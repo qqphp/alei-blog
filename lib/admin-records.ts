@@ -2,13 +2,13 @@ import type { Client } from 'pg';
 import { withDatabase } from './postgres';
 import { defaults, type Section } from './cms-defaults';
 import { validateContent } from './cms-validation';
-import { adminCollections, configKeys, validCollection } from './admin-sections';
+import { adminCollections, configKeys, sectionMetadata, validCollection } from './admin-sections';
 import { deleteLocalMedia } from './local-media';
 import { recordTimes } from './content-times';
 
 type Item = Record<string, unknown>;
 type RecordKey = { section: Section; collection: string; id: string };
-type ListOptions = { page: number; size: number; q: string; status: string; categoryId: string };
+type ListOptions = { page: number; size: number; q: string; status: string; categoryId: string; statusId: string };
 export class AdminConflict extends Error {}
 export class AdminNotFound extends Error {}
 
@@ -28,17 +28,21 @@ function itemId(section: Section, collection: string, value: Item) {
   return id;
 }
 function searchText(value: Item) {
-  return ['title', 'name', 'description', 'excerpt', 'text', 'summary', 'author', 'artist', 'tag']
-    .map((key) => typeof value[key] === 'string' ? value[key] : '').join(' ');
+  const fields = ['title', 'name', 'description', 'excerpt', 'text', 'summary', 'author', 'artist', 'tag', 'body']
+    .map((key) => typeof value[key] === 'string' ? value[key] : '');
+  const paragraphs = Array.isArray(value.paragraphs)
+    ? value.paragraphs.filter((item): item is string => typeof item === 'string')
+    : [];
+  return [...fields, ...paragraphs].join(' ');
 }
 function rowFields(value: Item) {
   return {
     published: value._published === true,
     title: typeof value.title === 'string' ? value.title : typeof value.name === 'string' ? value.name : '',
     categoryId: typeof value.categoryId === 'string' ? value.categoryId
-      : typeof value.statusId === 'string' ? value.statusId
-        : typeof value.moodId === 'string' ? value.moodId
-          : typeof value.sectionId === 'string' ? value.sectionId : null,
+      : typeof value.moodId === 'string' ? value.moodId
+        : typeof value.sectionId === 'string' ? value.sectionId : null,
+    statusId: typeof value.statusId === 'string' ? value.statusId : null,
     occurredAt: typeof value.date === 'string' && Number.isFinite(Date.parse(value.date))
       ? new Date(value.date).toISOString()
       : typeof value.createdAt === 'string' && Number.isFinite(Date.parse(value.createdAt))
@@ -66,7 +70,7 @@ export async function listAdminRecords(section: Section, collection: string, inp
   const pattern = `%${q.replace(/[\\%_]/g, '\\$&')}%`;
   return withDatabase(async (db) => {
     if (section === 'writing' && collection === 'articles') {
-      const where = `($1 = '' OR (a.title || ' ' || a.excerpt) ILIKE $2 ESCAPE '\\')
+      const where = `($1 = '' OR (a.title || ' ' || a.excerpt || ' ' || a.body) ILIKE $2 ESCAPE '\\')
         AND ($3 = 'all' OR a.published = ($3 = 'published'))
         AND ($4 = '' OR a.category_id = $4)`;
       const params = [q, pattern, input.status, input.categoryId];
@@ -87,8 +91,9 @@ export async function listAdminRecords(section: Section, collection: string, inp
       return { items: rows.rows, total: total.rows[0].count, page, size };
     }
     const where = `section = $1 AND collection = $2 AND ($3 = '' OR search_text ILIKE $4 ESCAPE '\\')
-      AND ($5 = 'all' OR published = ($5 = 'published')) AND ($6 = '' OR category_id = $6)`;
-    const params = [section, collection, q, pattern, input.status, input.categoryId];
+      AND ($5 = 'all' OR published = ($5 = 'published')) AND ($6 = '' OR category_id = $6)
+      AND ($7 = '' OR status_id = $7)`;
+    const params = [section, collection, q, pattern, input.status, input.categoryId, input.statusId];
     const total = await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM cms_entries WHERE ${where}`, params);
     const order = section === 'investing' && collection === 'entries'
       ? 'created_at DESC NULLS LAST, position, id'
@@ -96,7 +101,7 @@ export async function listAdminRecords(section: Section, collection: string, inp
     const rows = await db.query(`SELECT id, title, left(search_text, 160) AS excerpt,
       category_id AS "categoryId", published, occurred_at AS date, position, revision,
       created_at AS "createdAt", updated_at AS "updatedAt"
-      FROM cms_entries WHERE ${where} ORDER BY ${order} LIMIT $7 OFFSET $8`,
+      FROM cms_entries WHERE ${where} ORDER BY ${order} LIMIT $8 OFFSET $9`,
     [...params, size, (page - 1) * size]);
     return { items: rows.rows.map((row) => ({ ...row, ...recordTimes(row) })), total: total.rows[0].count, page, size };
   });
@@ -194,9 +199,11 @@ export async function saveAdminConfig(section: Section, scope: string, value: It
       const row = await db.query<{ value: Item; revision: number }>(
         'SELECT value, revision FROM cms_sections WHERE section = $1 FOR UPDATE', [section]);
       const previous = savedConfig(section, row.rows[0]?.value);
-      const next = value;
       if (adminCollections[section]?.some((name) => Object.hasOwn(value, name)))
         throw new Error('列表内容须逐条提交');
+      const allowed = new Set(configKeys(section, scope) ?? []);
+      const incoming = Object.fromEntries(Object.entries(value).filter(([key]) => allowed.has(key)));
+      const next = { ...previous, ...incoming };
       const sample = defaults[section];
       const full = sample && typeof sample === 'object' && !Array.isArray(sample)
         ? { ...sample, ...next } : next;
@@ -269,6 +276,11 @@ async function validateRecord(db: Client, key: Omit<RecordKey, 'id'>, value: Ite
       [section, name]);
     doc[name] = rows.rows.map((row) => row.payload);
   }
+  if (section === 'tracks' && collection === 'items') {
+    const scenes = doc.scenes as { id: string; name: string }[] | undefined;
+    const scene = scenes?.find((item) => item.id === value.moodId);
+    if (scene) value.mood = scene.name;
+  }
   validateContent(section, doc);
   if (['categories', 'statuses', 'scenes'].includes(collection)) {
     const existing = await db.query<{ payload: Item }>(
@@ -302,10 +314,12 @@ async function cleanupUnreferencedMedia(before: unknown, after: unknown) {
     const url = `/api/media/${key}`;
     try {
       const referenced = await withDatabase(async (db) => {
+        const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const pattern = `(^|[^A-Za-z0-9/._-])${escaped}($|[^A-Za-z0-9/._-])`;
         const rows = await db.query<{ used: boolean }>(`SELECT
-          EXISTS (SELECT 1 FROM articles WHERE cover_url = $1 OR body LIKE '%' || $1 || '%') OR
-          EXISTS (SELECT 1 FROM cms_entries WHERE payload::text LIKE '%' || $1 || '%') OR
-          EXISTS (SELECT 1 FROM cms_sections WHERE value::text LIKE '%' || $1 || '%') AS used`, [url]);
+          EXISTS (SELECT 1 FROM articles WHERE cover_url = $1 OR body ~ $2) OR
+          EXISTS (SELECT 1 FROM cms_entries WHERE payload::text ~ $2) OR
+          EXISTS (SELECT 1 FROM cms_sections WHERE value::text ~ $2) AS used`, [url, pattern]);
         return rows.rows[0].used;
       });
       if (!referenced) await deleteLocalMedia(key);
@@ -342,14 +356,14 @@ export async function createAdminRecord(section: Section, collection: string, va
       } else {
         const fields = rowFields(value);
         await db.query(`INSERT INTO cms_entries (section, collection, id, position, published,
-          title, category_id, occurred_at, payload, search_text)
+          title, category_id, status_id, occurred_at, payload, search_text)
           VALUES ($1,$2,$3,(SELECT coalesce(max(position) + 1, 0) FROM cms_entries
-            WHERE section = $1 AND collection = $2),$4,$5,$6,$7,$8::jsonb,$9)`,
-        [section, collection, id, fields.published, fields.title, fields.categoryId,
+            WHERE section = $1 AND collection = $2),$4,$5,$6,$7,$8,$9::jsonb,$10)`,
+        [section, collection, id, fields.published, fields.title, fields.categoryId, fields.statusId,
           fields.occurredAt, JSON.stringify(payloadValue(section, collection, value)), fields.search]);
       }
-      await db.query(`INSERT INTO cms_sections (section, value) VALUES ($1, '{}'::jsonb)
-        ON CONFLICT DO NOTHING`, [section]);
+      await db.query(`INSERT INTO cms_sections (section, value) VALUES ($1, $2::jsonb)
+        ON CONFLICT DO NOTHING`, [section, JSON.stringify(sectionMetadata(section))]);
       const saved = await readRecord(db, { section, collection, id });
       await db.query('COMMIT');
       return { id, ...saved! };
@@ -388,9 +402,9 @@ export async function updateAdminRecord(key: RecordKey, value: Item, revision: n
       } else {
         const fields = rowFields(value);
         updated = await db.query(`UPDATE cms_entries SET published=$1,title=$2,category_id=$3,
-          occurred_at=$4,payload=$5::jsonb,search_text=$6,revision=revision+1,
-          updated_at=now() WHERE section=$7 AND collection=$8 AND id=$9 AND revision=$10`,
-        [fields.published, fields.title, fields.categoryId, fields.occurredAt,
+          status_id=$4,occurred_at=$5,payload=$6::jsonb,search_text=$7,revision=revision+1,
+          updated_at=now() WHERE section=$8 AND collection=$9 AND id=$10 AND revision=$11`,
+        [fields.published, fields.title, fields.categoryId, fields.statusId, fields.occurredAt,
           JSON.stringify(payloadValue(key.section, key.collection, value)), fields.search,
           key.section, key.collection, key.id, revision]);
       }

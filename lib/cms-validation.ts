@@ -239,7 +239,6 @@ export function validateContent(key: Section, value: unknown) {
     for (const track of document.items) {
       const scene = document.scenes.find((scene) => scene.id === track.moodId);
       if (!scene) throw new Error('请选择有效场景；删除场景前请调整关联音乐');
-      track.mood = scene.name;
     }
     for (const track of document.items)
       if (track.src.startsWith('#')) throw new Error('请填写可播放的音频地址');

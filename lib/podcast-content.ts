@@ -61,7 +61,7 @@ export function migratePodcasts(
       ...podcastSample.items[0],
       id: item.id,
       title: item.title,
-      description: item.description,
+      description: item.description ?? '',
       categoryId: categoryId(item.category.trim() || '未分类'),
       cover: item.image ?? '',
       _published: item._published ?? true,

@@ -1,6 +1,6 @@
 import pg from 'pg';
 import { defaults } from '../lib/cms-defaults.ts';
-import { adminCollections } from '../lib/admin-sections.ts';
+import { adminCollections, sectionMetadata } from '../lib/admin-sections.ts';
 import { ensureManagedPostgres } from './managed-postgres.mjs';
 
 if (!process.env.DATABASE_URL) throw new Error('未配置 DATABASE_URL');
@@ -12,8 +12,7 @@ try {
   await db.query('BEGIN');
   for (const [section, value] of Object.entries(defaults)) {
     const collections = adminCollections[section] ?? [];
-    const metadata = Array.isArray(value) || section === 'writing' || section === 'categories'
-      ? {} : Object.fromEntries(Object.entries(value).filter(([key]) => !collections.includes(key)));
+    const metadata = sectionMetadata(section);
     const added = await db.query('INSERT INTO cms_sections (section, value) VALUES ($1, $2::jsonb) ON CONFLICT DO NOTHING RETURNING section',
       [section, JSON.stringify(metadata)]);
     if (!added.rowCount) continue;
@@ -42,14 +41,16 @@ try {
       for (const [position, item] of items.entries()) {
         const occurred = item.date ?? item.createdAt;
         await db.query(`INSERT INTO cms_entries (section,collection,id,position,published,title,
-          category_id,occurred_at,payload,search_text,created_at)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11) ON CONFLICT DO NOTHING`,
+          category_id,status_id,occurred_at,payload,search_text,created_at)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12) ON CONFLICT DO NOTHING`,
         [section, collection, item.id ?? `slide-${position}`, position,
           item._published === true, item.title ?? item.name ?? '',
-          item.categoryId ?? item.statusId ?? item.moodId ?? null,
+          item.categoryId ?? item.moodId ?? item.sectionId ?? null,
+          item.statusId ?? null,
           occurred && Number.isFinite(Date.parse(occurred)) ? new Date(occurred) : null,
           JSON.stringify(item), [item.title, item.name, item.description, item.excerpt,
-            item.text, item.summary, item.author, item.artist].filter(Boolean).join(' '),
+            item.text, item.summary, item.author, item.artist, item.tag, item.body,
+            ...(Array.isArray(item.paragraphs) ? item.paragraphs : [])].filter((part) => typeof part === 'string' && part).join(' '),
           section === 'ai' ? new Date() : section === 'projects' && item.createdAt && Number.isFinite(Date.parse(item.createdAt)) ? new Date(item.createdAt) : null]);
       }
     }
@@ -64,7 +65,7 @@ try {
             category_id,payload,search_text,created_at)
             VALUES ('investing','entries',$1,$2,$3,$4,$5,$6::jsonb,$7,NULL) ON CONFLICT DO NOTHING`,
           [item.id, entryPosition, item._published, item.title, group.id,
-            JSON.stringify(item), `${item.title} ${item.tag} ${item.description}`]);
+            JSON.stringify(item), [item.title, item.tag, item.description, ...(item.paragraphs ?? [])].filter(Boolean).join(' ')]);
       }
     }
   }

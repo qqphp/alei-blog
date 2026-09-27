@@ -20,12 +20,20 @@ export type MusicPlaylist = {
   songs: { title: string; artist: string }[];
   _published: boolean;
 };
+export const musicPageCopy = {
+  title: '音乐',
+  intro: '声音是日常的另一种时间线。',
+};
 export type MusicDocument = {
+  title: string;
+  intro: string;
   items: MusicTrack[];
   playlists: MusicPlaylist[];
   scenes: { id: string; name: string }[];
 };
 export const musicSample: MusicDocument = {
+  title: musicPageCopy.title,
+  intro: musicPageCopy.intro,
   items: [
     {
       id: 'track',
@@ -71,20 +79,28 @@ export function migrateMusic(
   input:
     | LegacyTrack[]
     | {
+        title?: string;
+        intro?: string;
         items: LegacyTrack[];
         playlists: LegacyPlaylist[];
         scenes?: MusicDocument['scenes'];
       },
 ): MusicDocument {
-  const document = Array.isArray(input)
-    ? { items: input, playlists: [] }
-    : input;
+  const document: {
+    title?: string;
+    intro?: string;
+    items: LegacyTrack[];
+    playlists: LegacyPlaylist[];
+    scenes?: MusicDocument['scenes'];
+  } = Array.isArray(input) ? { items: input, playlists: [] } : input;
   const scenes =
     document.scenes ??
     [
       ...new Set(document.items.map((item) => item.mood.trim() || '未分类')),
     ].map((name) => ({ id: categoryId(name), name }));
   return {
+    title: document.title?.trim() ? document.title : musicPageCopy.title,
+    intro: typeof document.intro === 'string' ? document.intro : musicPageCopy.intro,
     scenes,
     items: document.items.map(({ note: _note, ...item }) => {
       const moodId = item.moodId ?? categoryId(item.mood.trim() || '未分类');
@@ -115,6 +131,8 @@ export function migrateMusic(
 export function publicMusic(document: MusicDocument): MusicDocument {
   return {
     ...document,
+    title: document.title?.trim() ? document.title : musicPageCopy.title,
+    intro: typeof document.intro === 'string' ? document.intro : musicPageCopy.intro,
     items: document.items.filter((item) => item._published !== false),
     playlists: document.playlists.filter((item) => item._published !== false),
   };

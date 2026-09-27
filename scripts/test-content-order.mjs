@@ -47,14 +47,10 @@ for (const name of [
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const { createElement: h } = await import('react');
-const { render, screen, cleanup, within, fireEvent } =
+const { render, screen, cleanup, within, waitFor } =
   await import('@testing-library/react');
 const { default: userEvent } = await import('@testing-library/user-event');
 
-const { AdminWritingManager } =
-  await import('../components/admin-writing-manager.tsx');
-const { AdminProjectManager } =
-  await import('../components/admin-project-manager.tsx');
 const { defaults } = await import('../lib/cms-defaults.ts');
 const { resolveProjects } = await import('../lib/project-content.ts');
 const { stripArticleExtras } = await import('../lib/article-categories.ts');
@@ -62,45 +58,8 @@ const { newestArticlesFirst, newestProjectsFirst } =
   await import('../lib/content-order.ts');
 const { validateContent } = await import('../lib/cms-validation.ts');
 const user = userEvent.setup({ document: window.document });
+let realFetch = globalThis.fetch;
 try {
-  let articles = ['2020.01.01', '2026.09.11', '2024.08.03'].map((date, i) => ({
-    ...defaults.writing[0],
-    slug: 'article-' + i,
-    title: '文章' + i,
-    date,
-  }));
-  const original = structuredClone(articles);
-  let view;
-  const articleProps = () => ({
-    articles,
-    categories: defaults.categories,
-    busy: false,
-    onWorking: () => {},
-    onChange: (next) => {
-      articles = next;
-      view.rerender(h(AdminWritingManager, articleProps()));
-    },
-  });
-  view = render(h(AdminWritingManager, articleProps()));
-  const titles = () =>
-    Array.from(document.querySelectorAll('tbody tr')).map(
-      (row) => row.cells[0].querySelector('button').textContent,
-    );
-  assert.deepEqual(titles(), ['文章1', '文章2', '文章0']);
-  assert.deepEqual(articles, original);
-  await user.click(
-    within(document.querySelector('tbody tr')).getByRole('button', {
-      name: '编辑',
-    }),
-  );
-  for (const label of ['内容标签', '主题标签', '阅读时长'])
-    assert.equal(screen.queryByLabelText(label), null);
-  await user.type(screen.getByLabelText('文章标题'), '已修改');
-  assert.equal(articles[1].title, '文章1已修改');
-  assert.equal(articles[0].title, '文章0');
-  await user.click(screen.getByRole('button', { name: '← 返回文章表格' }));
-  assert.equal(titles()[0], '文章1已修改');
-  cleanup();
   assert.deepEqual(
     stripArticleExtras({
       title: '保留',
@@ -110,47 +69,6 @@ try {
     }),
     { title: '保留' },
   );
-  let projects = {
-    ...structuredClone(defaults.projects),
-    items: ['2020-01-01T00:00:00.000Z', '2026-09-11T00:00:00.000Z', ''].map(
-      (createdAt, i) => ({
-        ...structuredClone(defaults.projects.items[0]),
-        id: 'project-' + i,
-        title: '项目' + i,
-        createdAt,
-      }),
-    ),
-  };
-  const projectProps = () => ({
-    value: projects,
-    onChange: (next) => {
-      projects = next;
-      view.rerender(h(AdminProjectManager, projectProps()));
-    },
-  });
-  view = render(h(AdminProjectManager, projectProps()));
-  assert.ok(titles()[0].startsWith('项目1'));
-  assert.ok(titles()[2].startsWith('项目2'));
-  await user.click(
-    within(document.querySelector('tbody tr')).getByRole('button', {
-      name: '编辑',
-    }),
-  );
-  await user.type(screen.getByLabelText('项目名称'), '已修改');
-  assert.equal(projects.items[1].title, '项目1已修改');
-  assert.equal(projects.items[1].createdAt, '2026-09-11T00:00:00.000Z');
-  fireEvent.change(screen.getByLabelText('创建时间'), {
-    target: { value: '2027-01-02T03:04:05' },
-  });
-  assert.equal(
-    projects.items[1].createdAt,
-    new Date('2027-01-02T03:04:05').toISOString(),
-  );
-  await user.click(screen.getByRole('button', { name: '← 返回项目表格' }));
-  const before = Date.now();
-  await user.click(screen.getByRole('button', { name: /新增项目/ }));
-  assert.ok(Date.parse(projects.items.at(-1).createdAt) >= before);
-  cleanup();
   const legacy = structuredClone(defaults.projects);
   delete legacy.items[0].createdAt;
   delete legacy.items[0].url;
@@ -186,29 +104,65 @@ try {
     homeProjects.map((item) => item.title),
     ['最新项目', '旧数据项目', '旧项目'],
   );
-  const { default: WritingPage } = await import('../app/writing/page.tsx');
+  const { default: WritingArchivePage } =
+    await import('../components/writing-archive-page.tsx');
   const { ProjectShowcase } =
     await import('../components/project-showcase.tsx');
-  const { default: StoriesPage } = await import('../app/notes/page.tsx');
+  const { default: StoriesPage } =
+    await import('../components/stories-page.tsx');
   const { ContentProvider } =
     await import('../components/content-provider.tsx');
+  const { monthSummary } = await import('../lib/story-calendar.ts');
+  const articleStore = [];
+  const storyStore = [];
+  const byDate = (items) => [...items].sort((a, b) => b.date.localeCompare(a.date));
+  const pageSlice = (items, page, size) => items.slice((page - 1) * size, page * size);
+  realFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = new URL(typeof input === 'string' ? input : input.url, 'http://localhost:3000');
+    if (url.pathname === '/api/writing') {
+      const query = url.searchParams.get('q') ?? '';
+      const page = Number(url.searchParams.get('page') ?? 1);
+      const filtered = byDate(articleStore.filter((item) => !query
+        || `${item.title} ${item.excerpt} ${item.body ?? ''} ${item.category}`.includes(query)));
+      return Response.json({
+        items: pageSlice(filtered, page, 10),
+        total: filtered.length,
+        allCount: articleStore.length,
+        categoryCounts: {},
+      });
+    }
+    if (url.pathname === '/api/stories') {
+      const page = Number(url.searchParams.get('page') ?? 1);
+      const ordered = byDate(storyStore);
+      return Response.json({
+        items: pageSlice(ordered, page, 10),
+        total: ordered.length,
+        yearlyCount: ordered.length,
+        latestPeriod: 2026 * 12 + 8,
+        calendar: monthSummary(ordered.map((item) => item.date), 2026, 9),
+      });
+    }
+    return realFetch(input, init);
+  };
+  const writingInitial = (items) => ({
+    items: pageSlice(byDate(items), 1, 10),
+    total: items.length,
+    allCount: items.length,
+    categoryCounts: {},
+    categories: defaults.categories,
+  });
+  articleStore.push({
+    ...defaults.writing[0],
+    label: 'REMOVED_CONTENT_LABEL',
+    tag: 'REMOVED_TOPIC_TAG',
+    meta: 'REMOVED_READ_TIME',
+  });
   render(
     h(
       ContentProvider,
-      {
-        content: {
-          ...defaults,
-          writing: [
-            {
-              ...defaults.writing[0],
-              label: 'REMOVED_CONTENT_LABEL',
-              tag: 'REMOVED_TOPIC_TAG',
-              meta: 'REMOVED_READ_TIME',
-            },
-          ],
-        },
-      },
-      h(WritingPage),
+      { content: defaults },
+      h(WritingArchivePage, { initial: writingInitial(articleStore) }),
     ),
   );
   for (const text of [
@@ -230,9 +184,10 @@ try {
     }),
   );
   const sourceOrder = structuredClone(publicArticles);
-  render(h(ContentProvider, {
-    content: { ...defaults, writing: publicArticles },
-  }, h(WritingPage)));
+  articleStore.splice(0, articleStore.length, ...publicArticles);
+  render(h(ContentProvider, { content: defaults }, h(WritingArchivePage, {
+    initial: writingInitial(publicArticles),
+  })));
   const publicTitles = () => Array.from(
     document.querySelectorAll('.writing-list-item h2'),
     (element) => element.textContent,
@@ -240,10 +195,10 @@ try {
   assert.deepEqual(publicTitles(), ['排序验证 1', '排序验证 2', '排序验证 0']);
   assert.deepEqual(publicArticles, sourceOrder);
   await user.type(screen.getByRole('textbox', { name: '搜索文章' }), '排序验证');
-  assert.deepEqual(publicTitles(), ['排序验证 1', '排序验证 2', '排序验证 0']);
+  await waitFor(() => assert.deepEqual(publicTitles(), ['排序验证 1', '排序验证 2', '排序验证 0']));
   await user.clear(screen.getByRole('textbox', { name: '搜索文章' }));
   await user.type(screen.getByRole('textbox', { name: '搜索文章' }), '无匹配文章');
-  assert.deepEqual(publicTitles(), []);
+  await waitFor(() => assert.deepEqual(publicTitles(), []));
   assert.ok(screen.getByText('没有找到匹配的文章，换个关键词试试。'));
   console.log('PASS public writing publication order, search order, empty results and unchanged source data');
   cleanup();
@@ -312,13 +267,12 @@ try {
     title: `分页文章 ${index}`,
     date: `2026.09.${String(index + 1).padStart(2, '0')}`,
   }));
+  articleStore.splice(0, articleStore.length, ...pagedArticles);
   render(
     h(
       ContentProvider,
-      {
-        content: { ...defaults, writing: pagedArticles },
-      },
-      h(WritingPage),
+      { content: defaults },
+      h(WritingArchivePage, { initial: writingInitial(pagedArticles) }),
     ),
   );
   assert.equal(document.querySelectorAll('.writing-list-item').length, 10);
@@ -329,13 +283,13 @@ try {
   await user.click(
     within(writingPagination).getByRole('button', { name: '下一页' }),
   );
-  assert.equal(document.querySelectorAll('.writing-list-item').length, 2);
+  await waitFor(() => assert.equal(document.querySelectorAll('.writing-list-item').length, 2));
   assert.match(writingPagination.textContent, /第 2 \/ 2 页/);
   await user.type(
     screen.getByRole('textbox', { name: '搜索文章' }),
     '分页文章',
   );
-  assert.equal(document.querySelectorAll('.writing-list-item').length, 10);
+  await waitFor(() => assert.equal(document.querySelectorAll('.writing-list-item').length, 10));
   assert.match(writingPagination.textContent, /第 1 \/ 2 页/);
   cleanup();
 
@@ -376,13 +330,21 @@ try {
     text: `分页说说 ${index}`,
     date: `2026-09-${String(index + 1).padStart(2, '0')}T12:00:00+08:00`,
   }));
+  storyStore.splice(0, storyStore.length, ...pagedStories);
+  const storyPeriod = 2026 * 12 + 8;
   render(
     h(
       ContentProvider,
-      {
-        content: { ...defaults, stories: pagedStories },
-      },
-      h(StoriesPage),
+      { content: defaults },
+      h(StoriesPage, {
+        initial: {
+          items: pageSlice(pagedStories, 1, 10),
+          total: pagedStories.length,
+          yearlyCount: pagedStories.length,
+          latestPeriod: storyPeriod,
+          calendar: monthSummary(pagedStories.map((item) => item.date), 2026, 9),
+        },
+      }),
     ),
   );
   assert.equal(document.querySelectorAll('.story-post').length, 10);
@@ -390,12 +352,13 @@ try {
   await user.click(
     within(storyPagination).getByRole('button', { name: '下一页' }),
   );
-  assert.equal(document.querySelectorAll('.story-post').length, 1);
+  await waitFor(() => assert.equal(document.querySelectorAll('.story-post').length, 1));
   assert.match(storyPagination.textContent, /第 2 \/ 2 页/);
   console.log(
     'PASS public writing, project and story pagination page sizes and navigation',
   );
 } finally {
   cleanup();
+  globalThis.fetch = realFetch;
   await window.happyDOM.abort();
 }

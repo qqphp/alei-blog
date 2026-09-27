@@ -9,7 +9,7 @@ export async function GET(request: Request, { params }: Params) {
     return listAdminRecords(adminSection(section), collection, {
       page: Number(search.get('page') ?? 1), size: Number(search.get('size') ?? 20),
       q: search.get('q') ?? '', status: search.get('status') ?? 'all',
-      categoryId: search.get('categoryId') ?? '',
+      categoryId: search.get('categoryId') ?? '', statusId: search.get('statusId') ?? '',
     });
   });
 }

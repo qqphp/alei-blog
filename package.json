@@ -20,8 +20,11 @@
     "typecheck": "tsc --noEmit",
     "test:cms": "node --env-file=.dev.vars --import tsx scripts/test-granular.mjs",
     "test:admin-ui": "node --import tsx scripts/test-admin-ui.mjs",
+    "test:content-order": "node --import tsx scripts/test-content-order.mjs",
     "test:admin-granular-ui": "node --import tsx scripts/test-admin-granular-ui.mjs",
-    "test:granular": "node --env-file=.dev.vars --import tsx scripts/test-granular.mjs"
+    "test:pond-motion": "node --import tsx scripts/test-pond-motion.mjs",
+    "test:pond-lifecycle": "node --import tsx scripts/test-pond-lifecycle.mjs",
+    "test:film-ai": "node --import tsx scripts/test-film-ai.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

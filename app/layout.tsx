@@ -7,7 +7,7 @@ import '@/components/life.css';
 
 export const dynamic = 'force-dynamic';
 export async function generateMetadata() {
-  const { site } = await getPublicContent(['site']);
+  const { site } = await getPublicContent(['site', 'tracks']);
   return { title: site.title, description: site.description, icons: { icon: '/favicon.ico' } };
 }
 

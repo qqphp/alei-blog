@@ -2,6 +2,11 @@ import { pathToFileURL } from 'node:url';
 import { resolve as resolvePath } from 'node:path';
 
 export async function resolve(specifier, context, next) {
+  if (specifier === 'cloudflare:workers')
+    return {
+      url: pathToFileURL(resolvePath('scripts/cloudflare-workers-stub.mjs')).href,
+      shortCircuit: true,
+    };
   if (specifier === 'next/image' || specifier === 'next/link' || specifier === 'next/navigation')
     return {
       url: pathToFileURL(

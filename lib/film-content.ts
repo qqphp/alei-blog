@@ -67,22 +67,23 @@ export function migrateFilms(
         };
       }),
     };
+  const names = [...new Set(document.entries.map((item) => item.category.trim() || '未分类'))];
   return {
     title: document.title,
     intro: document.intro,
-    categories: [
-      ...filmSample.categories,
-      { id: categoryId('未分类'), name: '未分类' },
-    ],
-    items: document.entries.map((item) => ({
-      ...filmSample.items[0],
-      id: item.id,
-      title: item.title,
-      genre: item.category,
-      categoryId: categoryId('未分类'),
-      cover: item.image ?? '',
-      _published: item._published ?? true,
-    })),
+    categories: names.map((name) => ({ id: categoryId(name), name })),
+    items: document.entries.map((item) => {
+      const name = item.category.trim() || '未分类';
+      return {
+        ...filmSample.items[0],
+        id: item.id,
+        title: item.title,
+        genre: '',
+        categoryId: categoryId(name),
+        cover: item.image ?? '',
+        _published: item._published ?? true,
+      };
+    }),
   };
 }
 export const filmCoverInput = (film: Pick<Film, 'title' | 'director'>) =>

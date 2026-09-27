@@ -33,8 +33,16 @@ export function configScopes(section: Section) {
   return !collections.length || metadata.length ? [{ id: 'root', label: '设置' }] : [];
 }
 
+export function sectionMetadata(section: Section): Record<string, unknown> {
+  const value = defaults[section];
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const collections = adminCollections[section] ?? [];
+  return Object.fromEntries(Object.entries(value).filter(([key]) => !collections.includes(key)));
+}
+
 export function configKeys(section: Section, scope: string): readonly string[] | null {
-  return scope === 'root' && configScopes(section).length ? [] : null;
+  if (scope !== 'root' || !configScopes(section).length) return null;
+  return Object.keys(sectionMetadata(section));
 }
 
 export function validCollection(section: Section, collection: string) {

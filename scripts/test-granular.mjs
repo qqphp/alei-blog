@@ -84,7 +84,7 @@ try {
   await testDb.connect();
   try {
     assert.equal((await testDb.query("SELECT count(*)::int AS n FROM cms_sections WHERE section IN ('pageSettings','copy')")).rows[0].n, 0, '迁移和初始化不能恢复已删除配置');
-    assert.equal((await testDb.query("SELECT count(*)::int AS n FROM cms_section_parts WHERE section IN ('pageSettings','copy')")).rows[0].n, 0);
+    assert.equal((await testDb.query("SELECT to_regclass('public.cms_section_parts')")).rows[0].to_regclass, null);
     assert.equal((await testDb.query('SELECT count(*)::int AS n FROM articles WHERE created_at IS NOT NULL')).rows[0].n, 0);
     assert.equal((await testDb.query("SELECT count(*)::int AS n FROM cms_entries WHERE section='investing' AND collection='entries' AND created_at IS NOT NULL")).rows[0].n, 0);
     for (const item of original.entries.filter((row) => row.section === 'projects' && row.collection === 'items')) {

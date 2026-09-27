@@ -14,8 +14,7 @@ import { storyDate } from '@/lib/story-content';
 import type { Json } from '@/lib/cms-validation';
 import { AdminWritingEditor, createArticleCover, type Article } from './admin-writing-editor';
 import { createProjectImage } from './admin-project-images';
-import { createFilmCover } from './admin-film-manager';
-import { createPodcastCover } from './admin-podcast-manager';
+import { createFilmCover, createPodcastCover } from './admin-generated-covers';
 import { createPlaylistCover } from './admin-playlist-cover';
 import { AdminAiSettings } from './admin-ai-settings';
 import { AdminAiResources } from './admin-ai-resources';
@@ -157,6 +156,7 @@ export function AdminGranularPanel() {
   const [query, setQuery] = useState('');
   const [status, setStatus] = useState('all');
   const [categoryId, setCategoryId] = useState('');
+  const [statusId, setStatusId] = useState('');
   const [list, setList] = useState<Page | null>(null);
   const [options, setOptions] = useState<Record<string, Option[]>>({});
   const [edit, setEdit] = useState<Edit | null>(null);
@@ -217,7 +217,7 @@ export function AdminGranularPanel() {
   const refreshList = useCallback(async () => {
     if (!activeCollection) return;
     const params = new URLSearchParams({ page: String(page), size: '20', q: query,
-      status, categoryId });
+      status, categoryId, statusId: section === 'projects' ? statusId : '' });
     const request = ++listRequest.current;
     setLoading(true);
     try {
@@ -225,7 +225,7 @@ export function AdminGranularPanel() {
       if (request === listRequest.current) setList(result);
     } catch (error) { if (request === listRequest.current) setMessage(String(error)); }
     finally { if (request === listRequest.current) setLoading(false); }
-  }, [recordSection, activeCollection, page, query, status, categoryId]);
+  }, [recordSection, activeCollection, page, query, status, categoryId, statusId, section]);
   useEffect(() => {
     if (!loggedIn || !activeCollection) return;
     const task = setTimeout(() => void refreshList(), 0);
@@ -247,13 +247,13 @@ export function AdminGranularPanel() {
     setSection(next);
     setTab(next === 'site' ? websiteTabs[0].id : adminCollections[next]?.[0] ?? configScopes(next)[0]?.id ?? 'root');
     setEdit(null); setConfig(null); setList(null); setOptions({}); setPage(1); setQuery('');
-    setStatus('all'); setCategoryId(''); setMessage('');
+    setStatus('all'); setCategoryId(''); setStatusId(''); setMessage('');
   }
   function changeTab(next: string) {
     if (next === tab || !confirmDiscard()) return;
     listRequest.current++;
     setTab(next); setEdit(null); setConfig(null); setList(null);
-    setPage(1); setQuery(''); setStatus('all'); setCategoryId(''); setMessage('');
+    setPage(1); setQuery(''); setStatus('all'); setCategoryId(''); setStatusId(''); setMessage('');
   }
   async function openRecord(id: string) {
     if (!confirmDiscard() || !activeCollection) return;
@@ -454,11 +454,17 @@ export function AdminGranularPanel() {
               <option value="draft">草稿</option>
             </select>}
             {activeCollection === 'items' || activeCollection === 'articles' || activeCollection === 'entries' ?
-              <select aria-label="按分类筛选" value={categoryId}
+              <select aria-label={section === 'tracks' ? '按场景筛选' : '按分类筛选'} value={categoryId}
                 onChange={(event) => { setCategoryId(event.target.value); setPage(1); }}>
-                <option value="">全部分类</option>
-                {(section === 'investing' ? options.sections : options.categories)?.map((item) =>
+                <option value="">{section === 'tracks' ? '全部场景' : section === 'investing' ? '全部栏目' : '全部分类'}</option>
+                {(section === 'tracks' ? options.scenes : section === 'investing' ? options.sections : options.categories)?.map((item) =>
                   <option value={item.id} key={item.id}>{item.title ?? item.name}</option>)}
+              </select> : null}
+            {section === 'projects' && activeCollection === 'items' ?
+              <select aria-label="按项目状态筛选" value={statusId}
+                onChange={(event) => { setStatusId(event.target.value); setPage(1); }}>
+                <option value="">全部项目状态</option>
+                {options.statuses?.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
               </select> : null}
             <button className="admin-primary" type="button" onClick={addRecord}>＋ 新增{collectionName(section, tab)}</button>
           </div>
