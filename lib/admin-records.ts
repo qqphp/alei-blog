@@ -5,6 +5,7 @@ import { validateContent } from './cms-validation';
 import { adminCollections, configKeys, sectionMetadata, validCollection } from './admin-sections';
 import { deleteLocalMedia } from './local-media';
 import { recordTimes } from './content-times';
+import { recordFields } from './content-record-fields.mjs';
 
 type Item = Record<string, unknown>;
 type RecordKey = { section: Section; collection: string; id: string };
@@ -27,28 +28,9 @@ function itemId(section: Section, collection: string, value: Item) {
     throw new Error('记录标识无效');
   return id;
 }
-function searchText(value: Item) {
-  const fields = ['title', 'name', 'description', 'excerpt', 'text', 'summary', 'author', 'artist', 'tag', 'body']
-    .map((key) => typeof value[key] === 'string' ? value[key] : '');
-  const paragraphs = Array.isArray(value.paragraphs)
-    ? value.paragraphs.filter((item): item is string => typeof item === 'string')
-    : [];
-  return [...fields, ...paragraphs].join(' ');
-}
-function rowFields(value: Item) {
-  return {
-    published: value._published === true,
-    title: typeof value.title === 'string' ? value.title : typeof value.name === 'string' ? value.name : '',
-    categoryId: typeof value.categoryId === 'string' ? value.categoryId
-      : typeof value.moodId === 'string' ? value.moodId
-        : typeof value.sectionId === 'string' ? value.sectionId : null,
-    statusId: typeof value.statusId === 'string' ? value.statusId : null,
-    occurredAt: typeof value.date === 'string' && Number.isFinite(Date.parse(value.date))
-      ? new Date(value.date).toISOString()
-      : typeof value.createdAt === 'string' && Number.isFinite(Date.parse(value.createdAt))
-        ? new Date(value.createdAt).toISOString() : null,
-    search: searchText(value),
-  };
+// Related records and their options must be checked and written in the same order.
+async function lockSection(db: Client, section: Section) {
+  await db.query("SELECT pg_advisory_xact_lock(hashtext('cms-records'), hashtext($1))", [section]);
 }
 function payloadValue(section: Section, collection: string, value: Item) {
   if (section === 'investing' && collection === 'entries') {
@@ -297,8 +279,8 @@ function mediaKeys(value: unknown) {
   const keys = new Set<string>();
   const visit = (item: unknown) => {
     if (typeof item === 'string') {
-      const match = /^\/api\/media\/([a-f0-9-]+\.(?:png|jpg|gif|webp|mp3|wav))$/.exec(item);
-      if (match) keys.add(match[1]);
+      for (const match of item.matchAll(/(?:^|[^A-Za-z0-9/._-])\/api\/media\/([a-f0-9-]+\.(?:png|jpg|gif|webp|mp3|wav))(?=$|[^A-Za-z0-9/._-])/g))
+        keys.add(match[1]);
     } else if (Array.isArray(item)) item.forEach(visit);
     else if (item && typeof item === 'object') Object.values(item).forEach(visit);
   };
@@ -340,6 +322,7 @@ export async function createAdminRecord(section: Section, collection: string, va
   return withDatabase(async (db) => {
     await db.query('BEGIN');
     try {
+      await lockSection(db, section);
       const clock = await db.query<{ now: Date }>('SELECT now()');
       value = recordInput(section, collection, value, clock.rows[0].now.toISOString());
       await validateRecord(db, { section, collection }, value);
@@ -354,7 +337,7 @@ export async function createAdminRecord(section: Section, collection: string, va
             (SELECT coalesce(max(position) + 1, 0) FROM article_categories))`,
         [id, value.name, value.description, value.parentId]);
       } else {
-        const fields = rowFields(value);
+        const fields = recordFields(value);
         await db.query(`INSERT INTO cms_entries (section, collection, id, position, published,
           title, category_id, status_id, occurred_at, payload, search_text)
           VALUES ($1,$2,$3,(SELECT coalesce(max(position) + 1, 0) FROM cms_entries
@@ -384,6 +367,7 @@ export async function updateAdminRecord(key: RecordKey, value: Item, revision: n
   const before = await withDatabase(async (db) => {
     await db.query('BEGIN');
     try {
+      await lockSection(db, key.section);
       const previous = await readRecord(db, key);
       if (!previous) throw new AdminNotFound('记录不存在');
       if (previous.revision !== revision) throw new AdminConflict('此记录已在另一窗口修改');
@@ -400,7 +384,7 @@ export async function updateAdminRecord(key: RecordKey, value: Item, revision: n
           parent_id=nullif($3,''),revision=revision+1 WHERE id=$4 AND revision=$5`,
         [value.name, value.description, value.parentId, key.id, revision]);
       } else {
-        const fields = rowFields(value);
+        const fields = recordFields(value);
         updated = await db.query(`UPDATE cms_entries SET published=$1,title=$2,category_id=$3,
           status_id=$4,occurred_at=$5,payload=$6::jsonb,search_text=$7,revision=revision+1,
           updated_at=now() WHERE section=$8 AND collection=$9 AND id=$10 AND revision=$11`,
@@ -428,6 +412,7 @@ export async function deleteAdminRecord(key: RecordKey, revision: number) {
   const previous = await withDatabase(async (db) => {
     await db.query('BEGIN');
     try {
+      await lockSection(db, key.section);
       const before = await readRecord(db, key);
       if (!before) throw new AdminNotFound('记录不存在');
       if (before.revision !== revision) throw new AdminConflict('此记录已在另一窗口修改');
@@ -478,6 +463,7 @@ export async function moveAdminRecord(key: RecordKey, direction: -1 | 1, revisio
   return withDatabase(async (db) => {
     await db.query('BEGIN');
     try {
+      await lockSection(db, key.section);
       const table = key.section === 'writing'
         ? key.collection === 'articles' ? 'articles' : 'article_categories' : 'cms_entries';
       const idField = table === 'articles' ? 'slug' : 'id';

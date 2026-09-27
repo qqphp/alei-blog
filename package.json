@@ -19,6 +19,7 @@
     "admin:password": "node scripts/admin-password.mjs",
     "typecheck": "tsc --noEmit",
     "test:cms": "node --env-file=.dev.vars --import tsx scripts/test-granular.mjs",
+    "test:audit-regressions": "node --env-file=.dev.vars --import tsx scripts/test-audit-regressions.mjs",
     "test:admin-ui": "node --import tsx scripts/test-admin-ui.mjs",
     "test:content-order": "node --import tsx scripts/test-content-order.mjs",
     "test:admin-granular-ui": "node --import tsx scripts/test-admin-granular-ui.mjs",

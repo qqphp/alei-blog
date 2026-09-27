@@ -112,12 +112,12 @@ export async function POST(request: Request) {
       });
     }
     if (body.action === 'test') {
-      const { content } = await getDocuments();
+      const { content } = await getDocuments(['aiSettings']);
       const result = await providerRequest('chat/completions', {
         model: content.aiSettings.textModel,
         messages: [{ role: 'user', content: 'Reply with OK only.' }],
         max_tokens: 16,
-      });
+      }, content.aiSettings);
       if (!result.choices?.[0]?.message?.content)
         throw new Error('模型未返回文本。');
       return json({ message: '文本模型调用成功。' });

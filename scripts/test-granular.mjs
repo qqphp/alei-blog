@@ -108,6 +108,8 @@ try {
     env: { ...process.env, DATABASE_URL: testUrl.toString(),
       MINIFLARE_REGISTRY_PATH: resolve('.local/granular-test-registry') } });
   let workerError = '';
+  // Wrangler logs every request; an unread pipe eventually blocks the test server.
+  worker.stdout.resume();
   worker.stderr.on('data', (data) => { workerError += data.toString().slice(0, 3000); });
   let ready = false;
   for (let attempt = 0; attempt < 60; attempt++) {
@@ -127,8 +129,12 @@ try {
     const init = { method, headers: { cookie, origin,
       ...(body ? { 'content-type': 'application/json' } : {}) } };
     if (body) init.body = JSON.stringify(body);
-    const response = await fetch(origin + path, init);
-    return { status: response.status, data: await response.json() };
+    try {
+      const response = await fetch(origin + path, { ...init, signal: AbortSignal.timeout(30000) });
+      return { status: response.status, data: await response.json() };
+    } catch (error) {
+      throw new Error(`测试请求失败：${method} ${path}`, { cause: error });
+    }
   };
   const site = await request('/api/admin/config/site/root');
   assert.equal(site.data.value.title, 'ISOLATED_GRANULAR_TEST', '测试服务必须连接独立数据库');
@@ -273,6 +279,10 @@ try {
     headers: { cookie, origin, 'content-type': 'application/json' },
     body: JSON.stringify({ key: 'home', value: defaults.home, revision: 1 }) });
   assert.notEqual(oldBulk.status, 200, '旧整栏目写入接口必须停用');
+  assert.equal(oldBulk.status, 404);
+  assert.equal((await oldBulk.json()).error, '接口不存在');
+  assert.equal((await request('/api/admin/config/site/root')).status, 200,
+    '带正文的不存在接口请求不能阻塞后续有效请求');
   const { checkContentManagement } = await import('./test-content-management.mjs');
   await checkContentManagement({ request, origin, testUrl, defaults });
   console.log('PASS isolated PostgreSQL record lists, detail, single-record writes, conflicts, publication, move, delete, category references, config scopes and 1000-row pagination');

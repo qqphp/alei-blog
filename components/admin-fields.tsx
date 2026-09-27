@@ -193,6 +193,7 @@ export function Field({
   path,
   options = {},
   immutableIdentity = false,
+  onWorking,
 }: {
   value: Json;
   sample: Json;
@@ -201,6 +202,7 @@ export function Field({
   path: string;
   options?: Record<string, { id: string; name: string }[]>;
   immutableIdentity?: boolean;
+  onWorking?: (working: boolean) => void;
 }) {
   const [message, setMessage] = useState('');
   if (Array.isArray(value)) {
@@ -256,6 +258,7 @@ export function Field({
               }
               options={options}
               immutableIdentity={immutableIdentity}
+              onWorking={onWorking}
             />
           </details>
         ))}
@@ -292,6 +295,7 @@ export function Field({
               onChange={(next) => onChange({ ...value, [key]: next })}
               options={options}
               immutableIdentity={immutableIdentity}
+              onWorking={onWorking}
             />
           ))}
         </div>
@@ -365,14 +369,17 @@ export function Field({
                 const file = e.target.files?.[0];
                 if (!file) return;
                 setMessage('上传中…');
+                onWorking?.(true);
                 try {
                   const result = await upload(file);
                   onChange(result.url);
                   setMessage('已上传，点击表单底部“确认提交”后生效。');
                 } catch (error) {
                   setMessage(String(error));
+                } finally {
+                  onWorking?.(false);
+                  e.target.value = '';
                 }
-                e.target.value = '';
               }}
             />
           </label>

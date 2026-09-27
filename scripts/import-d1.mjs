@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import pg from 'pg';
 import { ensureManagedPostgres } from './managed-postgres.mjs';
+import { recordFields } from '../lib/content-record-fields.mjs';
 
 if (!process.env.DATABASE_URL) throw new Error('请先配置 DATABASE_URL');
 await ensureManagedPostgres();
@@ -46,14 +47,15 @@ try {
     for (const { key, value } of source.documents) {
       for (const collection of collections[key] ?? []) {
         const items = collection === 'root' ? value : value[collection];
-        for (const [position, item] of items.entries()) {
-          const occurred = item.date ?? item.createdAt;
-          await client.query(`INSERT INTO cms_entries (section, collection, id, position, published, title, category_id, occurred_at, payload, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10)`,
-          [key, collection, item.id ?? `slide-${position}`, position, item._published === true,
-            item.title ?? item.name ?? '', item.categoryId ?? null,
-            occurred && Number.isFinite(Date.parse(occurred)) ? new Date(occurred) : null,
-            JSON.stringify(item), key === 'projects' && item.createdAt && Number.isFinite(Date.parse(item.createdAt)) ? new Date(item.createdAt) : null]);
+        for (const [position, savedItem] of items.entries()) {
+          const item = { ...savedItem, id: savedItem.id ?? `slide-${position}` };
+          const fields = recordFields(item);
+          await client.query(`INSERT INTO cms_entries (section, collection, id, position, published, title, category_id, occurred_at, payload, created_at, status_id, search_text)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)`,
+          [key, collection, item.id ?? `slide-${position}`, position, fields.published,
+            fields.title, fields.categoryId, fields.occurredAt,
+            JSON.stringify(item), key === 'projects' && item.createdAt && Number.isFinite(Date.parse(item.createdAt)) ? new Date(item.createdAt) : null,
+            fields.statusId, fields.search]);
           entries++;
         }
       }

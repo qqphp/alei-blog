@@ -22,17 +22,21 @@ const settings = {
 };
 const stored = [];
 const requests = [];
+let settingsReads = 0;
 globalThis.__filmTestBindings = {
   TEAMOROUTER_KEY: 'test-only-key',
   LOCAL_MEDIA_STORAGE: 'http://127.0.0.1:3210',
   LOCAL_MEDIA_TOKEN: 'test-media-token',
   DB: {
     prepare: () => ({
-      all: async () => ({
+      all: async () => {
+        settingsReads++;
+        return {
         results: [
           { key: 'aiSettings', value: JSON.stringify(settings), revision: 1 },
         ],
-      }),
+        };
+      },
     }),
   },
 };
@@ -78,6 +82,7 @@ try {
     '导演姓名',
   );
   assert.equal(requests[0].model, 'test-image-model');
+  assert.equal(settingsReads, 1, '一次生成只读取一次 AI 设置');
   assert.equal(requests[0].prompt, 'FILM 影片名称 / 导演姓名 / PORTRAIT FILM');
   assert.match(result.url, /^\/api\/media\/.+\.png$/);
   assert.equal(

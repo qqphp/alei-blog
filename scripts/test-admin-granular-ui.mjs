@@ -15,7 +15,7 @@ for (const name of ['window', 'document', 'navigator', 'localStorage', 'HTMLElem
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 window.confirm = () => true;
-const { createElement } = await import('react');
+const { createElement, act } = await import('react');
 const { render, screen, waitFor, cleanup, within } = await import('@testing-library/react');
 const { default: userEvent } = await import('@testing-library/user-event');
 const { AdminGranularPanel } = await import('../components/admin-granular-panel.tsx');
@@ -95,17 +95,50 @@ try {
   for (const label of ['导出内容备份', '导入此栏目', '重新载入', '保存栏目'])
     assert.equal(screen.queryByText(label), null, label);
   assert.equal(window.document.querySelector('.admin-toolbar'), null);
+  const immediateFetch = globalThis.fetch;
+  let finishDetail;
+  globalThis.fetch = async (input, init) => {
+    if (input === '/api/admin/records/writing/articles/ui-granular')
+      await new Promise((done) => { finishDetail = done; });
+    return immediateFetch(input, init);
+  };
   await user.click(screen.getByRole('button', { name: '原文章' }));
+  const categoryTab = screen.getByRole('tab', { name: '文章分类' });
+  assert.equal(categoryTab.disabled, true, '详情未返回时不可切换表单');
+  await user.click(categoryTab);
+  assert.equal(screen.getByRole('tab', { name: '文章管理' }).getAttribute('aria-selected'), 'true');
+  await act(async () => finishDetail());
+  globalThis.fetch = immediateFetch;
   await screen.findByLabelText('文章标题');
+  const markdown = await screen.findByRole('textbox', { name: '文章正文 Markdown' });
+  await user.type(markdown, '\n\n## 按需编辑测试');
+  await user.click(screen.getByRole('button', { name: '预览', exact: true }));
+  assert.ok(screen.getByRole('heading', { name: '按需编辑测试', exact: true }));
+  await user.click(screen.getByRole('button', { name: '编辑', exact: true }));
+  assert.ok(screen.getByRole('textbox', { name: '文章正文 Markdown' }).value.includes('按需编辑测试'));
+  await user.click(screen.getByRole('button', { name: '分屏', exact: true }));
   await user.type(screen.getByLabelText('文章标题'), '已修改');
   assert.equal(calls.filter((call) => call.method === 'PUT').length, 0,
     '输入字段时不能自动保存');
   assert.ok(screen.getByRole('button', { name: '确认提交' }).closest('.admin-form-actions'));
+  let finishWrite;
+  globalThis.fetch = async (input, init) => {
+    if (init?.method === 'PUT') await new Promise((done) => { finishWrite = done; });
+    return immediateFetch(input, init);
+  };
   await user.click(screen.getByRole('button', { name: '确认提交' }));
+  assert.equal(screen.getByRole('button', { name: '← 返回列表' }).disabled, true);
+  assert.equal(screen.getByRole('tab', { name: '文章分类' }).disabled, true);
+  assert.equal(within(nav).getByRole('button', { name: '项目' }).disabled, true);
+  await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+  assert.ok(screen.getByLabelText('文章标题'));
+  await act(async () => finishWrite());
+  globalThis.fetch = immediateFetch;
   await waitFor(() => assert.equal(article.title, '原文章已修改'));
   const write = calls.find((call) => call.method === 'PUT' && call.path.includes('/records/'));
   assert.equal(Array.isArray(write.body.value), false);
   assert.equal(write.body.value.slug, 'ui-granular');
+  assert.ok(write.body.value.body.includes('## 按需编辑测试'), '按需加载后的正文修改必须随表单保存');
   assert.equal(Object.hasOwn(write.body, 'key'), false);
   await screen.findByRole('button', { name: '原文章已修改' });
   await user.click(screen.getByRole('button', { name: '发布' }));
@@ -226,6 +259,23 @@ try {
   await waitFor(() => assert.ok(calls.some((call) => call.path === '/api/admin/records/slides/root')));
   await user.click(screen.getByRole('button', { name: '＋ 新增说说封面' }));
   await screen.findByLabelText('素材地址');
+  let finishUpload;
+  globalThis.fetch = async (input, init) => {
+    if (input === '/api/admin/media') {
+      await new Promise((done) => { finishUpload = done; });
+      return Response.json({ url: '/api/media/1234-abcd.png' });
+    }
+    return immediateFetch(input, init);
+  };
+  await user.upload(screen.getByLabelText('上传替换'), new window.File(['image'], 'test.png', { type: 'image/png' }));
+  assert.equal(screen.getByRole('tab', { name: '说说', exact: true }).disabled, true);
+  assert.equal(screen.getByRole('button', { name: '← 返回列表' }).disabled, true);
+  assert.equal(screen.getByRole('button', { name: '确认提交' }).disabled, true);
+  assert.equal(within(nav).getByRole('button', { name: 'AI', exact: true }).disabled, true);
+  await act(async () => finishUpload());
+  globalThis.fetch = immediateFetch;
+  await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/1234-abcd.png'));
+  assert.equal(screen.getByRole('button', { name: '← 返回列表' }).disabled, false);
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: 'AI', exact: true }));
   assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['智能体', '技能 Skills', '中转站 API']);
   await user.click(screen.getByRole('button', { name: '＋ 新增智能体' }));

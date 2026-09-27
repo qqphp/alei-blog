@@ -166,6 +166,7 @@ export function AdminGranularPanel() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const listRequest = useRef(0);
+  const editRequest = useRef(0);
   const collections = useMemo(() => section === 'stories' ? ['root', 'covers'] : adminCollections[section] ?? EMPTY_COLLECTIONS, [section]);
   const recordSection = section === 'stories' && tab === 'covers' ? 'slides' : section;
   const scopes = section === 'site' ? websiteTabs : configScopes(section);
@@ -242,32 +243,37 @@ export function AdminGranularPanel() {
   }, [loggedIn, configSection, configScope, activeScope]);
 
   function changeSection(next: Section) {
-    if (next === section || !confirmDiscard()) return;
+    if (busy || working || next === section || !confirmDiscard()) return;
     listRequest.current++;
+    editRequest.current++;
     setSection(next);
     setTab(next === 'site' ? websiteTabs[0].id : adminCollections[next]?.[0] ?? configScopes(next)[0]?.id ?? 'root');
     setEdit(null); setConfig(null); setList(null); setOptions({}); setPage(1); setQuery('');
     setStatus('all'); setCategoryId(''); setStatusId(''); setMessage('');
   }
   function changeTab(next: string) {
-    if (next === tab || !confirmDiscard()) return;
+    if (busy || working || next === tab || !confirmDiscard()) return;
     listRequest.current++;
+    editRequest.current++;
     setTab(next); setEdit(null); setConfig(null); setList(null);
     setPage(1); setQuery(''); setStatus('all'); setCategoryId(''); setStatusId(''); setMessage('');
   }
   async function openRecord(id: string) {
-    if (!confirmDiscard() || !activeCollection) return;
+    if (busy || working || !confirmDiscard() || !activeCollection) return;
+    const request = ++editRequest.current;
     setBusy(true); setMessage('');
     try {
       const result = await api<{ value: Json; revision: number }>(recordUrl(recordSection, activeCollection, id));
+      if (request !== editRequest.current) return;
       if (!result) throw new Error('记录不存在');
       setEdit({ id, value: result.value, revision: result.revision,
         original: JSON.stringify(result.value) });
-    } catch (error) { setMessage(String(error)); }
-    finally { setBusy(false); }
+    } catch (error) { if (request === editRequest.current) setMessage(String(error)); }
+    finally { if (request === editRequest.current) setBusy(false); }
   }
   function addRecord() {
-    if (!activeCollection || !confirmDiscard()) return;
+    if (busy || working || !activeCollection || !confirmDiscard()) return;
+    editRequest.current++;
     try {
       const value = sampleRecord(recordSection, activeCollection, options);
       setEdit({ id: null, value, revision: 0, original: JSON.stringify(value) });
@@ -275,6 +281,7 @@ export function AdminGranularPanel() {
     } catch (error) { setMessage(String(error)); }
   }
   async function save() {
+    if (busy || working) return;
     setBusy(true); setMessage('');
     try {
       if (activeCollection && edit) {
@@ -303,7 +310,7 @@ export function AdminGranularPanel() {
     finally { setBusy(false); }
   }
   async function quickAction(item: Summary, action: 'publish' | 'delete' | 'up' | 'down') {
-    if (!activeCollection || !confirmDiscard()) return;
+    if (busy || working || !activeCollection || !confirmDiscard()) return;
     if (action === 'delete' && !window.confirm(`确定删除「${item.title || item.id}」？此操作立即生效。`)) return;
     setBusy(true); setMessage('');
     try {
@@ -323,7 +330,7 @@ export function AdminGranularPanel() {
     finally { setBusy(false); }
   }
   async function generateAdditionalImage() {
-    if (!edit || !activeCollection || !edit.value || typeof edit.value !== 'object' || Array.isArray(edit.value)) return;
+    if (busy || working || !edit || !activeCollection || !edit.value || typeof edit.value !== 'object' || Array.isArray(edit.value)) return;
     const value = edit.value as Item;
     const kind = section === 'travel' ? 'travel-cover' : section === 'hobbies' ? 'hobby-cover'
       : section === 'books' && activeCollection === 'items' ? 'book-cover'
@@ -409,14 +416,15 @@ export function AdminGranularPanel() {
       <div className="admin-editor">
         <div className="admin-settings-tabs" role="tablist" aria-label="栏目内容">
           {collections.map((name) => <button key={name} type="button" role="tab"
+            disabled={busy || working}
             aria-selected={tab === name} onClick={() => changeTab(name)}>{collectionName(section, name)}</button>)}
           {scopes.map((scope) => <button key={scope.id} type="button" role="tab"
             disabled={busy || working}
             aria-selected={tab === scope.id} onClick={() => changeTab(scope.id)}>{scope.label}</button>)}
         </div>
         {activeCollection && (edit ? <section className="admin-form" aria-label="内容表单">
-          <div className="admin-section-heading"><button type="button" onClick={() => {
-            if (confirmDiscard()) { setEdit(null); setMessage(''); }
+          <div className="admin-section-heading"><button type="button" disabled={busy || working} onClick={() => {
+            if (confirmDiscard()) { editRequest.current++; setEdit(null); setMessage(''); }
           }}>← 返回列表</button><span>{edit.id ? '编辑内容' : '新增内容'}</span></div>
           {showTimes && <dl className="admin-record-times">
             <div><dt>{section === 'investing' ? '添加时间' : '创建时间'}</dt><dd>{edit.id ? formatRecordTime((edit.value as Item).createdAt as string | null) : '首次保存时自动记录'}</dd></div>
@@ -434,6 +442,7 @@ export function AdminGranularPanel() {
                 columns={optionFields.sectionId} onChange={(value) => setEdit({ ...edit, value })} /> :
               <Field path={`${recordSection}.${activeCollection}`} label={collectionName(recordSection, activeCollection)}
                 value={edit.value} sample={recordSample ?? edit.value} options={optionFields}
+                onWorking={setWorking}
                 immutableIdentity={Boolean(edit.id)}
                 onChange={(value) => setEdit({ ...edit, value })} />}
           </fieldset>
@@ -466,13 +475,13 @@ export function AdminGranularPanel() {
                 <option value="">全部项目状态</option>
                 {options.statuses?.map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}
               </select> : null}
-            <button className="admin-primary" type="button" onClick={addRecord}>＋ 新增{collectionName(section, tab)}</button>
+            <button className="admin-primary" type="button" disabled={busy || working} onClick={addRecord}>＋ 新增{collectionName(section, tab)}</button>
           </div>
           <div className="admin-table-scroll"><table className="admin-data-table">
             <caption>共 {list?.total ?? 0} 条；每页最多 20 条</caption>
             <thead><tr><th scope="col">内容</th>{showTimes && <><th scope="col">{section === 'investing' ? '添加时间' : '创建时间'}</th><th scope="col">最后更新时间</th></>}<th scope="col">状态</th><th scope="col">操作</th></tr></thead>
             <tbody>{list?.items.map((item, index) => <tr key={item.id}>
-              <td><button type="button" className="admin-table-title" onClick={() => void openRecord(item.id)}>
+              <td><button type="button" className="admin-table-title" disabled={busy || working} onClick={() => void openRecord(item.id)}>
                 {item.title || item.excerpt || item.id}</button>
                 <small>{item.excerpt?.slice(0, 100) || item.id}</small></td>
               {showTimes && <><td>{formatRecordTime(item.createdAt)}</td><td>{item.updatedAt ? formatRecordTime(item.updatedAt) : '—'}</td></>}
@@ -504,6 +513,7 @@ export function AdminGranularPanel() {
               dirty={dirty} onChange={(value) => setConfig({ ...config, value: asJson(value) })} /> :
             <Field path={`${section}.${activeScope}`} label={scopes.find((scope) => scope.id === activeScope)?.label ?? sectionLabels[section]}
               value={configValue!} sample={configSample ?? config.value}
+              onWorking={setWorking}
               onChange={(value) => setConfig({ ...config,
                 value: websiteTab ? asJson({ ...config.value as Item, ...value as Item }) : value })} />}
           <div className="admin-form-actions"><button type="button" className="admin-primary"

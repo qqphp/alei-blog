@@ -17,6 +17,7 @@ import { categoryId, stripArticleExtras } from './article-categories';
 import { migrateStories, newestStoriesFirst } from './story-content';
 import { categoryBranch } from './article-categories';
 import { monthSummary } from './story-calendar';
+import { newestProjectsFirst } from './content-order';
 
 export type ArchiveArticle = Pick<typeof defaults.writing[number], 'slug' | 'title' | 'excerpt' | 'categoryId' | 'category' | 'date' | 'cover'>;
 export type WritingArchive = {
@@ -66,12 +67,12 @@ export async function getDocuments(sections?: Section[]) {
   const { results, categories, articles, entries } = await withDatabase(async (db) => {
     await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
     try {
-      const [sectionResult, categories, articles, entries] = await Promise.all([
-        db.query<{ section: Section; value: unknown; revision: number }>('SELECT section, value, revision FROM cms_sections WHERE $1::text[] IS NULL OR section = ANY($1::text[])', [selected]),
-        db.query<{ id: string; name: string; description: string; parent_id: string | null }>('SELECT id, name, description, parent_id FROM article_categories WHERE $1::boolean ORDER BY position', [has('categories') || has('writing')]),
-        db.query<{ slug: string; title: string; excerpt: string; body: string; category_id: string; date: string; published: boolean; cover_url: string; cover_mode: string; cover_generated_for: string }>(`SELECT slug, title, excerpt, body, category_id, to_char(published_on, 'YYYY.MM.DD') AS date, published, cover_url, cover_mode, cover_generated_for FROM articles WHERE $1::boolean ORDER BY position`, [has('writing')]),
-        db.query<{ section: Section; collection: string; category_id: string | null; payload: unknown; createdAt: Date | null; updatedAt: Date }>('SELECT section, collection, category_id, payload, created_at AS "createdAt", updated_at AS "updatedAt" FROM cms_entries WHERE $1::text[] IS NULL OR section = ANY($1::text[]) ORDER BY section, collection, position, id', [selected]),
-      ]);
+      const [sectionResult, categories, articles, entries] = [
+        await db.query<{ section: Section; value: unknown; revision: number }>('SELECT section, value, revision FROM cms_sections WHERE $1::text[] IS NULL OR section = ANY($1::text[])', [selected]),
+        await db.query<{ id: string; name: string; description: string; parent_id: string | null }>('SELECT id, name, description, parent_id FROM article_categories WHERE $1::boolean ORDER BY position', [has('categories') || has('writing')]),
+        await db.query<{ slug: string; title: string; excerpt: string; body: string; category_id: string; date: string; published: boolean; cover_url: string; cover_mode: string; cover_generated_for: string }>(`SELECT slug, title, excerpt, body, category_id, to_char(published_on, 'YYYY.MM.DD') AS date, published, cover_url, cover_mode, cover_generated_for FROM articles WHERE $1::boolean ORDER BY position`, [has('writing')]),
+        await db.query<{ section: Section; collection: string; category_id: string | null; payload: unknown; createdAt: Date | null; updatedAt: Date }>('SELECT section, collection, category_id, payload, created_at AS "createdAt", updated_at AS "updatedAt" FROM cms_entries WHERE $1::text[] IS NULL OR section = ANY($1::text[]) ORDER BY section, collection, position, id', [selected]),
+      ];
       await db.query('COMMIT');
       return { results: sectionResult.rows, categories: categories.rows, articles: articles.rows, entries: entries.rows };
     } catch (error) {
@@ -256,10 +257,16 @@ export async function getRecentProjects(limit: number) {
        ORDER BY occurred_at DESC NULLS LAST, position LIMIT $1`,
       [limit],
     );
-    return result.rows.map((row) => row.payload);
+    const options = await db.query<{ collection: string; payload: { id: string; name: string } }>(
+      "SELECT collection, payload FROM cms_entries WHERE section = 'projects' AND collection IN ('categories', 'statuses') ORDER BY position",
+    );
+    return resolveProjects({
+      items: result.rows.map((row) => row.payload),
+      categories: options.rows.filter((row) => row.collection === 'categories').map((row) => row.payload),
+      statuses: options.rows.filter((row) => row.collection === 'statuses').map((row) => row.payload),
+    }).items;
   });
-  return saved ?? [...defaults.projects.items].filter((item) => item._published)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, limit);
+  return saved ?? newestProjectsFirst(defaults.projects.items.filter((item) => item._published)).slice(0, limit);
 }
 
 export async function getWritingArchive(query = '', group = '', page = 1, pageSize = 10): Promise<WritingArchive & { categories: typeof defaults.categories }> {
@@ -277,16 +284,16 @@ export async function getWritingArchive(query = '', group = '', page = 1, pageSi
     const pattern = `%${search.replace(/[\\%_]/g, '\\$&')}%`;
     const filter = `a.published AND ($1::text[] IS NULL OR a.category_id = ANY($1::text[]))
       AND ($2 = '' OR (a.title || ' ' || a.excerpt || ' ' || a.body) ILIKE $3 ESCAPE '\\' OR a.category_id = ANY($4::text[]))`;
-    const [counts, total, matches, items] = await Promise.all([
-      db.query<{ category_id: string; count: number }>('SELECT category_id, count(*)::int AS count FROM articles WHERE published GROUP BY category_id'),
-      db.query<{ count: number }>('SELECT count(*)::int AS count FROM articles WHERE published'),
-      db.query<{ count: number }>(`SELECT count(*)::int AS count FROM articles a JOIN article_categories c ON c.id = a.category_id WHERE ${filter}`, [branch, search, pattern, matchingCategories]),
-      db.query<ArchiveArticle>(`SELECT a.slug, a.title, a.excerpt, a.category_id AS "categoryId",
+    const [counts, total, matches, items] = [
+      await db.query<{ category_id: string; count: number }>('SELECT category_id, count(*)::int AS count FROM articles WHERE published GROUP BY category_id'),
+      await db.query<{ count: number }>('SELECT count(*)::int AS count FROM articles WHERE published'),
+      await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM articles a JOIN article_categories c ON c.id = a.category_id WHERE ${filter}`, [branch, search, pattern, matchingCategories]),
+      await db.query<ArchiveArticle>(`SELECT a.slug, a.title, a.excerpt, a.category_id AS "categoryId",
         c.name AS category, to_char(a.published_on, 'YYYY.MM.DD') AS date, a.cover_url AS cover
         FROM articles a JOIN article_categories c ON c.id = a.category_id WHERE ${filter}
         ORDER BY a.published_on DESC, a.slug LIMIT $5 OFFSET $6`,
       [branch, search, pattern, matchingCategories, pageSize, (requestedPage - 1) * pageSize]),
-    ]);
+    ];
     return {
       categories,
       items: items.rows,
@@ -318,16 +325,16 @@ export async function getStoryArchive(page = 1, period?: number): Promise<StoryA
   const saved = await withDatabase(async (db) => {
     const section = await db.query('SELECT 1 FROM cms_sections WHERE section = $1', ['stories']);
     if (!section.rowCount) return null;
-    const [latest, total, items] = await Promise.all([
-      db.query<{ date: Date | null }>(`SELECT max(occurred_at) AS date FROM cms_entries
+    const [latest, total, items] = [
+      await db.query<{ date: Date | null }>(`SELECT max(occurred_at) AS date FROM cms_entries
         WHERE section = 'stories' AND collection = 'root' AND published`),
-      db.query<{ count: number }>(`SELECT count(*)::int AS count FROM cms_entries
+      await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM cms_entries
         WHERE section = 'stories' AND collection = 'root' AND published`),
-      db.query<{ payload: typeof defaults.stories[number] }>(`SELECT payload FROM cms_entries
+      await db.query<{ payload: typeof defaults.stories[number] }>(`SELECT payload FROM cms_entries
         WHERE section = 'stories' AND collection = 'root' AND published
         ORDER BY occurred_at DESC NULLS LAST, id LIMIT $1 OFFSET $2`,
       [10, (requestedPage - 1) * 10]),
-    ]);
+    ];
     const latestDate = latest.rows[0].date;
     const latestLocal = latestDate ? new Date(latestDate.getTime() + 8 * 3600000) : null;
     const latestPeriod = latestLocal ? latestLocal.getUTCFullYear() * 12 + latestLocal.getUTCMonth() : 2026 * 12 + 8;
@@ -340,16 +347,16 @@ export async function getStoryArchive(page = 1, period?: number): Promise<StoryA
     const yearEnd = shanghaiMidnight(year + 1, 0);
     const monthStart = shanghaiMidnight(year, month - 1);
     const monthEnd = shanghaiMidnight(year, month);
-    const [yearly, daily] = await Promise.all([
-      db.query<{ count: number }>(`SELECT count(*)::int AS count FROM cms_entries
+    const [yearly, daily] = [
+      await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM cms_entries
         WHERE section = 'stories' AND collection = 'root' AND published
         AND occurred_at >= $1 AND occurred_at < $2`, [yearStart, yearEnd]),
-      db.query<{ day: number; count: number }>(`SELECT EXTRACT(DAY FROM occurred_at AT TIME ZONE 'Asia/Shanghai')::int AS day,
+      await db.query<{ day: number; count: number }>(`SELECT EXTRACT(DAY FROM occurred_at AT TIME ZONE 'Asia/Shanghai')::int AS day,
         count(*)::int AS count FROM cms_entries
         WHERE section = 'stories' AND collection = 'root' AND published
         AND occurred_at >= $1 AND occurred_at < $2
         GROUP BY day`, [monthStart, monthEnd]),
-    ]);
+    ];
     const calendar = monthSummary([], year, month);
     const counts = new Map(daily.rows.map((row) => [row.day, row.count]));
     calendar.days = calendar.days.map((day) => ({ ...day, count: counts.get(day.day) ?? 0 }));

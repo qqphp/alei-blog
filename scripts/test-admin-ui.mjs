@@ -166,6 +166,7 @@ try {
       }),
     ),
   );
+  await screen.findByRole('textbox', { name: '预览测试 Markdown' });
   const preview = window.document.querySelector('.wmde-markdown');
   assert.equal(
     window.getComputedStyle(preview.querySelector('ol')).listStyleType,

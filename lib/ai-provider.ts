@@ -7,6 +7,7 @@ import { validateProviderUrl } from './cms-validation';
 import { projectImageInput } from './project-content';
 import { coverInput } from './article-categories';
 import { saveLocalMedia } from './local-media';
+import type { Content } from './cms-defaults';
 
 function aiFetch(url: string | URL, init: RequestInit) {
   const { LOCAL_AI_TRANSPORT, LOCAL_AI_TOKEN } = bindings();
@@ -17,12 +18,12 @@ function aiFetch(url: string | URL, init: RequestInit) {
   return fetch(LOCAL_AI_TRANSPORT, { ...init, headers });
 }
 
-export async function providerRequest(path: string, body?: unknown) {
-  const { content } = await getDocuments();
+export async function providerRequest(path: string, body?: unknown, settings?: Content['aiSettings']) {
+  settings ??= (await getDocuments(['aiSettings'])).content.aiSettings;
   const key = bindings().TEAMOROUTER_KEY?.trim();
   if (!key)
     throw new Error('未配置 TEAMOROUTER_KEY，请填写 .dev.vars 并重启服务。');
-  const base = validateProviderUrl(content.aiSettings.baseUrl).href.replace(
+  const base = validateProviderUrl(settings.baseUrl).href.replace(
     /\/$/,
     '',
   );
@@ -97,7 +98,7 @@ export async function generateCover(
     author?: string;
   },
 ) {
-  const { content } = await getDocuments();
+  const { content } = await getDocuments(['aiSettings']);
   const settings = content.aiSettings;
   const prompt = buildCoverPrompt(
     collection
@@ -155,7 +156,7 @@ export async function generateCover(
       ? { output_compression: settings.imageCompression }
       : {}),
     ...(size ? { size } : {}),
-  });
+  }, settings);
   const first = result.data?.[0];
   let bytes: Uint8Array;
   if (first?.b64_json) {
