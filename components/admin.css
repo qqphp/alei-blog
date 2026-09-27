@@ -1013,6 +1013,10 @@
   margin-left: auto;
   color: #6b7e70;
 }
+.admin-investment-editor {
+  display: grid;
+  gap: 20px;
+}
 .admin-array {
   border: 1px solid #dfe4da;
   padding: 14px;

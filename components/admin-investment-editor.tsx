@@ -9,8 +9,8 @@ export function AdminInvestmentEditor({ value, sample, columns, onChange }: {
 }) {
   const record = value as Record<string, Json>;
   const template = sample as Record<string, Json>;
-  const keys = ['title', 'description', 'sectionId', '_published'];
-  return <>
+  const keys = ['title', 'description', 'sectionId'];
+  return <div className="admin-investment-editor">
     <Field path="investing.entries" label="文章信息"
       value={Object.fromEntries(keys.map((key) => [key, record[key]]))}
       sample={Object.fromEntries(keys.map((key) => [key, template[key]]))}
@@ -18,5 +18,8 @@ export function AdminInvestmentEditor({ value, sample, columns, onChange }: {
       onChange={(next) => onChange({ ...record, ...(next as Record<string, Json>) })} />
     <AdminMarkdownEditor label="正文" value={(record.paragraphs as string[]).join('\n\n')}
       onChange={(markdown) => onChange({ ...record, paragraphs: [markdown] })} />
-  </>;
+    <Field path="investing.entries._published" label="发布到前台"
+      value={record._published} sample={template._published}
+      onChange={(published) => onChange({ ...record, _published: published })} />
+  </div>;
 }

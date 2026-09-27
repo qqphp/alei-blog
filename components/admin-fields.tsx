@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { Json } from '@/lib/cms-validation';
 import type { Content, Section } from '@/lib/cms-defaults';
+import { AdminMarkdownEditor } from './admin-markdown-editor';
 
 type ApiData = {
   error?: string;
@@ -315,6 +316,14 @@ export function Field({
       </label>
     );
   const field = path.split('.').at(-1)!;
+  if (path === 'projects.items.body')
+    return (
+      <AdminMarkdownEditor
+        label="项目正文"
+        value={String(value ?? '')}
+        onChange={onChange}
+      />
+    );
   const asset = /^(src|cover|image|audio|publicAccountQr|logo)$/.test(field) || /\.album\.\d+$/.test(path);
   const long =
     typeof value === 'string' &&
