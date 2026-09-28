@@ -7,6 +7,7 @@ export type Book = {
   categoryId: string;
   note: string;
   cover: string;
+  coverDescription: string;
   _published: boolean;
 };
 export type BookList = {
@@ -15,6 +16,7 @@ export type BookList = {
   description: string;
   entries: { title: string; author: string }[];
   cover: string;
+  coverDescription: string;
   _published: boolean;
 };
 export type BookDocument = {
@@ -32,6 +34,7 @@ export const bookSample: BookDocument = {
       categoryId: 'uncategorized',
       note: '',
       cover: '',
+      coverDescription: '',
       _published: false,
     },
   ],
@@ -42,6 +45,7 @@ export const bookSample: BookDocument = {
       description: '',
       entries: [{ title: '书名', author: '' }],
       cover: '',
+      coverDescription: '',
       _published: false,
     },
   ],
@@ -50,7 +54,7 @@ export function migrateBooks(
   value:
     | BookDocument
     | (Omit<BookDocument, 'lists'> & {
-        lists: (Omit<BookList, 'entries' | 'cover'> & { ids: string[] })[];
+        lists: (Omit<BookList, 'entries' | 'cover' | 'coverDescription'> & { ids: string[] })[];
       })
     | ((typeof books)[number] & { _published?: boolean })[],
   lists: ((typeof booklists)[number] & { _published?: boolean })[] = [],
@@ -60,15 +64,16 @@ export function migrateBooks(
       ...value,
       items: value.items.map((item) => {
         const { status: _status, ...book } = item as Book & { status?: string };
-        return book;
+        return { ...book, coverDescription: book.coverDescription ?? '' };
       }),
       lists: value.lists.map((list) => {
-        if ('entries' in list) return list;
+        if ('entries' in list) return { ...list, coverDescription: list.coverDescription ?? '' };
         return {
           id: list.id,
           title: list.title,
           description: list.description,
           cover: '',
+          coverDescription: '',
           entries: list.ids.flatMap((id) => {
             const book = value.items.find((item) => item.id === id);
             return book && (!list._published || book._published)
@@ -91,6 +96,7 @@ export function migrateBooks(
       author: item.author,
       categoryId: categoryId(item.category.trim() || '未分类'),
       note: item.note,
+      coverDescription: '',
       _published: item._published ?? true,
     })),
     lists: lists.map((item) => ({
@@ -98,6 +104,7 @@ export function migrateBooks(
       title: item.title,
       description: item.description,
       cover: '',
+      coverDescription: '',
       entries: [...new Set(item.ids)].flatMap((id) => {
         const book = value.find((book) => book.id === id);
         return book && (item._published === false || book._published !== false)

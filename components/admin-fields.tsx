@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import type { Json } from '@/lib/cms-validation';
 import type { Content, Section } from '@/lib/cms-defaults';
+import type { ProjectImage } from '@/lib/project-content';
 import { AdminMarkdownEditor } from './admin-markdown-editor';
 
 type ApiData = {
@@ -41,6 +42,7 @@ const names: Record<string, string> = {
   id: '唯一标识',
   text: '文字',
   topic: '话题',
+  topics: '话题',
   images: '图片',
   src: '素材地址',
   alt: '图片描述',
@@ -90,6 +92,20 @@ const names: Record<string, string> = {
   eyebrow: '眉题',
   noteTitle: '说说区标题',
   noteText: '说说区说明',
+  director: '导演',
+  genre: '类型',
+  country: '国家',
+  language: '语言',
+  host: '专辑主播',
+};
+const describedCoverActions: Record<string, string> = {
+  'tracks.playlists': 'playlist-cover',
+  'films.items': 'film-cover',
+  'podcasts.items': 'podcast-cover',
+  'travel.items': 'travel-cover',
+  'hobbies.items': 'hobby-cover',
+  'books.items': 'book-cover',
+  'books.lists': 'booklist-cover',
 };
 export const asJson = (value: unknown) => value as Json;
 export function titleOf(value: Json, index: number) {
@@ -186,6 +202,167 @@ export async function upload(file: File) {
     body: file,
   });
 }
+function ProjectTagsField({ value, onChange, pending, onPendingChange }: {
+  value: string[]; onChange: (value: Json) => void;
+  pending: string; onPendingChange: (value: string) => void;
+}) {
+  const [message, setMessage] = useState('');
+  function add() {
+    const tag = pending.trim();
+    if (!tag) { setMessage('请输入标签内容'); return; }
+    if (value.includes(tag)) { setMessage('标签不能重复'); return; }
+    if (value.length >= 500) { setMessage('标签最多 500 项'); return; }
+    onChange([...value, tag]);
+    onPendingChange('');
+    setMessage('');
+  }
+  return <div className="admin-field admin-wide">
+    <label htmlFor="project-tags">标签</label>
+    <div className="admin-story-topics">
+      {value.map((tag) => <span className="admin-story-topic" key={tag}>{tag}
+        <button type="button" aria-label={`删除标签 ${tag}`}
+          onClick={() => onChange(value.filter((old) => old !== tag))}>×</button>
+      </span>)}
+      <input id="project-tags" value={pending} placeholder="输入标签后按 Enter 创建"
+        onChange={(event) => { onPendingChange(event.target.value); setMessage(''); }}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
+            event.preventDefault(); add();
+          }
+        }} />
+    </div>
+    <output>{message}</output>
+  </div>;
+}
+
+function ProjectImagesField({ value, onChange, onWorking }: {
+  value: ProjectImage[]; onChange: (value: Json) => void;
+  onWorking?: (working: boolean) => void;
+}) {
+  const [workingIndex, setWorkingIndex] = useState<number | null>(null);
+  const [message, setMessage] = useState('');
+  const change = (index: number, image: ProjectImage) =>
+    onChange(value.map((old, i) => i === index ? image : old));
+  const move = (index: number, direction: number) => {
+    const images = [...value];
+    [images[index], images[index + direction]] = [images[index + direction], images[index]];
+    onChange(images);
+  };
+  async function generate(index: number) {
+    const image = value[index];
+    if (workingIndex !== null || !image.alt.trim()) return;
+    setWorkingIndex(index); onWorking?.(true); setMessage('正在根据图片描述生成配图…');
+    try {
+      const result = await api<{ url: string; generatedFor: string }>('/api/admin/ai', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'project-cover', description: image.alt }),
+      });
+      change(index, { ...image, src: result.url, mode: 'ai', generatedFor: result.generatedFor });
+      setMessage('图片已生成，点击“确认提交”后生效。');
+    } catch (error) { setMessage(String(error)); }
+    finally { setWorkingIndex(null); onWorking?.(false); }
+  }
+  return <fieldset className="admin-array">
+    <legend>图片 <small>{value.length} 项</small></legend>
+    {value.map((image, index) => <div className="admin-story-image" key={index}>
+      <div className="admin-row-actions">
+        <button type="button" disabled={index === 0} onClick={() => move(index, -1)}>上移</button>
+        <button type="button" disabled={index === value.length - 1} onClick={() => move(index, 1)}>下移</button>
+        <button type="button" onClick={() => {
+          if (window.confirm('从当前表单中删除这张图片？点击“确认提交”后生效。'))
+            onChange(value.filter((_, i) => i !== index));
+        }}>删除</button>
+      </div>
+      <div className="admin-story-image-fields">
+        <div className="admin-field"><label htmlFor={`project-image-${index}-src`}>素材地址</label>
+          <input id={`project-image-${index}-src`} value={image.src}
+            onChange={(event) => change(index, { ...image, src: event.target.value, mode: 'upload', generatedFor: '' })} /></div>
+        <div className="admin-field"><label htmlFor={`project-image-${index}-alt`}>图片描述</label>
+          <input id={`project-image-${index}-alt`} value={image.alt} maxLength={5000}
+            onChange={(event) => change(index, { ...image, alt: event.target.value })} /></div>
+      </div>
+      <div className="admin-field admin-project-image-label"><label htmlFor={`project-image-${index}-label`}>图片标签</label>
+        <input id={`project-image-${index}-label`} value={image.label}
+          onChange={(event) => change(index, { ...image, label: event.target.value })} /></div>
+      <div className="admin-asset">
+        <label className="admin-file-button">上传替换<input type="file" accept="image/png,image/jpeg,image/webp,image/gif"
+          onChange={async (event) => {
+            const file = event.target.files?.[0]; if (!file) return;
+            setWorkingIndex(index); onWorking?.(true); setMessage('上传中…');
+            try {
+              const result = await upload(file);
+              change(index, { ...image, src: result.url, mode: 'upload', generatedFor: '' });
+              setMessage('已上传，点击“确认提交”后生效。');
+            } catch (error) { setMessage(String(error)); }
+            finally { setWorkingIndex(null); onWorking?.(false); event.target.value = ''; }
+          }} /></label>
+        <button type="button" disabled={workingIndex !== null || !image.alt.trim()}
+          onClick={() => void generate(index)}>AI 生成配图</button>
+        {/^(\/|https?:)/.test(image.src) && <a href={image.src} target="_blank" rel="noreferrer">查看素材 ↗</a>}
+        <small>AI 生成配图依据当前图片描述生成</small>
+      </div>
+    </div>)}
+    <button type="button" onClick={() => onChange([...value,
+      { src: '', alt: '', label: '', mode: 'upload', generatedFor: '' }])}>＋ 添加一项</button>
+    <output className="admin-story-image-message">{message}</output>
+  </fieldset>;
+}
+
+function DescriptionImageField({ path, value, onChange, onWorking }: {
+  path: string; value: Record<string, Json>; onChange: (value: Json) => void;
+  onWorking?: (working: boolean) => void;
+}) {
+  const [message, setMessage] = useState('');
+  const [working, setWorking] = useState(false);
+  const cover = typeof value.cover === 'string' ? value.cover : '';
+  const description = typeof value.coverDescription === 'string' ? value.coverDescription : '';
+  async function generate() {
+    if (working || !description.trim()) return;
+    setWorking(true); onWorking?.(true); setMessage('正在根据图片描述生成配图…');
+    try {
+      const result = await api<{ url: string; generatedFor: string }>('/api/admin/ai', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: describedCoverActions[path], description }),
+      });
+      onChange({ ...value, cover: result.url,
+        ...('coverMode' in value ? { coverMode: 'ai' } : {}),
+        ...('coverGeneratedFor' in value ? { coverGeneratedFor: result.generatedFor } : {}) });
+      setMessage('图片已生成，点击“确认提交”后生效。');
+    } catch (error) { setMessage(String(error)); }
+    finally { setWorking(false); onWorking?.(false); }
+  }
+  return <div className="admin-description-image">
+    <div className="admin-story-image-fields">
+      <div className="admin-field"><label htmlFor={`${path}.cover`}>素材地址</label>
+        <input id={`${path}.cover`} value={cover} onChange={(event) => onChange({ ...value,
+          cover: event.target.value,
+          ...('coverMode' in value ? { coverMode: 'upload' } : {}),
+          ...('coverGeneratedFor' in value ? { coverGeneratedFor: '' } : {}) })} /></div>
+      <div className="admin-field"><label htmlFor={`${path}.coverDescription`}>图片描述</label>
+        <input id={`${path}.coverDescription`} value={description} maxLength={5000}
+          onChange={(event) => onChange({ ...value, coverDescription: event.target.value })} /></div>
+    </div>
+    <div className="admin-asset">
+      <label className="admin-file-button">上传替换<input type="file" accept="image/png,image/jpeg,image/webp,image/gif"
+        onChange={async (event) => {
+          const file = event.target.files?.[0]; if (!file) return;
+          setWorking(true); onWorking?.(true); setMessage('上传中…');
+          try {
+            const result = await upload(file);
+            onChange({ ...value, cover: result.url,
+              ...('coverMode' in value ? { coverMode: 'upload' } : {}),
+              ...('coverGeneratedFor' in value ? { coverGeneratedFor: '' } : {}) });
+            setMessage('已上传，点击“确认提交”后生效。');
+          } catch (error) { setMessage(String(error)); }
+          finally { setWorking(false); onWorking?.(false); event.target.value = ''; }
+        }} /></label>
+      <button type="button" disabled={working || !description.trim()} onClick={() => void generate()}>AI 生成配图</button>
+      {/^(\/|https?:)/.test(cover) && <a href={cover} target="_blank" rel="noreferrer">查看素材 ↗</a>}
+      <small>AI 生成配图依据当前图片描述生成</small>
+      <output>{message}</output>
+    </div>
+  </div>;
+}
 export function Field({
   value,
   sample,
@@ -195,6 +372,8 @@ export function Field({
   options = {},
   immutableIdentity = false,
   onWorking,
+  pendingProjectTag = '',
+  onPendingProjectTagChange,
 }: {
   value: Json;
   sample: Json;
@@ -204,8 +383,16 @@ export function Field({
   options?: Record<string, { id: string; name: string }[]>;
   immutableIdentity?: boolean;
   onWorking?: (working: boolean) => void;
+  pendingProjectTag?: string;
+  onPendingProjectTagChange?: (value: string) => void;
 }) {
   const [message, setMessage] = useState('');
+  if (path === 'projects.items.tags' && Array.isArray(value))
+    return <ProjectTagsField value={value as string[]} onChange={onChange}
+      pending={pendingProjectTag} onPendingChange={onPendingProjectTagChange ?? (() => {})} />;
+  if (path === 'projects.items.images' && Array.isArray(value))
+    return <ProjectImagesField value={value as unknown as ProjectImage[]}
+      onChange={onChange} onWorking={onWorking} />;
   if (Array.isArray(value)) {
     const template = Array.isArray(sample) ? (sample[0] ?? '') : '';
     const move = (index: number, direction: number) => {
@@ -260,6 +447,8 @@ export function Field({
               options={options}
               immutableIdentity={immutableIdentity}
               onWorking={onWorking}
+              pendingProjectTag={pendingProjectTag}
+              onPendingProjectTagChange={onPendingProjectTagChange}
             />
           </details>
         ))}
@@ -281,12 +470,17 @@ export function Field({
       <div className="admin-object">
         <h3>{label}</h3>
         <div className="admin-fields">
-          {Object.entries(value).filter(([key]) =>
+          {(path === 'projects.items'
+            ? Object.keys(template).filter((key) => Object.hasOwn(value, key)).map((key) => [key, value[key]] as const)
+            : Object.entries(value)).filter(([key]) =>
             !['id', 'coverGeneratedFor', 'generatedFor', 'createdAt', 'updatedAt'].includes(key) &&
+            !(describedCoverActions[path] && ['coverDescription', 'coverMode'].includes(key)) &&
             !(key === 'category' && Object.hasOwn(value, 'categoryId')) &&
             !(key === 'status' && Object.hasOwn(value, 'statusId')) &&
             !(key === 'mood' && Object.hasOwn(value, 'moodId')),
-          ).map(([key, item]) => (
+          ).map(([key, item]) => key === 'cover' && describedCoverActions[path]
+            ? <DescriptionImageField key={key} path={path} value={value}
+                onChange={onChange} onWorking={onWorking} /> : (
             <Field
               key={key}
               path={`${path}.${key}`}
@@ -297,6 +491,8 @@ export function Field({
               options={options}
               immutableIdentity={immutableIdentity}
               onWorking={onWorking}
+              pendingProjectTag={pendingProjectTag}
+              onPendingProjectTagChange={onPendingProjectTagChange}
             />
           ))}
         </div>

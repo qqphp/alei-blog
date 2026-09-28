@@ -2,15 +2,9 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { AdminMarkdownEditor } from './admin-markdown-editor';
-import { DayPicker } from 'react-day-picker';
-import { zhCN } from 'react-day-picker/locale';
-import { format, parse, isValid } from 'date-fns';
 import type { Content } from '@/lib/cms-defaults';
-import { Popover } from '@base-ui/react/popover';
-import { CalendarDays } from 'lucide-react';
 import { categoryRows, coverInput } from '@/lib/article-categories';
 import { api, upload } from './admin-fields';
-import 'react-day-picker/style.css';
 
 export type Article = Content['writing'][number];
 export async function createArticleCover(article: Article) {
@@ -46,15 +40,8 @@ export function AdminWritingEditor({
   onWorking: (working: boolean) => void;
   disabled?: boolean;
 }) {
-  const [calendarOpen, setCalendarOpen] = useState(false);
   const [message, setMessage] = useState('');
   const [working, setWorking] = useState(false);
-  const date = parse(
-    article.date.replaceAll('-', '.'),
-    'yyyy.MM.dd',
-    new Date(),
-  );
-  const selectedDate = isValid(date) ? date : undefined;
   const set = <K extends keyof Article>(key: K, value: Article[K]) =>
     onChange({ ...article, [key]: value });
   const needsCover =
@@ -127,71 +114,6 @@ export function AdminWritingEditor({
             <small>请先在左侧「文章分类」中新增分类。</small>
           )}
         </div>
-        <div className="admin-field">
-          <label htmlFor="article-date">发布日期</label>
-          <Popover.Root
-            open={calendarOpen && !disabled}
-            onOpenChange={setCalendarOpen}
-          >
-            <Popover.Trigger
-              id="article-date"
-              className="admin-date-trigger"
-              disabled={disabled}
-            >
-              {article.date || '选择日期'}
-              <CalendarDays size={17} />
-            </Popover.Trigger>
-            <Popover.Portal>
-              <Popover.Positioner
-                sideOffset={6}
-                align="end"
-                className="admin-floating-positioner"
-              >
-                <Popover.Popup className="admin-floating admin-calendar-popup">
-                  <Popover.Title className="admin-calendar-title">
-                    选择发布日期
-                  </Popover.Title>{' '}
-                  <DayPicker
-                    mode="single"
-                    required
-                    selected={selectedDate}
-                    defaultMonth={selectedDate}
-                    locale={zhCN}
-                    captionLayout="dropdown"
-                    startMonth={new Date(2000, 0)}
-                    endMonth={new Date(new Date().getFullYear() + 10, 11)}
-                    onSelect={(day) => {
-                      set('date', format(day, 'yyyy.MM.dd'));
-                      setCalendarOpen(false);
-                    }}
-                  />
-                </Popover.Popup>
-              </Popover.Positioner>
-            </Popover.Portal>
-          </Popover.Root>
-          <small>这是文章展示日期，不是定时发布。</small>
-        </div>
-        <fieldset className="admin-choice admin-wide">
-          <legend>发布状态</legend>
-          <label>
-            <input
-              type="radio"
-              name="article-publication"
-              checked={!article._published}
-              onChange={() => set('_published', false)}
-            />
-            草稿
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="article-publication"
-              checked={article._published}
-              onChange={() => set('_published', true)}
-            />
-            发布到前台
-          </label>
-        </fieldset>
         <fieldset className="admin-cover admin-wide">
           <legend>文章封面</legend>
           <div className="admin-choice">
@@ -291,20 +213,6 @@ export function AdminWritingEditor({
                       }}
                     />
                   </label>
-                  <label className="admin-field" htmlFor="article-cover-url">
-                    或使用已有素材地址
-                    <input
-                      id="article-cover-url"
-                      value={article.cover}
-                      onChange={(e) =>
-                        onChange({
-                          ...article,
-                          cover: e.target.value,
-                          coverGeneratedFor: '',
-                        })
-                      }
-                    />
-                  </label>
                 </>
               )}
               <output>{message}</output>
@@ -316,24 +224,16 @@ export function AdminWritingEditor({
           value={article.body}
           onChange={(body) => set('body', body)}
         />
-        <details className="admin-article-extra admin-wide">
-          <summary>文章链接</summary>
-          <div className="admin-fields">
-            {([['slug', '文章路径标识']] as const).map(([key, label]) => (
-              <div className="admin-field" key={key}>
-                <label htmlFor={`article-${key}`}>{label}</label>
-                <input
-                  id={`article-${key}`}
-                  value={article[key]}
-                  onChange={(e) => set(key, e.target.value)}
-                />
-              </div>
-            ))}
-          </div>
-          <small>
-            文章地址：/writing/{article.slug}。修改路径后旧链接不再有效。
-          </small>
-        </details>
+        <label className="admin-check">
+          <input
+            type="checkbox"
+            checked={article._published}
+            disabled={disabled}
+            onChange={(event) => set('_published', event.target.checked)}
+          />
+          发布到前台
+          <small>{article._published ? '保存后公开显示' : '草稿，仅后台可见'}</small>
+        </label>
       </div>
     </div>
   );

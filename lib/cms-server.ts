@@ -70,7 +70,7 @@ export async function getDocuments(sections?: Section[]) {
       const [sectionResult, categories, articles, entries] = [
         await db.query<{ section: Section; value: unknown; revision: number }>('SELECT section, value, revision FROM cms_sections WHERE $1::text[] IS NULL OR section = ANY($1::text[])', [selected]),
         await db.query<{ id: string; name: string; description: string; parent_id: string | null }>('SELECT id, name, description, parent_id FROM article_categories WHERE $1::boolean ORDER BY position', [has('categories') || has('writing')]),
-        await db.query<{ slug: string; title: string; excerpt: string; body: string; category_id: string; date: string; published: boolean; cover_url: string; cover_mode: string; cover_generated_for: string }>(`SELECT slug, title, excerpt, body, category_id, to_char(published_on, 'YYYY.MM.DD') AS date, published, cover_url, cover_mode, cover_generated_for FROM articles WHERE $1::boolean ORDER BY position`, [has('writing')]),
+        await db.query<{ slug: string; title: string; excerpt: string; body: string; category_id: string; date: string; published: boolean; cover_url: string; cover_mode: string; cover_generated_for: string }>(`SELECT slug, title, excerpt, body, category_id, to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, published, cover_url, cover_mode, cover_generated_for FROM articles WHERE $1::boolean ORDER BY created_at DESC, slug`, [has('writing')]),
         await db.query<{ section: Section; collection: string; category_id: string | null; payload: unknown; createdAt: Date | null; updatedAt: Date }>('SELECT section, collection, category_id, payload, created_at AS "createdAt", updated_at AS "updatedAt" FROM cms_entries WHERE $1::text[] IS NULL OR section = ANY($1::text[]) ORDER BY section, collection, position, id', [selected]),
       ];
       await db.query('COMMIT');
@@ -215,7 +215,7 @@ export async function getPublicArticle(slug: string) {
   const row = await withDatabase(async (db) => {
     const result = await db.query<{ slug: string; title: string; excerpt: string; body: string; categoryId: string; category: string; date: string; cover: string; coverMode: 'upload' | 'ai'; coverGeneratedFor: string }>(
       `SELECT a.slug, a.title, a.excerpt, a.body, a.category_id AS "categoryId",
-        c.name AS category, to_char(a.published_on, 'YYYY.MM.DD') AS date,
+        c.name AS category, to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date,
         a.cover_url AS cover, a.cover_mode AS "coverMode",
         a.cover_generated_for AS "coverGeneratedFor"
        FROM articles a JOIN article_categories c ON c.id = a.category_id
@@ -237,9 +237,9 @@ export async function getRecentArticles(limit: number) {
     if (!section.rowCount) return null;
     const result = await db.query<{ slug: string; title: string; excerpt: string; category: string; categoryId: string; date: string; cover: string }>(
       `SELECT a.slug, a.title, a.excerpt, c.name AS category, a.category_id AS "categoryId",
-        to_char(a.published_on, 'YYYY.MM.DD') AS date, a.cover_url AS cover
+        to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, a.cover_url AS cover
        FROM articles a JOIN article_categories c ON c.id = a.category_id
-       WHERE a.published ORDER BY a.published_on DESC, a.slug LIMIT $1`,
+       WHERE a.published ORDER BY a.created_at DESC, a.slug LIMIT $1`,
       [limit],
     );
     return result.rows;
@@ -289,9 +289,9 @@ export async function getWritingArchive(query = '', group = '', page = 1, pageSi
       await db.query<{ count: number }>('SELECT count(*)::int AS count FROM articles WHERE published'),
       await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM articles a JOIN article_categories c ON c.id = a.category_id WHERE ${filter}`, [branch, search, pattern, matchingCategories]),
       await db.query<ArchiveArticle>(`SELECT a.slug, a.title, a.excerpt, a.category_id AS "categoryId",
-        c.name AS category, to_char(a.published_on, 'YYYY.MM.DD') AS date, a.cover_url AS cover
+        c.name AS category, to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, a.cover_url AS cover
         FROM articles a JOIN article_categories c ON c.id = a.category_id WHERE ${filter}
-        ORDER BY a.published_on DESC, a.slug LIMIT $5 OFFSET $6`,
+        ORDER BY a.created_at DESC, a.slug LIMIT $5 OFFSET $6`,
       [branch, search, pattern, matchingCategories, pageSize, (requestedPage - 1) * pageSize]),
     ];
     return {

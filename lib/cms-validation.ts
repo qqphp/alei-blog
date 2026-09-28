@@ -254,12 +254,12 @@ export function validateContent(key: Section, value: unknown) {
       )
         throw new Error('请选择有效的年月日时分秒（北京时间）');
       if (
-        item.topics.length > 20 ||
+        item.topics.length > 6 ||
         item.topics.some((topic) => !topic.trim() || topic.length > 40) ||
         new Set(item.topics.map((topic) => topic.trim())).size !==
           item.topics.length
       )
-        throw new Error('话题不能重复或为空，每个最多 40 字，最多 20 个');
+        throw new Error('话题不能重复或为空，每个最多 40 字，最多 6 个');
     }
   if (key === 'aiSettings') {
     const settings = value as typeof defaults.aiSettings;
@@ -268,18 +268,6 @@ export function validateContent(key: Section, value: unknown) {
         throw new Error(
           `${label}尺寸须为 auto 或宽x高；宽高需为 16 的倍数且不超过 3840，长宽比不超过 3:1，总像素数须在 655360 到 8294400 之间`,
         );
-    for (const kind of ['travel', 'hobby', 'book', 'booklist'] as const) {
-      const fields = kind === 'book' ? ['title', 'author'] : ['title', 'excerpt'];
-      if (!fields.every(field => settings[`${kind}CoverPrompt`].includes('{{' + field + '}}')))
-        throw new Error('旅行、爱好和书籍封面提示词须保留对应内容占位符');
-    }
-    if (
-      !['title', 'excerpt', 'host'].every((key) =>
-        settings.podcastCoverPrompt.includes('{{' + key + '}}'),
-      )
-    )
-      throw new Error('播客封面提示词须包含标题、简介和主播占位符');
-
     validateProviderUrl(settings.baseUrl);
     if (!settings.textModel.trim() || !settings.imageModel.trim())
       throw new Error('请填写模型名称');
@@ -295,31 +283,18 @@ export function validateContent(key: Section, value: unknown) {
   }
   if (key === 'aiSettings') {
     const settings = value as typeof defaults.aiSettings;
+    for (const field of ['projectImagePrompt', 'playlistCoverPrompt', 'filmCoverPrompt',
+      'podcastCoverPrompt', 'travelCoverPrompt', 'hobbyCoverPrompt', 'bookCoverPrompt',
+      'booklistCoverPrompt'] as const) {
+      const prompt = settings[field];
+      if (!prompt.includes('{{description}}') || /\{\{(?:title|subtitle|excerpt|director|host|author)\}\}/.test(prompt))
+        throw new Error('图片描述生成提示词须包含 {{description}}，不再使用标题等内容占位符');
+    }
     if (
-      !['title', 'director'].every((key) =>
-        settings.filmCoverPrompt.includes('{{' + key + '}}'),
-      ) ||
-      settings.filmCoverPrompt.includes('{{excerpt}}')
+      !settings.storyImagePrompt.includes('{{description}}') ||
+      ['title', 'excerpt'].some((key) => settings.storyImagePrompt.includes('{{' + key + '}}'))
     )
-      throw new Error('电影封面提示词须包含名称和导演，不使用简介');
-    if (
-      !['title', 'excerpt'].every((key) =>
-        settings.playlistCoverPrompt.includes('{{' + key + '}}'),
-      )
-    )
-      throw new Error('歌单封面提示词须包含名称和简介');
-    if (
-      !['title', 'subtitle', 'excerpt'].every((key) =>
-        settings.projectImagePrompt.includes('{{' + key + '}}'),
-      )
-    )
-      throw new Error('项目图片提示词须包含名称、副标题和摘要占位符');
-    if (
-      !['title', 'excerpt'].every((key) =>
-        settings.storyImagePrompt.includes('{{' + key + '}}'),
-      )
-    )
-      throw new Error('说说图片提示词须包含话题和文字占位符');
+      throw new Error('说说图片提示词须包含 {{description}}，不再使用话题或文字占位符');
   }
   if (key === 'bookmarks' || key === 'friends') {
     const document = value as typeof defaults.bookmarks;

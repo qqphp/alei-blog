@@ -283,16 +283,16 @@ try {
     const [value, set] = useState({
       ...defaults.aiSettings,
       filmCoverStyle: '胶片',
-      filmCoverPrompt: '{{title}} {{director}}',
+      filmCoverPrompt: '{{description}} {{style}}',
       playlistCoverStyle: '唱片',
-      playlistCoverPrompt: '{{title}} {{excerpt}}',
+      playlistCoverPrompt: '{{description}} {{style}}',
       baseUrl: 'https://example.com/v1',
       textModel: 'text',
       imageModel: 'image',
       projectImageStyle: '项目纸艺',
-      projectImagePrompt: '{{title}} {{subtitle}} {{excerpt}}',
+      projectImagePrompt: '{{description}} {{style}}',
       storyImageStyle: '说说纪实',
-      storyImagePrompt: '{{title}} {{excerpt}} {{style}}',
+      storyImagePrompt: '{{description}} {{style}}',
       coverStyle: '纸艺',
       coverPrompt: '{{title}} {{excerpt}}',
     });
@@ -332,7 +332,7 @@ try {
   assert.equal(screen.getByLabelText('说说图片风格').value, '说说纪实 自然光');
   assert.match(
     screen.getByLabelText('说说图片生成提示词').value,
-    /\{\{title\}\}.*\{\{excerpt\}\}/,
+    /\{\{description\}\}/,
   );
   await user.click(screen.getByRole('tab', { name: '歌单配置' }));
   await user.type(screen.getByLabelText('歌单封面风格'), ' 复古');
@@ -550,12 +550,23 @@ try {
   const { migrateFilms } = await import('../lib/film-content.ts');
   const { musicSample, migrateMusic, publicMusic } = await import('../lib/music-content.ts');
   const { validateContent: validateCollections } = await import('../lib/cms-validation.ts');
+  const noImageProject = { ...defaults.projects.items[0], id: 'project-without-image', title: '测试项目', images: [], _published: true };
+  assert.throws(() => validateCollections('projects', { ...defaults.projects, items: [noImageProject] }), /项目至少需要一张图片/);
+  validateCollections('projects', { ...defaults.projects, items: [{ ...noImageProject, images: [defaults.projects.items[0].images[0]] }] });
+  validateCollections('aiSettings', defaults.aiSettings);
+  assert.throws(() => validateCollections('aiSettings', {
+    ...defaults.aiSettings, filmCoverPrompt: '电影名称：{{title}}',
+  }), /图片描述生成提示词/);
+  assert.throws(() => validateCollections('aiSettings', {
+    ...defaults.aiSettings, booklistCoverPrompt: '书单名称：{{title}}；简介：{{excerpt}}',
+  }), /图片描述生成提示词/);
   const legacyActivity = migrateActivities({ title: '旅行', intro: '', entries: [{ id: 'legacy', title: '旧记录', category: '城市', subtitle: '旧副标题', description: '旧简介', body: ['第一段', '第二段'], _published: false }] });
   assert.equal(legacyActivity.items[0].body, '第一段\n\n第二段');
   assert.equal(legacyActivity.items[0]._published, false);
   const legacyBooks = migrateBooks([{ id: 'old', title: '旧书', author: '作者', category: '文学', status: '读过', color: '#123456', note: '旧笔记', _published: false }], [{ id: 'old-list', title: '旧书单', description: '简介', label: '旧标签', ids: ['old'], _published: false }]);
   assert.equal(legacyBooks.items[0].note, '旧笔记');
   assert.deepEqual(legacyBooks.lists[0].entries, [{ title: '旧书', author: '作者' }]);
+  assert.equal(legacyBooks.lists[0].coverDescription, '');
   validateCollections('books', legacyBooks);
   const legacyPodcast = migratePodcasts({ title: '播客', intro: '', entries: [{ id: 'old', title: '旧节目', description: '旧简介', category: '话题', subtitle: '', body: ['旧稿'], _published: false }] });
   assert.equal(legacyPodcast.categories[0].name, '话题');

@@ -9,6 +9,7 @@ export type Podcast = {
   categoryId: string;
   audio: string;
   cover: string;
+  coverDescription: string;
   coverMode: 'upload' | 'ai';
   coverGeneratedFor: string;
   _published: boolean;
@@ -32,6 +33,7 @@ export const podcastSample: PodcastDocument = {
       categoryId: 'uncategorized',
       audio: '',
       cover: '',
+      coverDescription: '',
       coverMode: 'upload',
       coverGeneratedFor: '',
       _published: false,
@@ -47,7 +49,9 @@ export function migratePodcasts(
         entries: (LifeEntry & { _published?: boolean })[];
       },
 ): PodcastDocument {
-  if ('items' in document) return document;
+  if ('items' in document) return { ...document, items: document.items.map((item) => ({
+    ...item, coverDescription: item.coverDescription ?? '',
+  })) };
   const names = [
     ...new Set(
       document.entries.map((item) => item.category.trim() || '未分类'),
@@ -64,16 +68,8 @@ export function migratePodcasts(
       description: item.description ?? '',
       categoryId: categoryId(item.category.trim() || '未分类'),
       cover: item.image ?? '',
+      coverDescription: '',
       _published: item._published ?? true,
     })),
   };
 }
-export const podcastCoverInput = (
-  item: Pick<Podcast, 'title' | 'description' | 'host'>,
-) =>
-  JSON.stringify([
-    item.title.trim(),
-    item.description.trim(),
-    item.host.trim(),
-    '3:2',
-  ]);

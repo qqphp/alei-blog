@@ -8,15 +8,6 @@ export type ProjectImage = {
   mode: string;
   generatedFor: string;
 };
-export function projectImageInput(
-  project: Pick<Project, 'title' | 'subtitle' | 'description'>,
-) {
-  return JSON.stringify([
-    project.title.trim(),
-    project.subtitle.trim(),
-    project.description.trim(),
-  ]);
-}
 export type Project = {
   id: string;
   title: string;

@@ -23,40 +23,40 @@ export const defaults = {
   aiSettings: {
     booklistCoverSize: '1536x1024',
     booklistCoverStyle: '3:2 横版编辑插画，以阅读主题为视觉中心，细腻纸张质感、克制的色彩与留白。',
-    booklistCoverPrompt: '为主题书单创作原创封面。书单名称：{{title}}。书单简介：{{excerpt}}。风格：{{style}}。用象征性场景、物件和色彩表达主题，不添加文字、水印或虚构的官方标志。',
+    booklistCoverPrompt: '为主题书单创作原创封面。图片描述：{{description}}。风格：{{style}}。用描述中的场景、物件和色彩表达主题，不添加文字、水印或虚构的官方标志。',
     travelCoverSize: '1536x1024',
     travelCoverStyle: '自然旅行摄影，3:2 横版构图，真实光线、风景层次和安静的旅行氛围。',
-    travelCoverPrompt: '为旅行记录创作封面。标题：{{title}}。简介：{{excerpt}}。风格：{{style}}。按目的地和风景线索构图，不添加文字或水印。',
+    travelCoverPrompt: '为旅行记录创作封面。图片描述：{{description}}。风格：{{style}}。根据描述中的目的地和风景线索构图，不添加文字或水印。',
     hobbyCoverSize: '1536x1024',
     hobbyCoverStyle: '3:2 横版编辑摄影，细腻自然光，突出爱好的物件、动作与日常氛围。',
-    hobbyCoverPrompt: '为爱好记录创作封面。爱好：{{title}}。简介：{{excerpt}}。风格：{{style}}。围绕具体活动构图，不添加文字或水印。',
+    hobbyCoverPrompt: '为爱好记录创作封面。图片描述：{{description}}。风格：{{style}}。围绕描述中的具体活动构图，不添加文字或水印。',
     bookCoverSize: '1024x1536',
     bookCoverStyle: '2:3 竖版书籍封面，精炼的插画与象征性构图，有层次的色彩和留白。',
-    bookCoverPrompt: '为书籍创作原创视觉封面。书名：{{title}}。作者：{{author}}。风格：{{style}}。围绕书名和作者线索表达主题，作者未提供时仅根据书名构图，不冒充官方封面，不添加文字或水印。',
+    bookCoverPrompt: '为书籍创作原创视觉封面。图片描述：{{description}}。风格：{{style}}。根据图片描述表达主题，不冒充官方封面，不添加文字或水印。',
     playlistCoverSize: '1024x1024',
     playlistCoverStyle:
       '音乐专辑封面风格，方形 1:1 构图，用克制的色彩和具象场景传达歌单情绪。',
     playlistCoverPrompt:
-      '为歌单生成一张原创封面。歌单名称：{{title}}。歌单简介：{{excerpt}}。视觉风格：{{style}}。方形 1:1 构图，视觉焦点明确，不添加文字、标志或水印。',
+      '为歌单生成一张原创封面。图片描述：{{description}}。视觉风格：{{style}}。方形 1:1 构图，视觉焦点明确，不添加文字、标志或水印。',
     podcastCoverSize: '1536x1024',
     podcastCoverStyle: '3:2 横版播客封面，编辑摄影与抽象拼贴，围绕节目主题构图，不添加水印或虚构人物肖像。',
-    podcastCoverPrompt: '为播客生成 3:2 横版封面。标题：{{title}}。简介：{{excerpt}}。主播：{{host}}。风格：{{style}}。用场景、物件和色彩传达节目的主题与谈话氛围，不添加文字。',
+    podcastCoverPrompt: '为播客生成 3:2 横版封面。图片描述：{{description}}。风格：{{style}}。用场景、物件和色彩传达描述中的主题与谈话氛围，不添加文字。',
     filmCoverSize: '864x1536',
     filmCoverStyle:
       '电影海报摄影风格，竖向 9:16 构图，深色影调、细腻胶片颗粒、克制的光影和留白。',
     filmCoverPrompt:
-      '根据以下电影信息创作一张原创电影封面，不冒充官方海报。电影名称：{{title}}。导演：{{director}}。视觉风格：{{style}}。提炼故事中的场景、物件和情绪，形成单一视觉焦点。竖向 9:16 构图，保留裁切余量，不添加文字、水印或标志。',
+      '根据图片描述创作一张原创电影封面，不冒充官方海报。图片描述：{{description}}。视觉风格：{{style}}。提炼描述中的场景、物件和情绪，形成单一视觉焦点。竖向 9:16 构图，保留裁切余量，不添加文字、水印或标志。',
 
     projectImageSize: '1536x1024',
     projectImageStyle:
       '清晰的产品概念插画，简洁构图，突出项目核心用途，与博客视觉协调，横向构图。',
     projectImagePrompt:
-      '为以下项目生成一张横向封面图。\n项目名称：{{title}}\n副标题：{{subtitle}}\n摘要：{{excerpt}}\n视觉风格：{{style}}\n用具体的物件、场景与空间关系表达项目用途，保持一个视觉焦点，留出裁切余量。不要文字、标志或水印。',
+      '为项目生成一张横向配图。\n图片描述：{{description}}\n视觉风格：{{style}}\n根据图片描述中的物件、场景与空间关系构图，保持一个视觉焦点，留出裁切余量。不要文字、标志或水印。',
     storyImageSize: '1536x1024',
     storyImageStyle:
-      '自然纪实与编辑感结合的横版画面，真实光线、克制色彩，突出说说中的具体场景、情绪和关键意象。',
+      '自然纪实与编辑感结合的横版画面，真实光线、克制色彩，突出图片描述中的具体场景、情绪和关键意象。',
     storyImagePrompt:
-      '为一条中文个人博客说说创作配图。\n说说话题：{{title}}\n说说文字：{{excerpt}}\n视觉风格：{{style}}\n根据话题和文字选择合适的场景与表现方式，用一个明确视觉焦点表达内容。画面自然、有叙事感，适合说说图片展示。不要添加文字、字母、数字、标志、水印或虚构截图。',
+      '为一条中文个人博客说说创作配图。\n图片描述：{{description}}\n视觉风格：{{style}}\n根据图片描述呈现场景、主体与细节，用一个明确视觉焦点表达内容。画面自然、有叙事感，适合说说图片展示。不要添加文字、字母、数字、标志、水印或虚构截图。',
     baseUrl: 'https://api.teamorouter.com/v1',
     textModel: 'gpt-5.4-mini',
     imageModel: 'gpt-image-2',

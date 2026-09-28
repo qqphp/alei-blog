@@ -7,6 +7,7 @@ export type Activity = {
   description: string;
   body: string;
   cover: string;
+  coverDescription: string;
   album: string[];
   _published: boolean;
 };
@@ -28,6 +29,7 @@ export const activitySample: ActivityDocument = {
       description: '',
       body: '',
       cover: '',
+      coverDescription: '',
       album: [],
       _published: false,
     },
@@ -45,7 +47,7 @@ export function migrateActivities(
   if ('items' in doc)
     return {
       ...doc,
-      items: doc.items.map((item) => ({ ...item, album: item.album ?? [] })),
+      items: doc.items.map((item) => ({ ...item, coverDescription: item.coverDescription ?? '', album: item.album ?? [] })),
     };
   const names = [
     ...new Set(doc.entries.map((item) => item.category.trim() || '未分类')),
@@ -62,6 +64,7 @@ export function migrateActivities(
       description: item.description ?? '',
       body: (item.body ?? []).join('\n\n'),
       cover: item.image ?? '',
+      coverDescription: '',
       _published: item._published ?? true,
     })),
   };

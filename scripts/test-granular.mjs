@@ -31,15 +31,20 @@ try {
     const db = new pg.Client({ connectionString: testUrl.toString() });
     await db.connect();
     try {
-      const articles = await db.query('SELECT slug, position, published, cover_url, body, updated_at FROM articles ORDER BY slug');
+      const articles = await db.query('SELECT slug, position, published, published_on, cover_url, body, updated_at FROM articles ORDER BY slug');
       const categories = await db.query('SELECT id, position, parent_id FROM article_categories ORDER BY id');
-      const entries = await db.query('SELECT section, collection, id, position, published, payload, updated_at FROM cms_entries ORDER BY section, collection, id');
+      const entries = await db.query('SELECT section, collection, id, position, published, occurred_at, payload, updated_at FROM cms_entries ORDER BY section, collection, id');
       const sections = await db.query('SELECT section, value FROM cms_sections ORDER BY section');
       return { articles: articles.rows, categories: categories.rows,
         entries: entries.rows, sections: sections.rows };
     } finally { await db.end(); }
   };
   const original = await snapshot();
+  const timeDb = new pg.Client({ connectionString: testUrl.toString() });
+  await timeDb.connect();
+  const historicalArticles = (await timeDb.query('SELECT slug, created_at FROM articles')).rows;
+  const historicalEntries = (await timeDb.query('SELECT section, collection, id, created_at FROM cms_entries')).rows;
+  await timeDb.end();
   for (const task of [
     { name: 'migration', args: ['scripts/migrate-postgres.mjs'] },
     { name: 'default section seed', args: ['--import', 'tsx', 'scripts/seed-missing-sections.mjs'] },
@@ -57,6 +62,7 @@ try {
     assert.ok(after, `迁移后缺少 ${entry.section}/${entry.collection}/${entry.id}`);
     assert.equal(after.position, entry.position);
     assert.equal(after.published, entry.published);
+    assert.deepEqual(after.occurred_at, entry.occurred_at, '迁移不能改变说说日期或其他内容日期');
     if (entry.section === 'slides' && !Object.hasOwn(entry.payload, 'id')) {
       const { id: _id, ...payload } = after.payload;
       assert.deepEqual(payload, entry.payload);
@@ -64,15 +70,34 @@ try {
     } else {
       const renamed = entry.section === 'investing' && entry.collection === 'sections'
         ? ({ trends: ['趋势分析', '技术分析'], indicators: ['策略指标', '技术指标'] })[entry.id] : null;
-      assert.deepEqual(after.payload, renamed && entry.payload.title === renamed[0]
-        ? { ...entry.payload, title: renamed[1] } : entry.payload);
+      const coverDescriptionRecord = [
+        ['tracks', 'playlists'], ['films', 'items'], ['podcasts', 'items'],
+        ['travel', 'items'], ['hobbies', 'items'], ['books', 'items'], ['books', 'lists'],
+      ].some(([section, collection]) => entry.section === section && entry.collection === collection);
+      const expected = renamed && entry.payload.title === renamed[0]
+        ? { ...entry.payload, title: renamed[1] } : entry.payload;
+      assert.deepEqual(after.payload, coverDescriptionRecord && !('coverDescription' in expected)
+        ? { ...expected, coverDescription: '' } : expected);
     }
     assert.deepEqual(after.updated_at, entry.updated_at, '迁移不能改变历史更新时间');
   }
   const expectedSections = original.sections.filter((section) => !['pageSettings', 'copy'].includes(section.section));
-  for (const section of expectedSections.filter((item) => item.section !== 'investing'))
-    assert.deepEqual(migrated.sections.find((item) => item.section === section.section)?.value,
-      section.value, `${section.section} 其余设置应保留`);
+  for (const section of expectedSections.filter((item) => item.section !== 'investing')) {
+    const actual = migrated.sections.find((item) => item.section === section.section)?.value;
+    if (section.section === 'aiSettings') {
+      const fields = ['projectImagePrompt', 'playlistCoverPrompt', 'filmCoverPrompt',
+        'podcastCoverPrompt', 'travelCoverPrompt', 'hobbyCoverPrompt', 'bookCoverPrompt',
+        'booklistCoverPrompt'];
+      for (const field of fields) {
+        assert.ok(actual[field].includes('{{description}}'), `${field} 应使用图片描述`);
+        assert.doesNotMatch(actual[field], /\{\{(?:title|subtitle|excerpt|director|host|author)\}\}/);
+      }
+      const { storyImagePrompt: _oldStory, ...previous } = section.value;
+      const { storyImagePrompt: _newStory, ...current } = actual;
+      for (const field of fields) { delete previous[field]; delete current[field]; }
+      assert.deepEqual(current, previous, '其余 AI 设置应保留');
+    } else assert.deepEqual(actual, section.value, `${section.section} 其余设置应保留`);
+  }
   const media = (state) => new Set(JSON.stringify(state).match(/\/api\/media\/[a-f0-9-]+\.(?:png|jpg|gif|webp|mp3|wav)/g) ?? []);
   for (const url of media({ ...original, sections: expectedSections })) assert.ok(media(migrated).has(url), `迁移后缺少素材引用 ${url}`);
   assert.equal(migrated.entries.filter((item) => item.section === 'investing' &&
@@ -85,12 +110,41 @@ try {
   try {
     assert.equal((await testDb.query("SELECT count(*)::int AS n FROM cms_sections WHERE section IN ('pageSettings','copy')")).rows[0].n, 0, '迁移和初始化不能恢复已删除配置');
     assert.equal((await testDb.query("SELECT to_regclass('public.cms_section_parts')")).rows[0].to_regclass, null);
-    assert.equal((await testDb.query('SELECT count(*)::int AS n FROM articles WHERE created_at IS NOT NULL')).rows[0].n, 0);
-    assert.equal((await testDb.query("SELECT count(*)::int AS n FROM cms_entries WHERE section='investing' AND collection='entries' AND created_at IS NOT NULL")).rows[0].n, 0);
-    for (const item of original.entries.filter((row) => row.section === 'projects' && row.collection === 'items')) {
-      const date = (await testDb.query("SELECT created_at FROM cms_entries WHERE section='projects' AND collection='items' AND id=$1", [item.id])).rows[0].created_at;
-      assert.equal(date?.toISOString() ?? null, item.payload.createdAt ? new Date(item.payload.createdAt).toISOString() : null);
+    const backfill = '2026-01-01T00:00:00.000Z';
+    for (const item of historicalArticles) {
+      const date = (await testDb.query('SELECT created_at FROM articles WHERE slug=$1', [item.slug])).rows[0].created_at;
+      assert.equal(date.toISOString(), item.created_at?.toISOString() ?? backfill);
     }
+    for (const item of historicalEntries) {
+      const date = (await testDb.query('SELECT created_at FROM cms_entries WHERE section=$1 AND collection=$2 AND id=$3',
+        [item.section, item.collection, item.id])).rows[0].created_at;
+      assert.equal(date.toISOString(), item.created_at?.toISOString() ?? backfill);
+    }
+    const firstSettings = (await testDb.query("SELECT value,revision,updated_at FROM cms_sections WHERE section='aiSettings'")).rows;
+    await testDb.query(await readFile(resolve('db/migrations/0013_creation_dates_and_story_images.sql'), 'utf8'));
+    await testDb.query(await readFile(resolve('db/migrations/0014_description_driven_images.sql'), 'utf8'));
+    await testDb.query(await readFile(resolve('db/migrations/0015_booklist_cover_description.sql'), 'utf8'));
+    assert.deepEqual((await testDb.query("SELECT value,revision,updated_at FROM cms_sections WHERE section='aiSettings'")).rows,
+      firstSettings, '重复执行迁移不得修改提示词、版本或更新时间');
+    assert.deepEqual(await snapshot(), migrated, '迁移重复执行不得修改内容或其他时间');
+    await testDb.query(`UPDATE cms_sections SET value = jsonb_set(jsonb_set(value, '{filmCoverPrompt}',
+      to_jsonb('自定义胶片光影。电影：{{title}}。导演：{{director}}。风格：{{style}}。'::text)),
+      '{booklistCoverPrompt}', to_jsonb('自定义书单插画。名称：{{title}}。简介：{{excerpt}}。'::text))
+      WHERE section = 'aiSettings'`);
+    await testDb.query(await readFile(resolve('db/migrations/0014_description_driven_images.sql'), 'utf8'));
+    await testDb.query(await readFile(resolve('db/migrations/0015_booklist_cover_description.sql'), 'utf8'));
+    const customSettings = (await testDb.query("SELECT value,revision,updated_at FROM cms_sections WHERE section='aiSettings'")).rows;
+    assert.ok(customSettings[0].value.filmCoverPrompt.startsWith('自定义胶片光影。'));
+    assert.ok(customSettings[0].value.filmCoverPrompt.includes('{{description}}'));
+    assert.doesNotMatch(customSettings[0].value.filmCoverPrompt, /\{\{(?:title|director)\}\}/);
+    assert.ok(customSettings[0].value.booklistCoverPrompt.startsWith('自定义书单插画。'));
+    assert.ok(customSettings[0].value.booklistCoverPrompt.includes('{{description}}'));
+    assert.doesNotMatch(customSettings[0].value.booklistCoverPrompt, /\{\{(?:title|excerpt)\}\}/);
+    await testDb.query(await readFile(resolve('db/migrations/0014_description_driven_images.sql'), 'utf8'));
+    await testDb.query(await readFile(resolve('db/migrations/0015_booklist_cover_description.sql'), 'utf8'));
+    assert.deepEqual((await testDb.query("SELECT value,revision,updated_at FROM cms_sections WHERE section='aiSettings'")).rows,
+      customSettings, '自定义提示词转换后重复执行不得修改');
+    console.log('PASS historical creation-time backfill, preserved timestamps/content and idempotent image prompt migrations');
     await testDb.query(`INSERT INTO cms_sections (section, value)
       VALUES ('site', '{"title":"ISOLATED_GRANULAR_TEST"}'::jsonb)
       ON CONFLICT (section) DO UPDATE SET value = jsonb_set(cms_sections.value,

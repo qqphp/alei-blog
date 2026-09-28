@@ -275,7 +275,7 @@ export function AdminAiSettings({
           <div>
             <h2>项目图片生成</h2>
             <p className="admin-help">
-              使用“模型配置”中的图片模型，根据项目名称、副标题和摘要生成图片。
+              使用“模型配置”中的图片模型，根据每张项目图片的图片描述生成配图。
             </p>
           </div>
         </div>
@@ -310,7 +310,7 @@ export function AdminAiSettings({
             />
             <small>
               {
-                '{{title}} = 项目名称；{{subtitle}} = 副标题；{{excerpt}} = 摘要；{{style}} = 图片风格。前三个占位符必须保留。'
+                '{{description}} = 当前图片的图片描述；{{style}} = 图片风格。图片描述占位符必须保留。'
               }
             </small>
           </div>
@@ -321,7 +321,7 @@ export function AdminAiSettings({
           <div>
             <h2>说说图片生成</h2>
             <p className="admin-help">
-              使用“模型配置”中的图片模型，根据说说文字和话题生成合适的配图。
+              使用“模型配置”中的图片模型，根据每张图片的图片描述生成合适的配图。
             </p>
           </div>
         </div>
@@ -356,7 +356,7 @@ export function AdminAiSettings({
             />
             <small>
               {
-                '{{title}} = 话题；{{excerpt}} = 说说文字；{{style}} = 图片风格。话题和文字占位符必须保留。'
+                '{{description}} = 当前图片的图片描述；{{style}} = 图片风格。图片描述占位符必须保留。'
               }
             </small>
           </div>
@@ -365,7 +365,7 @@ export function AdminAiSettings({
       <Tabs.Panel value="music">
         <h2>歌单封面生成</h2>
         <p className="admin-help">
-          使用图片模型，根据歌单名称和简介生成封面。请先保存配置。
+          使用图片模型，根据歌单封面的图片描述生成配图。请先保存配置。
         </p>
         <div className="admin-fields">
           <ImageSizeSetting
@@ -398,7 +398,7 @@ export function AdminAiSettings({
             />
             <small>
               {
-                '{{title}} = 歌单名称；{{excerpt}} = 歌单简介；{{style}} = 封面风格。名称和简介占位符必须保留。'
+                '{{description}} = 图片描述；{{style}} = 封面风格。图片描述占位符必须保留。'
               }
             </small>
           </div>
@@ -407,7 +407,7 @@ export function AdminAiSettings({
       <Tabs.Panel value="films">
         <h2>电影封面生成</h2>
         <p className="admin-help">
-          使用“模型配置”中的图片模型，根据电影名称和导演生成封面。请先保存配置。
+          使用“模型配置”中的图片模型，根据电影封面的图片描述生成配图。请先保存配置。
         </p>
         <div className="admin-fields">
           <ImageSizeSetting
@@ -440,7 +440,7 @@ export function AdminAiSettings({
             />
             <small>
               {
-                '{{title}} = 电影名称；{{director}} = 导演；{{style}} = 封面风格。名称和导演占位符必须保留。'
+                '{{description}} = 图片描述；{{style}} = 封面风格。图片描述占位符必须保留。'
               }
             </small>
           </div>
@@ -449,7 +449,7 @@ export function AdminAiSettings({
       <Tabs.Panel value="podcasts">
         <h2>播客封面生成</h2>
         <p className="admin-help">
-          使用“模型配置”中的图片模型，根据播客标题、简介和主播生成封面。请先保存配置。
+          使用“模型配置”中的图片模型，根据播客封面的图片描述生成配图。请先保存配置。
         </p>
         <div className="admin-fields">
           <ImageSizeSetting
@@ -482,7 +482,7 @@ export function AdminAiSettings({
             />
             <small>
               {
-                '{{title}} = 播客名称；{{excerpt}} = 简介；{{host}} = 主播；{{style}} = 封面风格。标题、简介和主播占位符必须保留。'
+                '{{description}} = 图片描述；{{style}} = 封面风格。图片描述占位符必须保留。'
               }
             </small>
           </div>
@@ -535,10 +535,8 @@ export function AdminAiSettings({
                   }
                 />
                 <small>
-                  {kind === 'book'
-                    ? '{{title}} = 书名；{{author}} = 可选作者；{{style}} = 风格。'
-                    : '{{title}} = 标题；{{excerpt}} = 简介；{{style}} = 风格。'}
-                  保存配置后，点击编辑页面的生成封面按钮生效。
+                  {'{{description}} = 图片描述；{{style}} = 风格。图片描述占位符必须保留。'}
+                  保存配置后，点击编辑页面的 AI 生成配图按钮生效。
                 </small>
               </div>
             </div>

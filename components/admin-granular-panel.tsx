@@ -6,16 +6,11 @@ import { format } from 'date-fns';
 import { defaults, sectionLabels, type Content, type Section } from '@/lib/cms-defaults';
 import { adminCollections, collectionLabels, configScopes } from '@/lib/admin-sections';
 import { coverInput } from '@/lib/article-categories';
-import { projectImageInput, type Project } from '@/lib/project-content';
-import { filmCoverInput, type Film } from '@/lib/film-content';
-import { podcastCoverInput, type Podcast } from '@/lib/podcast-content';
-import { musicSample, playlistCoverInput, type MusicPlaylist } from '@/lib/music-content';
-import { storyDate } from '@/lib/story-content';
+import { musicSample } from '@/lib/music-content';
+import { storyDate, type Story } from '@/lib/story-content';
 import type { Json } from '@/lib/cms-validation';
 import { AdminWritingEditor, createArticleCover, type Article } from './admin-writing-editor';
-import { createProjectImage } from './admin-project-images';
-import { createFilmCover, createPodcastCover } from './admin-generated-covers';
-import { createPlaylistCover } from './admin-playlist-cover';
+import { AdminStoryEditor } from './admin-story-editor';
 import { AdminAiSettings } from './admin-ai-settings';
 import { AdminAiResources } from './admin-ai-resources';
 import { AdminInvestmentEditor } from './admin-investment-editor';
@@ -45,6 +40,12 @@ const websiteTabs = [
   { id: 'home', label: '首页', keys: ['eyebrow', 'title', 'description', 'noteTitle', 'noteText'] },
 ];
 const EMPTY_COLLECTIONS: readonly string[] = [];
+const blankNameCollections: Partial<Record<Section, readonly string[]>> = {
+  projects: ['items'], bookmarks: ['items'], friends: ['items'],
+  tracks: ['items', 'scenes', 'playlists'], films: ['items', 'categories'],
+  podcasts: ['items', 'categories'], travel: ['items', 'categories'],
+  hobbies: ['items', 'categories'], books: ['items', 'categories', 'lists'],
+};
 const destinations: Partial<Record<Section, string>> = {
   home: '/', site: '/', writing: '/writing', projects: '/projects', stories: '/notes',
   slides: '/notes', profile: '/about', ai: '/ai',
@@ -76,7 +77,7 @@ function sampleRecord(section: Section, collection: string, options: Record<stri
     return { id: `category-${crypto.randomUUID()}`, name: '', description: '', parentId: '' };
   if (section === 'investing' && collection === 'entries') {
     const sample = defaults.investing.sections[0].entries[0];
-    return { ...fresh(asJson(sample)) as Item, id: crypto.randomUUID(),
+    return { ...fresh(asJson(sample)) as Item, title: '', id: crypto.randomUUID(),
       sectionId: options.sections?.[0]?.id ?? '' } as Json;
   }
   const source = defaults[section] as unknown;
@@ -88,9 +89,17 @@ function sampleRecord(section: Section, collection: string, options: Record<stri
   if (!sample) throw new Error('此列表没有可用的表单模板');
   const value = fresh(asJson(sample)) as Item;
   value.id = crypto.randomUUID();
+  if (section === 'ai' || section === 'investing' || blankNameCollections[section]?.includes(collection)) {
+    for (const key of ['title', 'name']) if (key in value) value[key] = '';
+  }
+  if (section === 'projects' && collection === 'items') value.images = [];
+  if (section === 'films' && collection === 'items') value.cover = '';
   if (section === 'investing' && collection === 'sections') delete value.entries;
   if (section === 'ai' && collection === 'agents') value.status = 'active';
-  if (section === 'stories') value.date = storyDate(new Date());
+  if (section === 'stories') {
+    value.date = storyDate(new Date());
+    value.images = [];
+  }
   return value as Json;
 }
 
@@ -109,37 +118,6 @@ async function prepareMedia(section: Section, collection: string, value: Json, s
     if (article.coverMode === 'ai' && (!article.cover || article.coverGeneratedFor !== coverInput(article.title, article.excerpt))) {
       setMessage('正在生成文章封面…');
       return asJson(await createArticleCover(article));
-    }
-  }
-  if (section === 'projects' && collection === 'items') {
-    const project = item as unknown as Project;
-    const images = [...project.images];
-    for (let index = 0; index < images.length; index++)
-      if (images[index].mode === 'ai' && (!images[index].src || images[index].generatedFor !== projectImageInput(project))) {
-        setMessage(`正在生成项目图片 ${index + 1}…`);
-        images[index] = await createProjectImage(project, images[index]);
-      }
-    return asJson({ ...project, images });
-  }
-  if (section === 'films' && collection === 'items') {
-    const film = item as unknown as Film;
-    if (film.coverMode === 'ai' && (!film.cover || film.coverGeneratedFor !== filmCoverInput(film))) {
-      setMessage('正在生成电影封面…');
-      return asJson(await createFilmCover(film));
-    }
-  }
-  if (section === 'podcasts' && collection === 'items') {
-    const podcast = item as unknown as Podcast;
-    if (podcast.coverMode === 'ai' && (!podcast.cover || podcast.coverGeneratedFor !== podcastCoverInput(podcast))) {
-      setMessage('正在生成播客封面…');
-      return asJson(await createPodcastCover(podcast));
-    }
-  }
-  if (section === 'tracks' && collection === 'playlists') {
-    const list = item as unknown as MusicPlaylist;
-    if (list.coverMode === 'ai' && (!list.cover || list.coverGeneratedFor !== playlistCoverInput(list))) {
-      setMessage('正在生成歌单封面…');
-      return asJson(await createPlaylistCover(list));
     }
   }
   return value;
@@ -163,6 +141,8 @@ export function AdminGranularPanel() {
   const [config, setConfig] = useState<Edit | null>(null);
   const [busy, setBusy] = useState(false);
   const [working, setWorking] = useState(false);
+  const [pendingStoryTopic, setPendingStoryTopic] = useState('');
+  const [pendingProjectTag, setPendingProjectTag] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const listRequest = useRef(0);
@@ -175,7 +155,9 @@ export function AdminGranularPanel() {
   const configSection = section === 'site' && tab === 'home' ? 'home' : section;
   const configScope = section === 'site' ? 'root' : activeScope;
   const dirty = Boolean((edit && JSON.stringify(edit.value) !== edit.original) ||
-    (config && JSON.stringify(config.value) !== config.original));
+    (config && JSON.stringify(config.value) !== config.original) ||
+    (edit && recordSection === 'stories' && pendingStoryTopic.trim()) ||
+    (edit && recordSection === 'projects' && pendingProjectTag.trim()));
   const confirmDiscard = () => !dirty || window.confirm('有未提交的修改，确定放弃吗？');
   const optionFields = useMemo(() => ({
     categoryId: options.categories ?? [], statusId: options.statuses ?? [],
@@ -268,6 +250,8 @@ export function AdminGranularPanel() {
       if (!result) throw new Error('记录不存在');
       setEdit({ id, value: result.value, revision: result.revision,
         original: JSON.stringify(result.value) });
+      setPendingStoryTopic('');
+      setPendingProjectTag('');
     } catch (error) { if (request === editRequest.current) setMessage(String(error)); }
     finally { if (request === editRequest.current) setBusy(false); }
   }
@@ -277,11 +261,21 @@ export function AdminGranularPanel() {
     try {
       const value = sampleRecord(recordSection, activeCollection, options);
       setEdit({ id: null, value, revision: 0, original: JSON.stringify(value) });
+      setPendingStoryTopic('');
+      setPendingProjectTag('');
       setMessage('');
     } catch (error) { setMessage(String(error)); }
   }
   async function save() {
     if (busy || working) return;
+    if (recordSection === 'stories' && edit && pendingStoryTopic.trim()) {
+      setMessage('话题输入框还有未创建的内容，请先按 Enter 创建话题。');
+      return;
+    }
+    if (recordSection === 'projects' && edit && pendingProjectTag.trim()) {
+      setMessage('标签输入框还有未创建的内容，请先按 Enter 创建标签。');
+      return;
+    }
     setBusy(true); setMessage('');
     try {
       if (activeCollection && edit) {
@@ -329,31 +323,6 @@ export function AdminGranularPanel() {
     } catch (error) { setMessage(String(error)); }
     finally { setBusy(false); }
   }
-  async function generateAdditionalImage() {
-    if (busy || working || !edit || !activeCollection || !edit.value || typeof edit.value !== 'object' || Array.isArray(edit.value)) return;
-    const value = edit.value as Item;
-    const kind = section === 'travel' ? 'travel-cover' : section === 'hobbies' ? 'hobby-cover'
-      : section === 'books' && activeCollection === 'items' ? 'book-cover'
-        : section === 'books' && activeCollection === 'lists' ? 'booklist-cover'
-          : section === 'stories' ? 'story-image' : null;
-    if (!kind) return;
-    setWorking(true); setMessage('正在生成图片…');
-    try {
-      const result = await api<{ url: string }>('/api/admin/ai', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: kind, title: value.title ?? value.text ?? '',
-          excerpt: value.description ?? value.text ?? '', author: value.author ?? '' }),
-      });
-      const next = kind === 'story-image'
-        ? { ...value, images: [...(value.images as unknown[]), { src: result.url,
-          alt: typeof value.text === 'string' ? value.text.slice(0, 80) : '' }] }
-        : { ...value, cover: result.url };
-      setEdit({ ...edit, value: next as Json });
-      setMessage('图片已生成，点击“确认提交”后生效。');
-    } catch (error) { setMessage(String(error)); }
-    finally { setWorking(false); }
-  }
-
   if (!ready) return <main className="admin-login"><output>正在连接内容管理…</output></main>;
   if (!loggedIn) return <main className="admin-login"><form onSubmit={async (event) => {
     event.preventDefault(); setBusy(true);
@@ -382,8 +351,6 @@ export function AdminGranularPanel() {
   const recordSample = activeCollection ? sampleRecord(recordSection, activeCollection, options) : null;
   const canPublish = activeCollection && !['categories', 'statuses', 'scenes', 'sections'].includes(activeCollection)
     && !(section === 'writing' && activeCollection === 'categories');
-  const canGenerate = Boolean(edit && ((recordSection === 'travel' || recordSection === 'hobbies' || recordSection === 'stories')
-    || (section === 'books' && ['items', 'lists'].includes(activeCollection ?? ''))));
   const showTimes = (section === 'writing' && activeCollection === 'articles') ||
     (section === 'projects' && activeCollection === 'items') || (section === 'investing' && activeCollection === 'entries');
   const canMove = !['writing', 'stories'].includes(recordSection) && !(section === 'investing' && activeCollection === 'entries');
@@ -426,14 +393,14 @@ export function AdminGranularPanel() {
           <div className="admin-section-heading"><button type="button" disabled={busy || working} onClick={() => {
             if (confirmDiscard()) { editRequest.current++; setEdit(null); setMessage(''); }
           }}>← 返回列表</button><span>{edit.id ? '编辑内容' : '新增内容'}</span></div>
-          {showTimes && <dl className="admin-record-times">
-            <div><dt>{section === 'investing' ? '添加时间' : '创建时间'}</dt><dd>{edit.id ? formatRecordTime((edit.value as Item).createdAt as string | null) : '首次保存时自动记录'}</dd></div>
-            <div><dt>最后更新时间</dt><dd>{edit.id ? formatRecordTime((edit.value as Item).updatedAt as string) : '首次保存时自动记录'}</dd></div>
-          </dl>}
           <fieldset disabled={busy || working}>
             {section === 'writing' && activeCollection === 'articles' ?
               <AdminWritingEditor article={edit.value as unknown as Article}
                 categories={(options.categories ?? []) as Content['categories']}
+                onWorking={setWorking} disabled={busy || working}
+                onChange={(value) => setEdit({ ...edit, value: asJson(value) })} /> :
+              recordSection === 'stories' ? <AdminStoryEditor story={edit.value as unknown as Story}
+                pendingTopic={pendingStoryTopic} onPendingTopicChange={setPendingStoryTopic}
                 onWorking={setWorking} disabled={busy || working}
                 onChange={(value) => setEdit({ ...edit, value: asJson(value) })} /> :
               section === 'ai' ? <AdminAiResources collection={activeCollection} value={edit.value} sample={recordSample!}
@@ -443,12 +410,10 @@ export function AdminGranularPanel() {
               <Field path={`${recordSection}.${activeCollection}`} label={collectionName(recordSection, activeCollection)}
                 value={edit.value} sample={recordSample ?? edit.value} options={optionFields}
                 onWorking={setWorking}
+                pendingProjectTag={pendingProjectTag} onPendingProjectTagChange={setPendingProjectTag}
                 immutableIdentity={Boolean(edit.id)}
                 onChange={(value) => setEdit({ ...edit, value })} />}
           </fieldset>
-          {canGenerate && <button type="button" disabled={busy || working} onClick={() => void generateAdditionalImage()}>
-            {working ? '正在生成图片…' : section === 'stories' ? 'AI 生成配图' : 'AI 生成封面'}
-          </button>}
           <div className="admin-form-actions"><button className="admin-primary" type="button"
             disabled={busy || working} onClick={() => void save()}>
             {busy ? '提交中…' : '确认提交'}
@@ -482,8 +447,9 @@ export function AdminGranularPanel() {
             <thead><tr><th scope="col">内容</th>{showTimes && <><th scope="col">{section === 'investing' ? '添加时间' : '创建时间'}</th><th scope="col">最后更新时间</th></>}<th scope="col">状态</th><th scope="col">操作</th></tr></thead>
             <tbody>{list?.items.map((item, index) => <tr key={item.id}>
               <td><button type="button" className="admin-table-title" disabled={busy || working} onClick={() => void openRecord(item.id)}>
-                {item.title || item.excerpt || item.id}</button>
-                <small>{item.excerpt?.slice(0, 100) || item.id}</small></td>
+                {section === 'stories' ? item.date ? formatRecordTime(item.date).replaceAll('/', '-') : '—'
+                  : item.title || item.excerpt || item.id}</button>
+                <small>{section === 'stories' ? item.excerpt?.slice(0, 100) ?? '' : item.excerpt?.slice(0, 100) || item.id}</small></td>
               {showTimes && <><td>{formatRecordTime(item.createdAt)}</td><td>{item.updatedAt ? formatRecordTime(item.updatedAt) : '—'}</td></>}
               <td>{canPublish ? <span className={`admin-status-badge ${item.published ? 'published' : ''}`}>
                 {item.published ? '已发布' : '草稿'}</span> : '—'}</td>

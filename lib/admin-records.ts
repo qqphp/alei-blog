@@ -4,7 +4,7 @@ import { defaults, type Section } from './cms-defaults';
 import { validateContent } from './cms-validation';
 import { adminCollections, configKeys, sectionMetadata, validCollection } from './admin-sections';
 import { deleteLocalMedia } from './local-media';
-import { recordTimes } from './content-times';
+import { articleCreationDate, recordTimes } from './content-times';
 import { recordFields } from './content-record-fields.mjs';
 
 type Item = Record<string, unknown>;
@@ -16,6 +16,8 @@ export class AdminNotFound extends Error {}
 function recordInput(section: Section, collection: string, value: Item, createdAt: string | null) {
   if (section === 'writing' && collection === 'categories') return value;
   const { createdAt: _createdAt, updatedAt: _updatedAt, ...fields } = value;
+  if (section === 'writing' && collection === 'articles')
+    return { ...fields, date: articleCreationDate(createdAt ?? '2026-01-01T08:00:00+08:00') };
   return section === 'projects' && collection === 'items' ? { ...fields, createdAt: createdAt ?? '' } : fields;
 }
 
@@ -58,9 +60,9 @@ export async function listAdminRecords(section: Section, collection: string, inp
       const params = [q, pattern, input.status, input.categoryId];
       const total = await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM articles a WHERE ${where}`, params);
       const rows = await db.query(`SELECT a.slug AS id, a.title, a.excerpt, a.category_id AS "categoryId",
-        c.name AS category, a.published, to_char(a.published_on, 'YYYY.MM.DD') AS date,
+        c.name AS category, a.published, to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date,
         a.position, a.revision, a.created_at AS "createdAt", a.updated_at AS "updatedAt" FROM articles a JOIN article_categories c ON c.id = a.category_id
-        WHERE ${where} ORDER BY a.published_on DESC, a.slug LIMIT $5 OFFSET $6`,
+        WHERE ${where} ORDER BY a.created_at DESC, a.slug LIMIT $5 OFFSET $6`,
       [...params, size, (page - 1) * size]);
       return { items: rows.rows.map((row) => ({ ...row, ...recordTimes(row) })), total: total.rows[0].count, page, size };
     }
@@ -80,7 +82,8 @@ export async function listAdminRecords(section: Section, collection: string, inp
     const order = section === 'investing' && collection === 'entries'
       ? 'created_at DESC NULLS LAST, position, id'
       : section === 'stories' ? 'occurred_at DESC NULLS LAST, position, id' : 'position, id';
-    const rows = await db.query(`SELECT id, title, left(search_text, 160) AS excerpt,
+    const excerpt = section === 'stories' ? "left(payload->>'text', 160)" : 'left(search_text, 160)';
+    const rows = await db.query(`SELECT id, title, ${excerpt} AS excerpt,
       category_id AS "categoryId", published, occurred_at AS date, position, revision,
       created_at AS "createdAt", updated_at AS "updatedAt"
       FROM cms_entries WHERE ${where} ORDER BY ${order} LIMIT $8 OFFSET $9`,
@@ -94,7 +97,7 @@ async function readRecord(db: Client, key: RecordKey) {
   if (section === 'writing' && collection === 'articles') {
     const row = await db.query(`SELECT a.slug, a.title, a.excerpt, a.body,
       a.category_id AS "categoryId", c.name AS category,
-      to_char(a.published_on, 'YYYY.MM.DD') AS date, a.published AS "_published",
+      to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, a.published AS "_published",
       a.cover_url AS cover, a.cover_mode AS "coverMode",
       a.cover_generated_for AS "coverGeneratedFor", a.revision,
       a.created_at AS "createdAt", a.updated_at AS "updatedAt"

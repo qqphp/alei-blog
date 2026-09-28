@@ -15,11 +15,14 @@ for (const name of ['window', 'document', 'navigator', 'localStorage', 'HTMLElem
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 window.confirm = () => true;
-const { createElement, act } = await import('react');
-const { render, screen, waitFor, cleanup, within } = await import('@testing-library/react');
+const { createElement, act, useState } = await import('react');
+const { render, screen, waitFor, cleanup, within, fireEvent } = await import('@testing-library/react');
 const { default: userEvent } = await import('@testing-library/user-event');
 const { AdminGranularPanel } = await import('../components/admin-granular-panel.tsx');
 const { defaults } = await import('../lib/cms-defaults.ts');
+const { coverInput } = await import('../lib/article-categories.ts');
+const { musicSample } = await import('../lib/music-content.ts');
+const { Field } = await import('../components/admin-fields.tsx');
 const user = userEvent.setup({ document: window.document });
 const calls = [];
 const category = { id: 'ui-category', name: '测试分类', description: '', parentId: '' };
@@ -34,6 +37,20 @@ let site = { ...structuredClone(defaults.site), name: ' 自定义站点 ', descr
 let siteRevision = 1;
 let failNextConfigWrite = '';
 let failNextWrite = false;
+let story = { ...structuredClone(defaults.stories[0]), id: 'ui-story', text: '原说说',
+  date: '2026-09-08T12:34:56+08:00', topics: [], images: [
+    { src: '/stories-lake.png', alt: '湖面上的清晨薄雾' },
+    { src: '/stories-coast.png', alt: '海边的灯塔' },
+  ] };
+let storyRevision = 1;
+let failStoryImage = false;
+const project = { ...structuredClone(defaults.projects.items[0]), title: '原项目' };
+const aiResources = Object.fromEntries(['agents', 'skills', 'relays'].map((collection) => [collection,
+  { ...structuredClone(defaults.ai[collection][0]), id: `ui-${collection}`,
+    ...(collection === 'skills' ? { title: '原技能' } : { name: `原${collection}` }) }]));
+let investment = { ...structuredClone(defaults.investing.sections[0].entries[0]), id: 'ui-investment',
+  title: '原投资文章', sectionId: defaults.investing.sections[0].id,
+  createdAt: '2026-09-08T01:02:03.000Z', updatedAt: '2026-09-09T01:02:03.000Z' };
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url, 'http://localhost:3000');
   calls.push({ path: url.pathname, method: init.method ?? 'GET', body: init.body ? JSON.parse(init.body) : null });
@@ -41,7 +58,52 @@ globalThis.fetch = async (input, init = {}) => {
     return Response.json({ authenticated: true, configured: true });
   if (url.pathname === '/api/admin/options/writing')
     return Response.json({ categories: [category] });
+  if (url.pathname === '/api/admin/options/projects')
+    return Response.json({ categories: defaults.projects.categories, statuses: defaults.projects.statuses });
+  if (url.pathname === '/api/admin/options/investing')
+    return Response.json({ sections: defaults.investing.sections.map(({ id, title }) => ({ id, name: title })) });
   if (url.pathname.startsWith('/api/admin/options/')) return Response.json({});
+  if (url.pathname === '/api/admin/ai' && init.method === 'POST')
+    return failStoryImage ? Response.json({ error: '模拟生成失败，原图片已保留' }, { status: 502 })
+      : Response.json({ url: '/api/media/story-generated.png',
+        generatedFor: JSON.stringify([JSON.parse(init.body).description.trim()]) });
+  if (url.pathname === '/api/admin/records/stories/root') {
+    if (init.method === 'POST') { story = JSON.parse(init.body).value; return Response.json({ revision: 1 }); }
+    return Response.json({ items: [{ id: story.id, title: story.text, excerpt: story.text, date: story.date,
+      revision: storyRevision, published: story._published, position: 0 },
+      { id: 'empty-story', title: '不应回退为标题', excerpt: '', date: null, revision: 1, position: 1 }],
+      total: 2, page: 1, size: 20 });
+  }
+  if (url.pathname === '/api/admin/records/stories/root/ui-story') {
+    if (init.method === 'PUT') { story = JSON.parse(init.body).value; storyRevision++; }
+    return Response.json({ value: story, revision: storyRevision });
+  }
+  if (url.pathname === '/api/admin/records/projects/items') {
+    if (init.method === 'POST') {
+      if (!JSON.parse(init.body).value.images.length)
+        return Response.json({ error: '项目至少需要一张图片' }, { status: 400 });
+      return Response.json({ revision: 1 });
+    }
+    return Response.json({ items: [{ id: project.id, title: project.title, revision: 1,
+      published: project._published, position: 0 }], total: 1, page: 1, size: 20 });
+  }
+  if (url.pathname === `/api/admin/records/projects/items/${project.id}`)
+    return Response.json({ value: Object.fromEntries(Object.entries(project).reverse()), revision: 1 });
+  for (const [collection, value] of Object.entries(aiResources)) {
+    const base = `/api/admin/records/ai/${collection}`;
+    if (url.pathname === base)
+      return Response.json({ items: [{ id: value.id, title: value.title ?? value.name, revision: 1,
+        published: value._published, position: 0 }], total: 1, page: 1, size: 20 });
+    if (url.pathname === `${base}/${value.id}`) return Response.json({ value, revision: 1 });
+  }
+  if (url.pathname === '/api/admin/records/investing/entries')
+    return Response.json({ items: [{ id: investment.id, title: investment.title, revision: 1,
+      createdAt: investment.createdAt, updatedAt: investment.updatedAt,
+      published: investment._published, position: 0 }], total: 1, page: 1, size: 20 });
+  if (url.pathname === `/api/admin/records/investing/entries/${investment.id}`) {
+    if (init.method === 'PUT') investment = JSON.parse(init.body).value;
+    return Response.json({ value: investment, revision: 1 });
+  }
   if (url.pathname === '/api/admin/records/writing/articles') {
     if (init.method === 'POST') return Response.json({ revision: 1 });
     return Response.json({ items: [{ id: article.slug, title: article.title,
@@ -110,6 +172,13 @@ try {
   await act(async () => finishDetail());
   globalThis.fetch = immediateFetch;
   await screen.findByLabelText('文章标题');
+  assert.equal(screen.queryByLabelText('或使用已有素材地址'), null);
+  assert.ok(screen.getByLabelText('选择封面文件'));
+  assert.ok(screen.getByRole('img', { name: '当前文章封面' }));
+  for (const label of ['创建时间', '最后更新时间', '发布日期', '文章路径标识'])
+    assert.equal(screen.queryByText(label), null, `文章表单隐藏 ${label}`);
+  assert.equal(screen.getAllByRole('checkbox').at(-1), screen.getByRole('checkbox', { name: /发布到前台/ }));
+  assert.equal(screen.queryByRole('radio', { name: '草稿' }), null);
   const markdown = await screen.findByRole('textbox', { name: '文章正文 Markdown' });
   await user.type(markdown, '\n\n## 按需编辑测试');
   await user.click(screen.getByRole('button', { name: '预览', exact: true }));
@@ -138,6 +207,7 @@ try {
   const write = calls.find((call) => call.method === 'PUT' && call.path.includes('/records/'));
   assert.equal(Array.isArray(write.body.value), false);
   assert.equal(write.body.value.slug, 'ui-granular');
+  assert.equal(write.body.value.cover, '/notes/paper-v2.png', '修改正文时保留原封面');
   assert.ok(write.body.value.body.includes('## 按需编辑测试'), '按需加载后的正文修改必须随表单保存');
   assert.equal(Object.hasOwn(write.body, 'key'), false);
   await screen.findByRole('button', { name: '原文章已修改' });
@@ -145,6 +215,9 @@ try {
   await waitFor(() => assert.equal(article._published, true));
   assert.ok(calls.some((call) => call.method === 'PATCH'));
   await user.click(screen.getByRole('button', { name: '＋ 新增文章管理' }));
+  assert.equal(screen.queryByLabelText('或使用已有素材地址'), null);
+  for (const label of ['创建时间', '最后更新时间', '发布日期', '文章路径标识'])
+    assert.equal(screen.queryByText(label), null, `新增文章表单隐藏 ${label}`);
   assert.equal(calls.some((call) => call.method === 'POST' && call.path.includes('/records/')), false);
   await user.click(screen.getByRole('button', { name: '← 返回列表' }));
   assert.equal(calls.some((call) => call.method === 'POST' && call.path.includes('/records/')), false);
@@ -279,6 +352,7 @@ try {
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: 'AI', exact: true }));
   assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['智能体', '技能 Skills', '中转站 API']);
   await user.click(screen.getByRole('button', { name: '＋ 新增智能体' }));
+  assert.equal(screen.getByLabelText('名称').value, '');
   await user.type(screen.getByLabelText('名称'), '未保存资源');
   window.confirm = () => false;
   await user.click(screen.getByRole('tab', { name: '技能 Skills' }));
@@ -286,22 +360,268 @@ try {
   window.confirm = () => true;
   await user.click(screen.getByRole('tab', { name: '技能 Skills' }));
   await user.click(screen.getByRole('button', { name: '＋ 新增技能 Skills' }));
+  assert.equal(screen.getByLabelText('标题').value, '');
   assert.ok(screen.getByLabelText('子分类'));
   assert.equal(screen.queryByLabelText('提示词'), null);
+  await user.click(screen.getByRole('tab', { name: '中转站 API' }));
+  await user.click(screen.getByRole('button', { name: '＋ 新增中转站 API' }));
+  assert.equal(screen.getByLabelText('名称').value, '');
+  await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+  await user.click(await screen.findByRole('button', { name: '原relays' }));
+  assert.equal((await screen.findByLabelText('名称')).value, '原relays');
+  for (const [tab, label, title] of [['智能体', '名称', '原agents'], ['技能 Skills', '标题', '原技能']]) {
+    await user.click(screen.getByRole('tab', { name: tab }));
+    await user.click(await screen.findByRole('button', { name: title }));
+    assert.equal((await screen.findByLabelText(label)).value, title);
+  }
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: '投资', exact: true }));
   assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['文章', '栏目']);
   await user.click(screen.getByRole('button', { name: '＋ 新增文章' }));
-  assert.equal(screen.getAllByText('首次保存时自动记录').length, 2);
+  assert.equal(screen.getByLabelText('标题').value, '');
+  for (const text of ['首次保存时自动记录', '添加时间', '最后更新时间']) assert.equal(screen.queryByText(text), null);
   assert.ok(screen.getByLabelText('栏目'));
   assert.equal(screen.queryByLabelText('添加时间'), null);
+  await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+  await screen.findByRole('button', { name: '原投资文章' });
+  assert.ok(screen.getByRole('columnheader', { name: '添加时间' }));
+  assert.ok(screen.getByRole('columnheader', { name: '最后更新时间' }));
+  await user.click(screen.getByRole('button', { name: '原投资文章' }));
+  assert.equal((await screen.findByLabelText('标题')).value, '原投资文章');
+  for (const text of ['添加时间', '最后更新时间']) assert.equal(screen.queryByText(text), null);
+  await user.type(screen.getByLabelText('说明'), '修改说明');
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await screen.findByRole('button', { name: '原投资文章' });
+  assert.equal(investment.createdAt, '2026-09-08T01:02:03.000Z');
+  await user.click(screen.getByRole('button', { name: '原投资文章' }));
+  assert.ok((await screen.findByLabelText('说明')).value.endsWith('修改说明'));
   await user.click(screen.getByRole('tab', { name: '栏目' }));
   await user.click(screen.getByRole('button', { name: '＋ 新增栏目' }));
-  assert.ok(screen.getByLabelText('标题'));
+  assert.equal(screen.getByLabelText('标题').value, '');
   assert.equal(screen.queryByLabelText('上级分类'), null);
   assert.equal(screen.queryByText('内容条目'), null);
   assert.equal(within(screen.getByRole('navigation', { name: '后台栏目' })).queryByRole('button', { name: '页面标题与配图', exact: true }), null);
   assert.equal(within(screen.getByRole('navigation', { name: '后台栏目' })).queryByRole('button', { name: '页面固定文案', exact: true }), null);
   assert.equal('copy' in defaults, false);
+  await user.click(within(nav).getByRole('button', { name: '项目', exact: true }));
+  await screen.findByRole('button', { name: '原项目' });
+  await user.click(screen.getByRole('button', { name: '＋ 新增内容' }));
+  const labels = () => [...window.document.querySelectorAll('.admin-form .admin-field > label, .admin-form .admin-array > legend, .admin-form .admin-check')]
+    .filter((node) => !node.closest('details,.admin-story-image'))
+    .map((node) => node.firstChild.textContent.trim());
+  const projectLabels = labels();
+  assert.equal(screen.getByLabelText('标题').value, '');
+  assert.equal(within(screen.getByRole('group', { name: /^图片/ })).queryByLabelText('素材地址'), null);
+  assert.match(screen.getByRole('group', { name: /^图片/ }).textContent, /0 项/);
+  await user.type(screen.getByLabelText('标题'), '新项目');
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  assert.ok(await screen.findByText(/项目至少需要一张图片/));
+  const tags = screen.getByLabelText('标签');
+  await user.type(tags, '新标签{Enter}');
+  assert.ok(screen.getByRole('button', { name: '删除标签 新标签' }));
+  await user.type(tags, '新标签{Enter}');
+  assert.ok(screen.getByText('标签不能重复'));
+  await user.clear(tags);
+  await user.click(within(screen.getByRole('group', { name: /^图片/ })).getByRole('button', { name: '＋ 添加一项' }));
+  assert.equal(screen.getByLabelText('素材地址').value, '');
+  assert.equal(screen.getByRole('button', { name: 'AI 生成配图' }).disabled, true);
+  await user.type(screen.getByLabelText('图片描述'), '山上的小型木屋');
+  await user.click(screen.getByRole('button', { name: 'AI 生成配图' }));
+  await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/story-generated.png'));
+  const projectAiCall = calls.filter((call) => call.path === '/api/admin/ai').at(-1);
+  assert.deepEqual(projectAiCall.body, { action: 'project-cover', description: '山上的小型木屋' });
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await screen.findByRole('button', { name: '原项目' });
+  const createdProject = calls.filter((call) => call.path === '/api/admin/records/projects/items' && call.method === 'POST').at(-1).body.value;
+  assert.equal(createdProject.images.length, 1);
+  assert.deepEqual(createdProject.tags, ['新标签']);
+  assert.equal(window.document.querySelector('.admin-record-times'), null);
+  await user.click(await screen.findByRole('button', { name: '原项目' }));
+  await screen.findByLabelText('标题');
+  assert.deepEqual(labels(), projectLabels, '项目编辑字段顺序与新增一致，即使接口顺序相反');
+  assert.equal(window.document.querySelector('.admin-record-times'), null);
+
+  await user.click(within(nav).getByRole('button', { name: '说说', exact: true }));
+  const storyTitle = await screen.findByRole('button', { name: '2026-09-08 12:34:56' });
+  assert.equal(storyTitle.closest('td').querySelector('small').textContent, '原说说');
+  const emptyTitle = screen.getByRole('button', { name: '—', exact: true });
+  assert.equal(emptyTitle.closest('td').querySelector('small').textContent, '');
+  assert.equal(screen.queryByRole('button', { name: '原说说' }), null);
+  await user.click(storyTitle);
+  await screen.findByLabelText('内容');
+  assert.equal(screen.queryByLabelText('文字'), null);
+  assert.equal(screen.queryByText('topics'), null);
+  assert.equal(screen.getByLabelText('日期（北京时间）').textContent, '2026-09-08 12:34:56');
+  await user.click(screen.getByLabelText('日期（北京时间）'));
+  fireEvent.change(screen.getByLabelText('时间（时分秒）'), { target: { value: '23:45:12' } });
+  await user.click(screen.getByRole('button', { name: '完成', exact: true }));
+  assert.equal(screen.getByLabelText('日期（北京时间）').textContent, '2026-09-08 23:45:12');
+  const topics = screen.getByLabelText('话题');
+  await user.type(topics, '# 湖边 ');
+  fireEvent.keyDown(topics, { key: 'Enter', isComposing: true });
+  assert.equal(screen.queryByRole('button', { name: '删除话题 湖边' }), null, '输入法确认不创建话题');
+  await user.keyboard('{Enter}');
+  assert.ok(screen.getByRole('button', { name: '删除话题 湖边' }));
+  await user.type(topics, '湖边{Enter}');
+  assert.ok(screen.getByText('话题不能重复'));
+  await user.clear(topics);
+  await user.keyboard('{Enter}');
+  assert.ok(screen.getByText('请输入话题内容'));
+  await user.type(topics, '长'.repeat(41) + '{Enter}');
+  assert.ok(screen.getByText('每个话题最多 40 字'));
+  await user.clear(topics);
+  for (let i = 2; i <= 6; i++) await user.type(topics, `话题${i}{Enter}`);
+  await user.type(topics, '第七条{Enter}');
+  assert.ok(screen.getByText('最多创建 6 个话题'));
+  const beforePending = calls.filter((call) => call.method === 'PUT').length;
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  assert.ok(screen.getByText('话题输入框还有未创建的内容，请先按 Enter 创建话题。'));
+  assert.equal(calls.filter((call) => call.method === 'PUT').length, beforePending);
+  await user.clear(topics);
+  await user.click(screen.getByRole('button', { name: '删除话题 话题6' }));
+  await user.type(topics, '替换话题{Enter}');
+  assert.ok(screen.getByRole('button', { name: '删除话题 替换话题' }));
+  const imageRows = () => [...window.document.querySelectorAll('.admin-story-image')];
+  assert.deepEqual([...imageRows()[0].querySelectorAll('.admin-field > label')].map((node) => node.textContent), ['素材地址', '图片描述']);
+  assert.deepEqual([...imageRows()[0].querySelector('.admin-asset').children].map((node) => node.textContent),
+    ['上传替换', 'AI 生成配图', '查看素材 ↗', 'AI 生成配图依据当前图片描述生成']);
+  await user.clear(screen.getAllByLabelText('图片描述')[0]);
+  assert.equal(screen.getAllByRole('button', { name: 'AI 生成配图' })[0].disabled, true);
+  await user.type(screen.getAllByLabelText('图片描述')[0], '田野上的白色帐篷');
+  failStoryImage = true;
+  await user.click(screen.getAllByRole('button', { name: 'AI 生成配图' })[0]);
+  await screen.findByText('模拟生成失败，原图片已保留');
+  assert.equal(screen.getAllByLabelText('素材地址')[0].value, '/stories-lake.png');
+  failStoryImage = false;
+  await user.click(screen.getAllByRole('button', { name: 'AI 生成配图' })[0]);
+  await waitFor(() => assert.equal(screen.getAllByLabelText('素材地址')[0].value, '/api/media/story-generated.png'));
+  assert.equal(screen.getAllByLabelText('素材地址')[1].value, '/stories-coast.png');
+  assert.equal(imageRows().length, 2, '生成替换当前图片，不追加图片');
+  assert.deepEqual(calls.filter((call) => call.path === '/api/admin/ai').at(-1).body,
+    { action: 'story-image', description: '田野上的白色帐篷' });
+  assert.equal(story.images[0].src, '/stories-lake.png', '生成后尚未提交');
+  await user.click(within(imageRows()[0]).getByRole('button', { name: '下移' }));
+  assert.equal(screen.getAllByLabelText('素材地址')[0].value, '/stories-coast.png');
+  await user.click(within(imageRows()[1]).getByRole('button', { name: '上移' }));
+  await user.click(within(screen.getByRole('group', { name: /^图片/ })).getByRole('button', { name: '＋ 添加一项' }));
+  assert.equal(screen.getAllByLabelText('素材地址')[2].value, '');
+  await user.click(within(imageRows()[2]).getByRole('button', { name: '删除', exact: true }));
+  const beforeSaveAi = calls.filter((call) => call.path === '/api/admin/ai').length;
+  await user.type(screen.getByLabelText('内容'), '正文'.repeat(80));
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  const savedStoryTitle = await screen.findByRole('button', { name: '2026-09-08 23:45:12' });
+  assert.equal(savedStoryTitle.closest('td').querySelector('small').textContent, story.text.slice(0, 100));
+  assert.equal(savedStoryTitle.closest('td').querySelector('small').textContent.length, 100);
+  assert.equal(story.date, '2026-09-08T23:45:12+08:00');
+  assert.equal(story.images[0].src, '/api/media/story-generated.png');
+  assert.equal(story.images[0].alt, '田野上的白色帐篷');
+  assert.equal(story.topics.length, 6);
+  assert.equal(calls.filter((call) => call.path === '/api/admin/ai').length, beforeSaveAi, '提交不能自动生图');
+  await user.click(screen.getByRole('button', { name: '2026-09-08 23:45:12' }));
+  await screen.findByLabelText('话题');
+  assert.equal(screen.getAllByLabelText('素材地址')[0].value, story.images[0].src);
+  assert.equal(screen.getByLabelText('日期（北京时间）').textContent, '2026-09-08 23:45:12');
+  await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+  await user.click(screen.getByRole('button', { name: '＋ 新增说说' }));
+  assert.match(screen.getByLabelText('日期（北京时间）').textContent, /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+  assert.equal(imageRows().length, 0, '新增说说不能继承示例图片');
+  assert.equal(screen.queryByLabelText('素材地址'), null);
+  await user.click(within(screen.getByRole('group', { name: /^图片/ })).getByRole('button', { name: '＋ 添加一项' }));
+  assert.equal(imageRows().length, 1);
+  assert.equal(screen.getByLabelText('素材地址').value, '');
+  assert.equal(screen.getByLabelText('图片描述').value, '');
+  assert.equal(screen.getByRole('button', { name: 'AI 生成配图' }).disabled, true);
+  await user.click(within(imageRows()[0]).getByRole('button', { name: '删除', exact: true }));
+  assert.equal(imageRows().length, 0);
+  await user.click(within(nav).getByRole('button', { name: '写作', exact: true }));
+  await user.click(screen.getByRole('button', { name: '＋ 新增文章管理' }));
+  assert.equal(screen.queryByLabelText('或使用已有素材地址'), null);
+  await user.type(screen.getByLabelText('文章标题'), '封面上传验收');
+  await user.type(screen.getByLabelText('文章摘要'), '封面摘要');
+  globalThis.fetch = async (input, init) => input === '/api/admin/media'
+    ? Response.json({ url: '/api/media/writing-uploaded.png' }) : immediateFetch(input, init);
+  await user.upload(screen.getByLabelText('选择封面文件'), new window.File(['image'], 'cover.png', { type: 'image/png' }));
+  await waitFor(() => assert.equal(screen.getByRole('img', { name: '当前文章封面' }).getAttribute('src'), '/api/media/writing-uploaded.png'));
+  globalThis.fetch = immediateFetch;
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await screen.findByRole('button', { name: '原文章已修改' });
+  assert.equal(calls.filter((call) => call.method === 'POST' && call.path === '/api/admin/records/writing/articles').at(-1).body.value.cover,
+    '/api/media/writing-uploaded.png');
+  await user.click(screen.getByRole('button', { name: '原文章已修改' }));
+  await screen.findByLabelText('文章标题');
+  await user.click(screen.getByRole('radio', { name: 'AI 生成', exact: true }));
+  globalThis.fetch = async (input, init) => input === '/api/admin/ai'
+    ? Response.json({ url: '/api/media/writing-generated.png', generatedFor: coverInput(article.title, article.excerpt) })
+    : immediateFetch(input, init);
+  await user.click(screen.getByRole('button', { name: '生成文章封面' }));
+  await waitFor(() => assert.equal(screen.getByRole('img', { name: '当前文章封面' }).getAttribute('src'), '/api/media/writing-generated.png'));
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await screen.findByRole('button', { name: '原文章已修改' });
+  assert.equal(article.cover, '/api/media/writing-generated.png');
+  assert.equal(article.coverGeneratedFor, coverInput(article.title, article.excerpt));
+  globalThis.fetch = immediateFetch;
+  for (const [sectionLabel, tabLabel, inputLabel] of [
+    ['书签', '内容', '名称'], ['友链', '内容', '名称'],
+    ['音乐', '内容', '标题'], ['音乐', '音乐场景', '名称'], ['音乐', '歌单', '标题'],
+    ['电影', '内容', '标题'], ['电影', '分类', '名称'],
+    ['播客', '内容', '标题'], ['播客', '分类', '名称'],
+    ['旅行', '内容', '标题'], ['旅行', '分类', '名称'],
+    ['爱好', '内容', '标题'], ['爱好', '分类', '名称'],
+    ['书籍', '内容', '标题'], ['书籍', '分类', '名称'], ['书籍', '书单', '标题'],
+  ]) {
+    await user.click(within(nav).getByRole('button', { name: sectionLabel, exact: true }));
+    await user.click(screen.getByRole('tab', { name: tabLabel }));
+    await user.click(screen.getByRole('button', { name: `＋ 新增${tabLabel}` }));
+    assert.equal(screen.getByLabelText(inputLabel).value, '', `${sectionLabel}/${tabLabel} 新增名称应为空`);
+    if (sectionLabel === '电影' && tabLabel === '内容') {
+      assert.equal(screen.getByLabelText('素材地址').value, '');
+      for (const label of ['导演', '类型', '国家', '语言']) assert.ok(screen.getByLabelText(label));
+    }
+    if (sectionLabel === '播客' && tabLabel === '内容') assert.ok(screen.getByLabelText('专辑主播'));
+    if (sectionLabel === '旅行' && tabLabel === '分类') {
+      assert.equal(screen.queryByRole('button', { name: 'AI 生成配图' }), null);
+      assert.equal(screen.queryByRole('button', { name: 'AI 生成封面' }), null);
+    }
+    await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+  }
+  cleanup();
+  for (const [path, sample, action] of [
+    ['tracks.playlists', musicSample.playlists[0], 'playlist-cover'],
+    ['films.items', defaults.films.items[0], 'film-cover'],
+    ['podcasts.items', defaults.podcasts.items[0], 'podcast-cover'],
+    ['travel.items', defaults.travel.items[0], 'travel-cover'],
+    ['hobbies.items', defaults.hobbies.items[0], 'hobby-cover'],
+    ['books.items', defaults.books.items[0], 'book-cover'],
+    ['books.lists', defaults.books.lists[0], 'booklist-cover'],
+  ]) {
+    function Form() {
+      const [value, setValue] = useState(() => structuredClone(sample));
+      return createElement('div', { className: 'admin-shell' }, createElement(Field, {
+        path, label: '内容', value, sample, onChange: setValue,
+      }));
+    }
+    render(createElement(Form));
+    assert.deepEqual([...window.document.querySelectorAll('.admin-description-image .admin-field > label')]
+      .map((node) => node.textContent), ['素材地址', '图片描述']);
+    assert.equal(screen.queryByLabelText('封面来源'), null);
+    assert.equal(screen.getByRole('button', { name: 'AI 生成配图' }).disabled, true);
+    await user.type(screen.getByLabelText('图片描述'), '薄雾中的白色灯塔');
+    if (action === 'film-cover') {
+      const previousCover = screen.getByLabelText('素材地址').value;
+      failStoryImage = true;
+      await user.click(screen.getByRole('button', { name: 'AI 生成配图' }));
+      await screen.findByText(/模拟生成失败/);
+      assert.equal(screen.getByLabelText('素材地址').value, previousCover);
+      failStoryImage = false;
+    }
+    await user.click(screen.getByRole('button', { name: 'AI 生成配图' }));
+    await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/story-generated.png'));
+    assert.deepEqual(calls.filter((call) => call.path === '/api/admin/ai').at(-1).body,
+      { action, description: '薄雾中的白色灯塔' });
+    assert.equal(screen.getByLabelText('图片描述').value, '薄雾中的白色灯塔');
+    cleanup();
+  }
+  console.log('PASS seven description image fields, exact AI request data and explicit generation controls');
+  console.log('PASS unified writing/project forms, story time/Enter topics/IME/limits, per-image generation/failure/reorder and explicit persistence');
   console.log('PASS per-record admin UI and website settings tabs: explicit submit, navigation editing, preserved fields, unsaved drafts and conflict retention');
 } finally {
   cleanup();

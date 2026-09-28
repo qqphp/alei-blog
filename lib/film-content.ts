@@ -9,6 +9,7 @@ export type Film = {
   language: string;
   categoryId: string;
   cover: string;
+  coverDescription: string;
   coverMode: 'upload' | 'ai';
   coverGeneratedFor: string;
   _published: boolean;
@@ -36,6 +37,7 @@ export const filmSample: FilmDocument = {
       language: '',
       categoryId: 'recommended',
       cover: '',
+      coverDescription: '',
       coverMode: 'upload',
       coverGeneratedFor: '',
       _published: false,
@@ -60,8 +62,9 @@ export function migrateFilms(
         };
         return {
           ...item,
+          coverDescription: item.coverDescription ?? '',
           coverGeneratedFor:
-            item.coverGeneratedFor === filmCoverInput(item)
+            item.coverGeneratedFor === filmCoverInput({ coverDescription: item.coverDescription ?? '' })
               ? item.coverGeneratedFor
               : '',
         };
@@ -81,10 +84,11 @@ export function migrateFilms(
         genre: '',
         categoryId: categoryId(name),
         cover: item.image ?? '',
+        coverDescription: '',
         _published: item._published ?? true,
       };
     }),
   };
 }
-export const filmCoverInput = (film: Pick<Film, 'title' | 'director'>) =>
-  JSON.stringify([film.title.trim(), film.director.trim(), '9:16']);
+export const filmCoverInput = (film: Pick<Film, 'coverDescription'>) =>
+  JSON.stringify([film.coverDescription.trim()]);

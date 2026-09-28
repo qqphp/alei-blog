@@ -14,6 +14,7 @@ export type MusicPlaylist = {
   title: string;
   description: string;
   cover: string;
+  coverDescription: string;
   color: string;
   coverMode: 'upload' | 'ai';
   coverGeneratedFor: string;
@@ -52,6 +53,7 @@ export const musicSample: MusicDocument = {
       title: '歌单',
       description: '',
       cover: '',
+      coverDescription: '',
       color: '#91b8a5',
       coverMode: 'upload',
       coverGeneratedFor: '',
@@ -113,6 +115,7 @@ export function migrateMusic(
     }),
     playlists: document.playlists.map(({ trackIds, ...list }) => ({
       ...list,
+      coverDescription: list.coverDescription ?? '',
       coverMode: list.coverMode ?? 'upload',
       coverGeneratedFor: list.coverGeneratedFor ?? '',
       songs:
@@ -128,6 +131,7 @@ export function migrateMusic(
     })),
   };
 }
+
 export function publicMusic(document: MusicDocument): MusicDocument {
   return {
     ...document,
@@ -137,7 +141,3 @@ export function publicMusic(document: MusicDocument): MusicDocument {
     playlists: document.playlists.filter((item) => item._published !== false),
   };
 }
-
-export const playlistCoverInput = (
-  list: Pick<MusicPlaylist, 'title' | 'description'>,
-) => JSON.stringify([list.title.trim(), list.description.trim(), '1:1']);

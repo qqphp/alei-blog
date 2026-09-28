@@ -1,5 +1,11 @@
 export type RecordTimes = { createdAt: string | null; updatedAt: string };
 
+export function articleCreationDate(value: string): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date(value)).replaceAll('-', '.');
+}
+
 export function recordTimes(row: { createdAt: Date | string | null; updatedAt: Date | string }): RecordTimes {
   return { createdAt: row.createdAt ? new Date(row.createdAt).toISOString() : null,
     updatedAt: new Date(row.updatedAt).toISOString() };

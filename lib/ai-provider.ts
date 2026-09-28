@@ -1,10 +1,6 @@
-import { playlistCoverInput } from './music-content';
-import { podcastCoverInput } from './podcast-content';
-import { filmCoverInput } from './film-content';
 import { bindings, getDocuments } from './cms-server';
 import { readLimitedBody } from './admin-auth';
 import { validateProviderUrl } from './cms-validation';
-import { projectImageInput } from './project-content';
 import { coverInput } from './article-categories';
 import { saveLocalMedia } from './local-media';
 import type { Content } from './cms-defaults';
@@ -60,93 +56,46 @@ export async function providerRequest(path: string, body?: unknown, settings?: C
   };
 }
 
-export function buildCoverPrompt(
-  template: string,
-  title: string,
-  excerpt: string,
-  style: string,
-  subtitle = '',
-  director = '',
-  host = '',
-  author = '',
-) {
+export function buildCoverPrompt(template: string, input: {
+  title?: string; excerpt?: string; style: string; description?: string;
+}) {
   const values: Record<string, string> = {
-    title: title.trim(),
-    excerpt: excerpt.trim(),
-    style,
-    subtitle: subtitle.trim(),
-    director: director.trim(),
-    host: host.trim(),
-    author: author.trim(),
+    title: input.title?.trim() ?? '',
+    excerpt: input.excerpt?.trim() ?? '',
+    style: input.style,
+    description: input.description?.trim() ?? '',
   };
   return template.replace(
-    /\{\{(title|excerpt|style|subtitle|director|host|author)\}\}/g,
+    /\{\{(title|excerpt|style|description)\}\}/g,
     (_, key: string) => values[key],
   );
 }
 
-export async function generateCover(
-  title: string,
-  excerpt: string,
-  projectSubtitle?: string,
-  storyImage = false,
-  filmDirector?: string,
-  playlistCover = false,
-  podcastHost?: string,
-  collection?: {
-    kind: 'travel' | 'hobby' | 'book' | 'booklist';
-    author?: string;
-  },
-) {
+export const imageActions = {
+  cover: ['coverPrompt', 'coverStyle', 'coverSize'],
+  'project-cover': ['projectImagePrompt', 'projectImageStyle', 'projectImageSize'],
+  'story-image': ['storyImagePrompt', 'storyImageStyle', 'storyImageSize'],
+  'playlist-cover': ['playlistCoverPrompt', 'playlistCoverStyle', 'playlistCoverSize'],
+  'film-cover': ['filmCoverPrompt', 'filmCoverStyle', 'filmCoverSize'],
+  'podcast-cover': ['podcastCoverPrompt', 'podcastCoverStyle', 'podcastCoverSize'],
+  'travel-cover': ['travelCoverPrompt', 'travelCoverStyle', 'travelCoverSize'],
+  'hobby-cover': ['hobbyCoverPrompt', 'hobbyCoverStyle', 'hobbyCoverSize'],
+  'book-cover': ['bookCoverPrompt', 'bookCoverStyle', 'bookCoverSize'],
+  'booklist-cover': ['booklistCoverPrompt', 'booklistCoverStyle', 'booklistCoverSize'],
+} as const;
+export type ImageAction = keyof typeof imageActions;
+
+export async function generateCover(input: {
+  action: ImageAction; title?: string; excerpt?: string; description?: string;
+}) {
   const { content } = await getDocuments(['aiSettings']);
   const settings = content.aiSettings;
-  const prompt = buildCoverPrompt(
-    collection
-      ? settings[`${collection.kind}CoverPrompt`]
-      : podcastHost !== undefined
-        ? settings.podcastCoverPrompt
-        : playlistCover
-          ? settings.playlistCoverPrompt
-          : filmDirector !== undefined
-            ? settings.filmCoverPrompt
-            : storyImage
-              ? settings.storyImagePrompt
-              : projectSubtitle === undefined
-                ? settings.coverPrompt
-                : settings.projectImagePrompt,
-    title,
-    excerpt,
-    collection
-      ? settings[`${collection.kind}CoverStyle`]
-      : podcastHost !== undefined
-        ? settings.podcastCoverStyle
-        : playlistCover
-          ? settings.playlistCoverStyle
-          : filmDirector !== undefined
-            ? settings.filmCoverStyle
-            : storyImage
-              ? settings.storyImageStyle
-              : projectSubtitle === undefined
-                ? settings.coverStyle
-                : settings.projectImageStyle,
-    projectSubtitle,
-    filmDirector,
-    podcastHost,
-    collection?.author,
-  );
-  const size = collection
-    ? settings[`${collection.kind}CoverSize`]
-    : podcastHost !== undefined
-      ? settings.podcastCoverSize
-      : playlistCover
-        ? settings.playlistCoverSize
-        : filmDirector !== undefined
-          ? settings.filmCoverSize
-          : storyImage
-            ? settings.storyImageSize
-            : projectSubtitle === undefined
-              ? settings.coverSize
-              : settings.projectImageSize;
+  const [promptField, styleField, sizeField] = imageActions[input.action];
+  const prompt = buildCoverPrompt(settings[promptField], {
+    title: input.title, excerpt: input.excerpt,
+    style: settings[styleField], description: input.description,
+  });
+  const size = settings[sizeField];
   const result = await providerRequest('images/generations', {
     model: settings.imageModel,
     prompt,
@@ -201,27 +150,13 @@ export async function generateCover(
   const key = `${crypto.randomUUID()}.${format[0]}`;
   await saveLocalMedia(key, bytes, {
     contentType: format[1],
-    name: `${title.slice(0, 80)} · AI封面`,
+    name: `${(input.description ?? input.title ?? '').slice(0, 80)} · AI${input.action === 'story-image' || input.action === 'project-cover' ? '配图' : '封面'}`,
     source: 'ai',
   });
   return {
     url: `/api/media/${key}`,
-    generatedFor:
-      podcastHost !== undefined
-        ? podcastCoverInput({ title, description: excerpt, host: podcastHost })
-        : playlistCover
-          ? playlistCoverInput({ title, description: excerpt })
-          : filmDirector !== undefined
-            ? filmCoverInput({
-                title,
-                director: filmDirector,
-              })
-            : projectSubtitle === undefined
-              ? coverInput(title, excerpt)
-              : projectImageInput({
-                  title,
-                  subtitle: projectSubtitle,
-                  description: excerpt,
-                }),
+    generatedFor: input.description !== undefined
+      ? JSON.stringify([input.description.trim()])
+      : coverInput(input.title ?? '', input.excerpt ?? ''),
   };
 }

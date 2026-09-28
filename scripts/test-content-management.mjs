@@ -112,14 +112,15 @@ export async function checkContentManagement({ request, origin, testUrl, default
       ['projects', 'items', defaults.projects.items[0], 'id'],
     ]) {
       const value = { ...sample, [identity]: `time-${section}`, _published: false,
-        createdAt: '2000-01-01T00:00:00Z', updatedAt: '2099-01-01T00:00:00Z' };
+        createdAt: '2000-01-01T00:00:00Z', updatedAt: '2099-01-01T00:00:00Z',
+        ...(section === 'writing' ? { date: '2000.01.01' } : {}) };
       const base = `/api/admin/records/${section}/${collection}`;
       const created = await request(base, 'POST', { value });
       assert.equal(created.status, 200, JSON.stringify(created.data));
       assert.ok(created.data.value.createdAt > '2026-01-01');
       const path = `${base}/${value[identity]}`;
       const edit = await request(path, 'PUT', { value: { ...created.data.value, title: '时间验收更新',
-        createdAt: '2099-01-01T00:00:00Z' }, revision: 1 });
+        createdAt: '2099-01-01T00:00:00Z', ...(section === 'writing' ? { date: '1990.01.01' } : {}) }, revision: 1 });
       assert.equal(edit.status, 200);
       assertTime(created.data.value, edit.data.value);
       const published = await request(path, 'PATCH', { published: true, revision: 2 });
@@ -127,8 +128,49 @@ export async function checkContentManagement({ request, origin, testUrl, default
       assertTime(edit.data.value, published.data.value);
       assert.equal((await request(path, 'PUT', { value: edit.data.value, revision: 1 })).status, 409);
       assert.equal((await request(path)).data.value.updatedAt, published.data.value.updatedAt);
+      if (section === 'writing') {
+        const expected = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' })
+          .format(new Date(created.data.value.createdAt)).replaceAll('-', '.');
+        assert.equal(created.data.value.date, expected);
+        assert.equal(edit.data.value.date, expected);
+        await db.query("UPDATE articles SET published_on='1990-01-01' WHERE slug=$1", [value.slug]);
+        assert.equal((await request(path)).data.value.date, expected, '后台日期取创建时间');
+        const list = await request('/api/writing');
+        assert.equal(list.data.items.find((item) => item.slug === value.slug).date, expected);
+        assert.ok((await getHtml(`/writing/${value.slug}`)).includes(expected), '详情日期取创建时间');
+        const home = await getHtml('/');
+        assert.ok(home.includes('时间验收更新'));
+        assert.equal(home.includes('1990.01.01'), false);
+      }
       assert.equal((await request(path, 'DELETE', { revision: 3 })).status, 200);
     }
+    const storyValue = { ...structuredClone(defaults.stories[0]), id: 'time-story',
+      date: '2026-09-08T23:45:12+08:00', text: '说说表单持久化验收', topics: ['田野', '露营'],
+      images: [{ src: '/stories-lake.png', alt: '湖边清晨的帐篷' }], _published: false };
+    const storyBase = '/api/admin/records/stories/root';
+    const storyCreated = await request(storyBase, 'POST', { value: storyValue });
+    assert.equal(storyCreated.status, 200, JSON.stringify(storyCreated.data));
+    const storyList = await request(`${storyBase}?q=${encodeURIComponent(storyValue.text)}&status=draft&size=1`);
+    assert.equal(storyList.status, 200);
+    assert.equal(storyList.data.items[0].id, storyValue.id, '正文搜索和草稿筛选仍正常');
+    assert.equal(storyList.data.items[0].excerpt, storyValue.text, '列表摘要仅来自说说正文');
+    assert.equal(storyList.data.items[0].date, new Date(storyValue.date).toISOString());
+    const storyPath = `${storyBase}/${storyValue.id}`;
+    const storyEdited = await request(storyPath, 'PUT', { revision: 1,
+      value: { ...storyCreated.data.value, date: '2026-10-01T08:09:10+08:00', topics: Array.from({ length: 6 }, (_, i) => `话题${i}`),
+        images: [{ src: '/stories-coast.png', alt: '海边的灯塔' }] } });
+    assert.equal(storyEdited.status, 200, JSON.stringify(storyEdited.data));
+    const storedStory = (await request(storyPath)).data.value;
+    assert.equal(storedStory.date, '2026-10-01T08:09:10+08:00');
+    assert.equal(storedStory.images[0].alt, '海边的灯塔');
+    assert.equal(storedStory.topics.length, 6);
+    const editedStoryList = await request(`${storyBase}?q=${encodeURIComponent(storyValue.text)}&status=draft`);
+    assert.equal(editedStoryList.data.items[0].excerpt, storyValue.text);
+    assert.equal(editedStoryList.data.items[0].date, '2026-10-01T00:09:10.000Z');
+    for (const topics of [Array.from({ length: 7 }, (_, i) => `话题${i}`), ['重复', '重复'], [''], ['长'.repeat(41)]])
+      assert.equal((await request(storyPath, 'PUT', { value: { ...storedStory, topics }, revision: 2 })).status, 400);
+    assert.equal((await request(storyPath, 'DELETE', { revision: 2 })).status, 200);
+    console.log('PASS article creation-date display despite old publication date, immutable edits and story seconds/topics/image persistence');
     // Test saved empty/draft states, without touching the user's database.
     await db.query("UPDATE cms_entries SET published=false,payload=jsonb_set(payload,'{_published}','false') WHERE section='ai'");
     const emptyAi = await getHtml('/ai');
