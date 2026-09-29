@@ -35,7 +35,7 @@ const names: Record<string, string> = {
   coverMode: '封面来源',
   mode: '图片来源',
   createdAt: '创建时间',
-  creator: '作者 / 团队', logo: 'Logo', subcategory: '子分类',
+  creator: '作者', logo: 'Logo', subcategory: '子分类',
   audio: '音频地址',
   cover: '封面地址',
   slug: '文章路径标识',
@@ -65,7 +65,8 @@ const names: Record<string, string> = {
   url: '网址',
   initials: '头像文字',
   author: '作者',
-  color: '书封颜色',
+  songs: '歌曲',
+  album: '相册',
   note: '笔记',
   artist: '音乐作者',
   duration: '时长（秒）',
@@ -107,6 +108,10 @@ const describedCoverActions: Record<string, string> = {
   'books.items': 'book-cover',
   'books.lists': 'booklist-cover',
 };
+const orderedRecordPaths = new Set([
+  'projects.items', 'tracks.items', 'tracks.playlists', 'films.items',
+  'podcasts.items', 'books.items', 'travel.items', 'hobbies.items',
+]);
 export const asJson = (value: unknown) => value as Json;
 export function titleOf(value: Json, index: number) {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -281,7 +286,7 @@ function ProjectImagesField({ value, onChange, onWorking }: {
           <input id={`project-image-${index}-alt`} value={image.alt} maxLength={5000}
             onChange={(event) => change(index, { ...image, alt: event.target.value })} /></div>
       </div>
-      <div className="admin-field admin-project-image-label"><label htmlFor={`project-image-${index}-label`}>图片标签</label>
+      <div className="admin-field admin-project-image-label"><label htmlFor={`project-image-${index}-label`}>图片标题</label>
         <input id={`project-image-${index}-label`} value={image.label}
           onChange={(event) => change(index, { ...image, label: event.target.value })} /></div>
       <div className="admin-asset">
@@ -470,7 +475,7 @@ export function Field({
       <div className="admin-object">
         <h3>{label}</h3>
         <div className="admin-fields">
-          {(path === 'projects.items'
+          {(orderedRecordPaths.has(path)
             ? Object.keys(template).filter((key) => Object.hasOwn(value, key)).map((key) => [key, value[key]] as const)
             : Object.entries(value)).filter(([key]) =>
             !['id', 'coverGeneratedFor', 'generatedFor', 'createdAt', 'updatedAt'].includes(key) &&
@@ -527,7 +532,7 @@ export function Field({
       (sample.length > 90 || sample.includes('\n'))) ||
       /body|description|excerpt|text|note|summary|paragraph/.test(field));
   return (
-    <div className="admin-field">
+    <div className={`admin-field${path === 'ai.agents.logo' || path === 'ai.relays.logo' ? ' admin-resource-logo' : ''}${path === 'tracks.items.src' ? ' admin-track-src' : ''}`}>
       <label htmlFor={path}>{label}</label>
       {options[field] ? (
         <select id={path} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)}>

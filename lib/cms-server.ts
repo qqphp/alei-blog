@@ -97,7 +97,7 @@ export async function getDocuments(sections?: Section[]) {
     });
   }
   if (has('ai') && revisions.ai === undefined)
-    content.ai = { agents: [], skills: [], relays: [] };
+    content.ai = { agents: [], skills: [], relays: [], skillCategories: [] };
   if (has('writing') && revisions.writing !== undefined)
     content.writing = articles.map((row) => ({
       slug: row.slug, title: row.title, excerpt: row.excerpt, body: row.body,

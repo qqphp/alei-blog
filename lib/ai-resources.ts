@@ -15,8 +15,7 @@ export interface AiSkill {
   id: string;
   name: string;
   title: string;
-  category: string;
-  subcategory: string;
+  categoryId: string;
   description: string;
   scenario: string;
   input: string;
@@ -38,6 +37,14 @@ export interface AiRelay {
   endpoint: string;
   href: string;
 }
+
+export interface AiSkillCategory {
+  id: string;
+  name: string;
+  parentId: string;
+}
+
+export const skillCategorySample: AiSkillCategory = { id: 'skill-category-sample', name: '', parentId: '' };
 
 export const aiAgents: AiAgent[] = [
   {
@@ -80,8 +87,7 @@ export const aiSkills: AiSkill[] = [
     id: 'frontend-design',
     name: 'frontend-design',
     title: '让界面有自己的性格',
-    category: '界面设计',
-    subcategory: '页面生成',
+    categoryId: '',
     description: '把视觉方向、排版和组件细节放进同一次前端创作。',
     scenario: '准备做一个新页面，或想摆脱千篇一律的默认组件时。',
     input: '页面目标、内容、参考风格与技术约束',
@@ -95,8 +101,7 @@ export const aiSkills: AiSkill[] = [
     id: 'webapp-testing',
     name: 'webapp-testing',
     title: '走一遍真实的使用路径',
-    category: '测试验证',
-    subcategory: '端到端检查',
+    categoryId: '',
     description: '用浏览器检查本地应用，把交互结果变成可复查的证据。',
     scenario: '表单、菜单或页面流程刚改完，需要确认它真的能用时。',
     input: '本地地址、待验证流程与预期结果',
@@ -110,8 +115,7 @@ export const aiSkills: AiSkill[] = [
     id: 'skill-creator',
     name: 'skill-creator',
     title: '把重复的方法留成 Skill',
-    category: '工作流',
-    subcategory: '技能制作',
+    categoryId: '',
     description: '把一套常用做法整理为可重复使用、可继续改进的技能。',
     scenario: '同一类任务反复解释，希望把方法稳定地复用时。',
     input: '任务边界、操作步骤与成功示例',
@@ -125,8 +129,7 @@ export const aiSkills: AiSkill[] = [
     id: 'code-review',
     name: 'code-review',
     title: '全方位代码审查',
-    category: '代码审查',
-    subcategory: '质量检查',
+    categoryId: '',
     description: '不仅检查语法，更关注架构设计、安全性及性能瓶颈。',
     scenario: '提交 Pull Request 前的质量把关。',
     input: '代码变更差异（Git Diff）、项目规范要求',
@@ -140,8 +143,7 @@ export const aiSkills: AiSkill[] = [
     id: 'data-extract',
     name: 'data-extract',
     title: '非结构化数据清洗',
-    category: '数据分析',
-    subcategory: '数据提取',
+    categoryId: '',
     description: '从长文本、网页或 PDF 中提取特定的字段实体。',
     scenario: '需要将大量研报或新闻转化为数据库结构时。',
     input: '原始杂乱文本、目标 JSON Schema',
@@ -155,8 +157,7 @@ export const aiSkills: AiSkill[] = [
     id: 'copywriting',
     name: 'copywriting',
     title: '高转化率文案创作',
-    category: '内容创作',
-    subcategory: '文案写作',
+    categoryId: '',
     description: '撰写具有吸引力的营销文案、产品介绍或社交媒体内容。',
     scenario: '推出新产品，需要撰写落地页文案或推广推文。',
     input: '产品卖点、目标受众群体、品牌基调',

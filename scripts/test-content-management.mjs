@@ -24,6 +24,9 @@ export async function checkContentManagement({ request, origin, testUrl, default
       assert.equal((await request(`/api/admin/records/${old}/root`)).status, 400);
       assert.equal((await request(`/api/admin/config/${old}/root`)).status, 400);
     }
+    const managedCategory = { id: 'test-managed-category', name: '测试分类', parentId: '' };
+    const managedCategoryPath = `/api/admin/records/ai/skillCategories/${managedCategory.id}`;
+    assert.equal((await request('/api/admin/records/ai/skillCategories', 'POST', { value: managedCategory })).status, 200);
     for (const collection of ['agents', 'skills', 'relays']) {
       const base = `/api/admin/records/ai/${collection}`;
       const value = { ...defaults.ai[collection][0], id: `test-${collection}`,
@@ -31,6 +34,7 @@ export async function checkContentManagement({ request, origin, testUrl, default
         href: 'https://example.com/resource', _published: false };
       // Preserve each collection's existing schema.
       if (collection !== 'skills') delete value.title;
+      else value.categoryId = managedCategory.id;
       const created = await request(base, 'POST', { value });
       assert.equal(created.status, 200, JSON.stringify(created.data));
       assert.match(created.data.value.createdAt, /^\d{4}-.*Z$/);
@@ -73,6 +77,7 @@ export async function checkContentManagement({ request, origin, testUrl, default
       seed(); seed();
       assert.equal((await request(`${base}/${deletedId}`)).status, 404, '初始化不得重新添加已删除资源');
     }
+    assert.equal((await request(managedCategoryPath, 'DELETE', { revision: 1 })).status, 200);
 
     const column = { id: 'new-investment-column', title: '新增研究栏目', description: '单层栏目' };
     const columnsBase = '/api/admin/records/investing/sections';

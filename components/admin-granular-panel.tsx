@@ -75,6 +75,8 @@ function sampleRecord(section: Section, collection: string, options: Record<stri
     };
   if (section === 'writing' && collection === 'categories')
     return { id: `category-${crypto.randomUUID()}`, name: '', description: '', parentId: '' };
+  if (section === 'ai' && collection === 'skillCategories')
+    return { id: crypto.randomUUID(), name: '', parentId: '' };
   if (section === 'investing' && collection === 'entries') {
     const sample = defaults.investing.sections[0].entries[0];
     return { ...fresh(asJson(sample)) as Item, title: '', id: crypto.randomUUID(),
@@ -93,6 +95,7 @@ function sampleRecord(section: Section, collection: string, options: Record<stri
     for (const key of ['title', 'name']) if (key in value) value[key] = '';
   }
   if (section === 'projects' && collection === 'items') value.images = [];
+  if (section === 'tracks' && collection === 'items') value.src = '';
   if (section === 'films' && collection === 'items') value.cover = '';
   if (section === 'investing' && collection === 'sections') delete value.entries;
   if (section === 'ai' && collection === 'agents') value.status = 'active';
@@ -288,7 +291,7 @@ export function AdminGranularPanel() {
         });
         setEdit(null);
         await refreshList();
-        if (['categories', 'statuses', 'scenes', 'sections'].includes(activeCollection))
+        if (['categories', 'statuses', 'scenes', 'sections', 'skillCategories'].includes(activeCollection))
           await refreshOptions();
         setMessage(result.failedMedia?.length ? '已保存，但部分旧素材清理失败。' : '已保存，内容已入库。');
       } else if (activeScope && config) {
@@ -317,7 +320,8 @@ export function AdminGranularPanel() {
         method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       await refreshList();
-      if (action === 'delete' && ['categories', 'statuses', 'scenes', 'sections'].includes(activeCollection))
+      if ((action === 'delete' && ['categories', 'statuses', 'scenes', 'sections', 'skillCategories'].includes(activeCollection)) ||
+        (activeCollection === 'skillCategories' && (action === 'up' || action === 'down')))
         await refreshOptions();
       setMessage(action === 'delete' ? '已删除。' : '已更新并入库。');
     } catch (error) { setMessage(String(error)); }
@@ -349,7 +353,7 @@ export function AdminGranularPanel() {
     ? asJson(Object.fromEntries(Object.entries(config.value as Item).filter(([key]) => websiteTab.keys.includes(key))))
     : config?.value;
   const recordSample = activeCollection ? sampleRecord(recordSection, activeCollection, options) : null;
-  const canPublish = activeCollection && !['categories', 'statuses', 'scenes', 'sections'].includes(activeCollection)
+  const canPublish = activeCollection && !['categories', 'statuses', 'scenes', 'sections', 'skillCategories'].includes(activeCollection)
     && !(section === 'writing' && activeCollection === 'categories');
   const showTimes = (section === 'writing' && activeCollection === 'articles') ||
     (section === 'projects' && activeCollection === 'items') || (section === 'investing' && activeCollection === 'entries');
@@ -404,6 +408,7 @@ export function AdminGranularPanel() {
                 onWorking={setWorking} disabled={busy || working}
                 onChange={(value) => setEdit({ ...edit, value: asJson(value) })} /> :
               section === 'ai' ? <AdminAiResources collection={activeCollection} value={edit.value} sample={recordSample!}
+                skillCategories={options.skillCategories ?? []}
                 onChange={(value) => setEdit({ ...edit, value })} /> :
               section === 'investing' && activeCollection === 'entries' ? <AdminInvestmentEditor value={edit.value} sample={recordSample!}
                 columns={optionFields.sectionId} onChange={(value) => setEdit({ ...edit, value })} /> :

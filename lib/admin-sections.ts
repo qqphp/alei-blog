@@ -5,7 +5,7 @@ export const adminCollections: Partial<Record<Section, readonly string[]>> = {
   projects: ['items', 'statuses', 'categories'],
   stories: ['root'],
   slides: ['root'],
-  ai: ['agents', 'skills', 'relays'],
+  ai: ['agents', 'skills', 'relays', 'skillCategories'],
   investing: ['entries', 'sections'],
   bookmarks: ['items', 'categories'],
   friends: ['items', 'categories'],
@@ -20,12 +20,12 @@ export const adminCollections: Partial<Record<Section, readonly string[]>> = {
 export const collectionLabels: Record<string, string> = {
   articles: '文章', categories: '分类', items: '内容', statuses: '项目状态',
   root: '内容', sections: '栏目', entries: '文章', lists: '书单',
-  agents: '智能体', skills: '技能 Skills', relays: '中转站 API',
+  agents: '智能体', skills: '技能 Skills', relays: '中转站 API', skillCategories: 'Skills分类',
   scenes: '音乐场景', playlists: '歌单',
 };
 
 export function configScopes(section: Section) {
-  if (section === 'ai' || section === 'investing') return [];
+  if (['ai', 'investing', 'films', 'tracks', 'podcasts', 'travel', 'hobbies'].includes(section)) return [];
   const value = defaults[section];
   const collections = adminCollections[section] ?? [];
   const metadata = value && typeof value === 'object' && !Array.isArray(value)

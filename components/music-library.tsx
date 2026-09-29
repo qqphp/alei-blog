@@ -188,10 +188,7 @@ export function MusicLibrary() {
                   ← 全部歌单
                 </button>
                 <div className="music-playlist-summary">
-                  <div
-                    className="music-playlist-mini"
-                    style={{ backgroundColor: selectedPlaylist.color }}
-                  >
+                  <div className="music-playlist-mini">
                     {selectedPlaylist.cover ? (
                       <Image
                         src={selectedPlaylist.cover}
@@ -281,10 +278,7 @@ export function MusicLibrary() {
                             reset();
                           }}
                         >
-                          <div
-                            className="music-playlist-cover"
-                            style={{ backgroundColor: list.color }}
-                          >
+                          <div className="music-playlist-cover">
                             {list.cover ? (
                               <Image
                                 src={list.cover}

@@ -466,6 +466,8 @@ try {
   assert.equal(within(agentRegion).getAllByRole('article').length, aiAgents.length);
   const skillRegion = await switchAi('技能 Skills');
   assert.equal(within(skillRegion).getAllByRole('article').length, aiSkills.length);
+  assert.ok(within(skillRegion).getByRole('navigation', { name: '技能分类' }));
+  assert.equal(skillRegion.querySelectorAll('.ai-skill-card').length, 0);
   const relayRegion = await switchAi('中转站 API');
   assert.equal(within(relayRegion).getAllByRole('article').length, aiRelays.length);
   const refreshedModelRegion = await switchAi('大模型数据');
@@ -484,14 +486,35 @@ try {
     /C4 · 261\.6 Hz/,
   );
   aiView.unmount();
-  const managedAi = { agents: [], skills: [{ ...defaults.ai.skills[0], id: 'custom-skill', title: '后台技能', category: '后台分类', subcategory: '自定义子类' }], relays: [{ ...defaults.ai.relays[0], id: 'custom-relay', name: '后台中转站', logo: '/missing-logo.png', mark: 'TEST', href: 'https://example.com/' + 'long-path/'.repeat(30) }] };
+  const managedAi = {
+    agents: [],
+    skillCategories: [
+      { id: 'parent', name: '后台分类', parentId: '' },
+      { id: 'child', name: '自定义子类', parentId: 'parent' },
+      { id: 'empty', name: '空分类', parentId: '' },
+    ],
+    skills: [
+      { ...defaults.ai.skills[0], id: 'custom-skill', title: '后台技能', categoryId: 'child' },
+      { ...defaults.ai.skills[1], id: 'parent-skill', title: '一级技能', categoryId: 'parent' },
+      { ...defaults.ai.skills[2], id: 'old-skill', title: '历史技能', categoryId: '' },
+    ],
+    relays: [{ ...defaults.ai.relays[0], id: 'custom-relay', name: '后台中转站', logo: '/missing-logo.png', mark: 'TEST', href: 'https://example.com/' + 'long-path/'.repeat(30) }],
+  };
   const managedView = render(h(ContentProvider, { content: { ...defaults, ai: managedAi } }, h(AiNotebook)));
   await switchAi('智能体');
   assert.ok(screen.getByText('暂无智能体内容。'));
   await switchAi('技能 Skills');
-  assert.ok(screen.getByText('后台分类', { exact: true }));
+  const skillNav = screen.getByRole('navigation', { name: '技能分类' });
+  assert.ok(within(skillNav).getByRole('button', { name: /后台分类/ }));
   assert.ok(screen.getByText('后台技能'));
-  assert.ok(screen.getByRole('link', { name: '查看技能' }));
+  await user.click(within(skillNav).getByRole('button', { name: /后台分类/ }));
+  assert.equal(document.querySelectorAll('.ai-skill-row').length, 2);
+  await user.click(within(skillNav).getByRole('button', { name: /自定义子类/ }));
+  assert.equal(document.querySelectorAll('.ai-skill-row').length, 1);
+  await user.click(within(skillNav).getByRole('button', { name: /未分类/ }));
+  assert.ok(screen.getByText('历史技能'));
+  await user.click(within(skillNav).getByRole('button', { name: /空分类/ }));
+  assert.ok(screen.getByText('当前分类下暂无技能。'));
   await switchAi('中转站 API');
   const relayCard = screen.getByRole('article');
   assert.ok(within(relayCard).getByText('后台中转站'));
@@ -542,6 +565,7 @@ try {
   const { Bookshelf } = await import('../components/bookshelf.tsx');
   const { PodcastLibrary } = await import('../components/podcast-library.tsx');
   const { FilmLibrary } = await import('../components/film-library.tsx');
+  const { LifePage } = await import('../components/life-page.tsx');
   const { MusicLibrary } = await import('../components/music-library.tsx');
   const { MusicProvider } = await import('../components/music-player.tsx');
   const { migrateActivities } = await import('../lib/activity-content.ts');
@@ -550,9 +574,13 @@ try {
   const { migrateFilms } = await import('../lib/film-content.ts');
   const { musicSample, migrateMusic, publicMusic } = await import('../lib/music-content.ts');
   const { validateContent: validateCollections } = await import('../lib/cms-validation.ts');
+  const { configScopes } = await import('../lib/admin-sections.ts');
   const noImageProject = { ...defaults.projects.items[0], id: 'project-without-image', title: '测试项目', images: [], _published: true };
   assert.throws(() => validateCollections('projects', { ...defaults.projects, items: [noImageProject] }), /项目至少需要一张图片/);
   validateCollections('projects', { ...defaults.projects, items: [{ ...noImageProject, images: [defaults.projects.items[0].images[0]] }] });
+  assert.throws(() => validateCollections('tracks', { ...musicSample,
+    items: [{ ...musicSample.items[0], src: '' }] }), /请填写图片或音频地址/);
+  assert.deepEqual(configScopes('films'), []);
   validateCollections('aiSettings', defaults.aiSettings);
   assert.throws(() => validateCollections('aiSettings', {
     ...defaults.aiSettings, filmCoverPrompt: '电影名称：{{title}}',
@@ -612,6 +640,28 @@ try {
   assert.ok(screen.getByRole('heading', { name: '影片 0' }));
   filmFront.unmount();
   cleanup();
+  const changedFilmCopy = { ...manyFilms, title: '旧后台标题', intro: '旧后台简介' };
+  render(h(ContentProvider, { content: { ...defaults, films: changedFilmCopy } }, h(LifePage, { type: 'films' })));
+  const filmHeading = document.querySelector('.life-page-heading-main');
+  assert.equal(filmHeading.querySelector('h1').textContent, '电影');
+  assert.equal(filmHeading.querySelector('h1 + p').textContent, '留意画面里的光，也留意故事结束后的余味。');
+  assert.equal(filmHeading.textContent.includes('旧后台标题'), false);
+  cleanup();
+  for (const [type, title, intro, section] of [
+    ['music', '音乐', '声音是日常的另一种时间线。', 'tracks'],
+    ['podcasts', '播客', '给一个问题留足时间，也给不同的声音留一个座位。', 'podcasts'],
+    ['travel', '旅行', '把目的地留给地图，把沿途留给自己。', 'travel'],
+    ['hobbies', '爱好', '有些事不需要变得擅长，只要愿意一次次开始。', 'hobbies'],
+  ]) {
+    const changedCopy = { ...defaults[section], title: '旧后台标题', intro: '旧后台简介' };
+    const page = h(LifePage, { type });
+    render(h(ContentProvider, { content: { ...defaults, [section]: changedCopy } },
+      type === 'music' ? h(MusicProvider, {}, page) : page));
+    const heading = document.querySelector('.life-page-heading-main');
+    assert.equal(heading.querySelector('h1').textContent, title);
+    assert.equal(heading.querySelector('h1 + p').textContent, intro);
+    cleanup();
+  }
   const manyMusic = {
     scenes: defaults.tracks.scenes,
     items: Array.from({ length: 61 }, (_, index) => ({

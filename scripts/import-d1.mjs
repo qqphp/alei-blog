@@ -13,7 +13,7 @@ const source = JSON.parse(exported.stdout);
 source.documents = source.documents.filter(({ key }) => !['pageSettings', 'copy'].includes(key));
 const collections = {
   projects: ['statuses', 'categories', 'items'], stories: ['root'], slides: ['root'],
-  ai: ['agents', 'skills', 'relays'], bookmarks: ['categories', 'items'], friends: ['categories', 'items'],
+  ai: ['agents', 'skills', 'relays', 'skillCategories'], bookmarks: ['categories', 'items'], friends: ['categories', 'items'],
   books: ['categories', 'items', 'lists'], tracks: ['scenes', 'items', 'playlists'],
   films: ['categories', 'items'], podcasts: ['categories', 'items'],
   travel: ['categories', 'items'], hobbies: ['categories', 'items'],
@@ -46,9 +46,15 @@ try {
     let entries = 0;
     for (const { key, value } of source.documents) {
       for (const collection of collections[key] ?? []) {
-        const items = collection === 'root' ? value : value[collection];
+        const items = collection === 'root' ? value : value[collection] ?? [];
         for (const [position, savedItem] of items.entries()) {
           const item = { ...savedItem, id: savedItem.id ?? `slide-${position}` };
+          if (key === 'ai' && collection === 'skills') {
+            delete item.category;
+            delete item.subcategory;
+            item.categoryId = '';
+          }
+          if (key === 'tracks' && collection === 'playlists') delete item.color;
           const fields = recordFields(item);
           await client.query(`INSERT INTO cms_entries (section, collection, id, position, published, title, category_id, occurred_at, payload, created_at, status_id, search_text)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)`,

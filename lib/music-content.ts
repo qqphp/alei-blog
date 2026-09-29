@@ -15,7 +15,6 @@ export type MusicPlaylist = {
   description: string;
   cover: string;
   coverDescription: string;
-  color: string;
   coverMode: 'upload' | 'ai';
   coverGeneratedFor: string;
   songs: { title: string; artist: string }[];
@@ -54,7 +53,6 @@ export const musicSample: MusicDocument = {
       description: '',
       cover: '',
       coverDescription: '',
-      color: '#91b8a5',
       coverMode: 'upload',
       coverGeneratedFor: '',
       songs: [{ title: '歌曲', artist: '' }],
@@ -76,6 +74,7 @@ type LegacyPlaylist = Omit<
   trackIds?: string[];
   coverMode?: MusicPlaylist['coverMode'];
   coverGeneratedFor?: string;
+  color?: string;
 };
 export function migrateMusic(
   input:
@@ -113,7 +112,7 @@ export function migrateMusic(
         _published: item._published ?? true,
       };
     }),
-    playlists: document.playlists.map(({ trackIds, ...list }) => ({
+    playlists: document.playlists.map(({ trackIds, color: _color, ...list }) => ({
       ...list,
       coverDescription: list.coverDescription ?? '',
       coverMode: list.coverMode ?? 'upload',

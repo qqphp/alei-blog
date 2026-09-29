@@ -371,6 +371,7 @@
   justify-content: space-between;
   padding: 17px;
   color: #fff;
+  background: #91b8a5;
   isolation: isolate;
   overflow: hidden;
 }
@@ -470,6 +471,7 @@
   place-items: center;
   overflow: hidden;
   position: relative;
+  background: #91b8a5;
 }
 .music-playlist-mini img {
   width: 100%;

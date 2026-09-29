@@ -982,6 +982,12 @@
 .admin-check {
   grid-column: 1/-1;
 }
+.admin-fields > .admin-field.admin-resource-logo {
+  grid-column: auto;
+}
+.admin-fields > .admin-field.admin-track-src {
+  grid-column: auto;
+}
 .admin-field > label {
   display: block;
   font-size: 12px;
@@ -1105,7 +1111,7 @@
   gap: 16px;
 }
 .admin-description-image { grid-column: 1 / -1; min-width: 0; }
-.admin-project-image-label { margin-top: 12px; }
+.admin-project-image-label { width: calc((100% - 16px) / 2); margin-top: 12px; }
 .admin-story-image-message {
   display: block;
   margin-top: 10px;
@@ -1127,6 +1133,7 @@
 }
 @media (max-width: 700px) {
   .admin-story-image-fields { grid-template-columns: 1fr; }
+  .admin-project-image-label { width: 100%; }
 }
 .admin-story-tab-help {
   margin: 0 26px;

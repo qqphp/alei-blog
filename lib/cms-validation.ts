@@ -4,6 +4,7 @@ import { podcastSample, type PodcastDocument } from './podcast-content';
 import { filmSample, type FilmDocument } from './film-content';
 import { musicSample, type MusicDocument } from './music-content';
 import { defaults, type Section } from './cms-defaults';
+import { skillCategorySample } from './ai-resources';
 import { storyDate } from './story-content';
 
 export type Json =
@@ -64,10 +65,10 @@ export function validateContent(key: Section, value: unknown) {
       if (!Array.isArray(input)) fail('需要列表');
       const list = input as unknown[];
       const growingCollection = path === key || path === `${key}.items` || path === `${key}.lists` ||
-        (key === 'ai' && ['ai.agents', 'ai.skills', 'ai.relays'].includes(path));
+        (key === 'ai' && ['ai.agents', 'ai.skills', 'ai.relays', 'ai.skillCategories'].includes(path));
       if (list.length > (growingCollection ? 10000 : 500))
         fail(growingCollection ? '最多 10000 项' : '最多 500 项');
-      const itemSample = sample[0] ?? '';
+      const itemSample = path === 'ai.skillCategories' ? skillCategorySample : sample[0] ?? '';
       list.forEach((item, i) => walk(item, itemSample, `${path}[${i + 1}]`));
       for (const identity of ['id', 'slug']) {
         const ids = list.flatMap((item) =>
@@ -157,6 +158,20 @@ export function validateContent(key: Section, value: unknown) {
   );
   if (key === 'ai') {
     const document = value as typeof defaults.ai;
+    const categories = new Map(document.skillCategories.map((item) => [item.id, item]));
+    const names = document.skillCategories.map((item) => JSON.stringify([item.parentId, item.name.trim()]));
+    if (new Set(names).size !== names.length || document.skillCategories.some((item) => item.name.trim() === '全部' || item.name.trim() === '未分类'))
+      throw new Error('同级 Skills 分类不能重名或使用保留名称');
+    for (const item of document.skillCategories) {
+      if (!item.name.trim()) throw new Error('请填写 Skills 分类名称');
+      if (item.parentId && (!categories.has(item.parentId) || item.parentId === item.id || categories.get(item.parentId)?.parentId))
+        throw new Error('Skills 分类最多两层，上级只能选择一级分类');
+      if (document.skillCategories.some((child) => child.parentId === item.id) && item.parentId)
+        throw new Error('有子分类的 Skills 分类不能改为二级');
+    }
+    for (const skill of document.skills)
+      if (skill.categoryId && !categories.has(skill.categoryId))
+        throw new Error('请选择有效的 Skills 分类');
     for (const item of [...document.agents, ...document.skills, ...document.relays]) {
       try {
         const url = new URL(item.href);

@@ -16,6 +16,18 @@ export class AdminNotFound extends Error {}
 function recordInput(section: Section, collection: string, value: Item, createdAt: string | null) {
   if (section === 'writing' && collection === 'categories') return value;
   const { createdAt: _createdAt, updatedAt: _updatedAt, ...fields } = value;
+  if (section === 'ai' && collection === 'skills') {
+    const skill = { ...fields };
+    delete skill.category;
+    delete skill.subcategory;
+    if (typeof skill.categoryId !== 'string') skill.categoryId = '';
+    return skill;
+  }
+  if (section === 'tracks' && collection === 'playlists') {
+    const playlist = { ...fields };
+    delete playlist.color;
+    return playlist;
+  }
   if (section === 'writing' && collection === 'articles')
     return { ...fields, date: articleCreationDate(createdAt ?? '2026-01-01T08:00:00+08:00') };
   return section === 'projects' && collection === 'items' ? { ...fields, createdAt: createdAt ?? '' } : fields;
@@ -135,7 +147,7 @@ export async function getAdminRecord(key: RecordKey) {
 export async function getAdminOptions(section: Section) {
   const collections = adminCollections[section] ?? [];
   const optionCollections = collections.filter((name) =>
-    ['categories', 'statuses', 'scenes', 'sections', 'items'].includes(name) &&
+    ['categories', 'statuses', 'scenes', 'sections', 'skillCategories'].includes(name) &&
     name !== 'items');
   if (section === 'writing') return withDatabase(async (db) => {
     const rows = await db.query('SELECT id, name, description, coalesce(parent_id, \'\') AS "parentId" FROM article_categories ORDER BY position');
@@ -223,6 +235,19 @@ async function validateRecord(db: Client, key: Omit<RecordKey, 'id'>, value: Ite
       `SELECT id, name, description, coalesce(parent_id, '') AS "parentId"
        FROM article_categories WHERE id <> $1`, [oldId ?? '']);
     validateContent('categories', [...rows.rows, value]);
+    return;
+  }
+  if (section === 'ai' && (collection === 'skills' || collection === 'skillCategories')) {
+    const rows = await db.query<{ payload: { id: string; name: string; parentId: string } }>(
+      "SELECT payload FROM cms_entries WHERE section='ai' AND collection='skillCategories' AND id <> $1 ORDER BY position",
+      [collection === 'skillCategories' ? oldId ?? '' : '']);
+    const skillCategories = rows.rows.map((row) => row.payload);
+    if (collection === 'skills') {
+      if (!oldId && !value.categoryId) throw new Error('新增 Skills 时请选择分类');
+      validateContent('ai', { ...defaults.ai, skills: [value], skillCategories });
+    } else {
+      validateContent('ai', { ...defaults.ai, skills: [], skillCategories: [...skillCategories, value] });
+    }
     return;
   }
   if (section === 'investing') {
@@ -424,6 +449,11 @@ export async function deleteAdminRecord(key: RecordKey, revision: number) {
           EXISTS (SELECT 1 FROM articles WHERE category_id = $1) OR
           EXISTS (SELECT 1 FROM article_categories WHERE parent_id = $1) AS used`, [key.id]);
         if (used.rows[0].used) throw new Error('分类仍被文章或子分类使用');
+      } else if (key.section === 'ai' && key.collection === 'skillCategories') {
+        const used = await db.query(`SELECT 1 FROM cms_entries WHERE section='ai' AND
+          ((collection='skillCategories' AND payload->>'parentId'=$1) OR
+           (collection='skills' AND payload->>'categoryId'=$1)) LIMIT 1`, [key.id]);
+        if (used.rowCount) throw new Error('分类仍被技能或子分类使用');
       } else if (['categories', 'statuses', 'scenes', 'sections'].includes(key.collection)) {
         const field = key.collection === 'statuses' ? 'statusId'
           : key.collection === 'scenes' ? 'moodId' : 'categoryId';

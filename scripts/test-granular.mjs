@@ -54,6 +54,14 @@ try {
     assert.equal(run.status, 0, `${task.name}: ${run.stderr}`);
   }
   const migrated = await snapshot();
+  const replay = new pg.Client({ connectionString: testUrl.toString() });
+  await replay.connect();
+  try {
+    for (const file of ['0016_ai_skill_categories.sql', '0017_remove_playlist_color.sql'])
+      await replay.query(await readFile(resolve('db/migrations', file), 'utf8'));
+  }
+  finally { await replay.end(); }
+  assert.deepEqual(await snapshot(), migrated, '分类和歌单迁移重复执行不能覆盖已迁移数据');
   assert.deepEqual(migrated.articles, original.articles, '迁移应保留文章顺序、发布状态与媒体');
   assert.deepEqual(migrated.categories, original.categories, '迁移应保留分类及顺序');
   for (const entry of original.entries) {
@@ -75,11 +83,21 @@ try {
         ['travel', 'items'], ['hobbies', 'items'], ['books', 'items'], ['books', 'lists'],
       ].some(([section, collection]) => entry.section === section && entry.collection === collection);
       const expected = renamed && entry.payload.title === renamed[0]
-        ? { ...entry.payload, title: renamed[1] } : entry.payload;
+        ? { ...entry.payload, title: renamed[1] } : { ...entry.payload };
+      const historicalSkill = entry.section === 'ai' && entry.collection === 'skills' &&
+        (Object.hasOwn(expected, 'category') || Object.hasOwn(expected, 'subcategory') || !Object.hasOwn(expected, 'categoryId'));
+      if (historicalSkill) {
+        delete expected.category;
+        delete expected.subcategory;
+        expected.categoryId = '';
+      }
+      if (entry.section === 'tracks' && entry.collection === 'playlists') delete expected.color;
       assert.deepEqual(after.payload, coverDescriptionRecord && !('coverDescription' in expected)
         ? { ...expected, coverDescription: '' } : expected);
     }
-    assert.deepEqual(after.updated_at, entry.updated_at, '迁移不能改变历史更新时间');
+    if (!((entry.section === 'ai' && entry.collection === 'skills') ||
+      (entry.section === 'tracks' && entry.collection === 'playlists' && Object.hasOwn(entry.payload, 'color'))))
+      assert.deepEqual(after.updated_at, entry.updated_at, '迁移不能改变历史更新时间');
   }
   const expectedSections = original.sections.filter((section) => !['pageSettings', 'copy'].includes(section.section));
   for (const section of expectedSections.filter((item) => item.section !== 'investing')) {
@@ -242,6 +260,54 @@ try {
       const stale = await request(path, 'PUT', { value: detail.data.value, revision: detail.data.revision });
       assert.equal(stale.status, 409, `${section}/${collection} stale write`);
     }
+  const playlistBase = '/api/admin/records/tracks/playlists';
+  const playlist = { id: `playlist-${crypto.randomUUID().slice(0, 8)}`, title: '旧颜色歌单',
+    description: '', cover: '', coverDescription: '', coverMode: 'upload', coverGeneratedFor: '',
+    songs: [], _published: false, color: '#123456' };
+  const playlistCreated = await request(playlistBase, 'POST', { value: playlist });
+  assert.equal(playlistCreated.status, 200, JSON.stringify(playlistCreated.data));
+  assert.equal(Object.hasOwn(playlistCreated.data.value, 'color'), false);
+  const playlistPath = `${playlistBase}/${playlist.id}`;
+  const playlistEdited = await request(playlistPath, 'PUT', { value: { ...playlistCreated.data.value,
+    color: '#abcdef', description: '编辑后仍不保存颜色' }, revision: 1 });
+  assert.equal(playlistEdited.status, 200, JSON.stringify(playlistEdited.data));
+  assert.equal(Object.hasOwn(playlistEdited.data.value, 'color'), false);
+  assert.equal((await request(playlistPath, 'DELETE', { revision: 2 })).status, 200);
+  const skillCategoryBase = '/api/admin/records/ai/skillCategories';
+  const skillBase = '/api/admin/records/ai/skills';
+  const skillParent = { id: `skill-parent-${crypto.randomUUID().slice(0, 8)}`, name: '测试父类', parentId: '' };
+  const skillChild = { id: `skill-child-${crypto.randomUUID().slice(0, 8)}`, name: '测试子类', parentId: skillParent.id };
+  const skillCategoryPath = (item) => `${skillCategoryBase}/${item.id}`;
+  assert.equal((await request(skillCategoryBase, 'POST', { value: skillParent })).status, 200);
+  assert.equal((await request(skillCategoryBase, 'POST', { value: skillChild })).status, 200);
+  assert.equal((await request(skillCategoryBase, 'POST', { value: { ...skillChild,
+    id: `third-${crypto.randomUUID().slice(0, 8)}`, parentId: skillChild.id } })).status, 400);
+  assert.equal((await request(skillCategoryBase, 'POST', { value: { ...skillChild,
+    id: `duplicate-${crypto.randomUUID().slice(0, 8)}` } })).status, 400);
+  assert.equal((await request(skillCategoryPath(skillParent), 'PUT', { value: { ...skillParent, parentId: skillChild.id }, revision: 1 })).status, 400);
+  assert.equal((await request(skillCategoryPath(skillParent), 'DELETE', { revision: 1 })).status, 400);
+  const skill = { ...defaults.ai.skills[0], id: `test-skill-${crypto.randomUUID().slice(0, 8)}`,
+    name: 'test-skill', title: '测试技能', categoryId: skillChild.id, _published: false };
+  assert.equal((await request(skillBase, 'POST', { value: { ...skill, categoryId: '' } })).status, 400);
+  assert.equal((await request(skillBase, 'POST', { value: { ...skill, categoryId: 'missing' } })).status, 400);
+  assert.equal((await request(skillBase, 'POST', { value: skill })).status, 200);
+  assert.equal((await request(skillCategoryPath(skillChild), 'DELETE', { revision: 1 })).status, 400);
+  const skillDetail = await request(`${skillBase}/${skill.id}`);
+  assert.equal((await request(`${skillBase}/${skill.id}`, 'PUT', { value: { ...skillDetail.data.value,
+    category: '旧分类', subcategory: '旧子类', categoryId: '' }, revision: skillDetail.data.revision })).status, 200,
+    '历史技能带旧字段仍可编辑，并清空分类');
+  const savedSkill = await request(`${skillBase}/${skill.id}`);
+  assert.equal(savedSkill.data.value.categoryId, '');
+  assert.equal(Object.hasOwn(savedSkill.data.value, 'category'), false);
+  const movedChild = await request(`${skillCategoryPath(skillChild)}/move`, 'POST', { direction: -1, revision: 1 });
+  assert.equal(movedChild.status, 200, JSON.stringify(movedChild.data));
+  assert.equal((await request(skillCategoryBase)).data.items[0].id, skillChild.id);
+  const childDetail = await request(skillCategoryPath(skillChild));
+  assert.equal((await request(skillCategoryPath(skillChild), 'DELETE', { revision: childDetail.data.revision })).status, 200);
+  const parentDetail = await request(skillCategoryPath(skillParent));
+  assert.equal((await request(skillCategoryPath(skillParent), 'DELETE', { revision: parentDetail.data.revision })).status, 200);
+  const skillAfter = await request(`${skillBase}/${skill.id}`);
+  assert.equal((await request(`${skillBase}/${skill.id}`, 'DELETE', { revision: skillAfter.data.revision })).status, 200);
   const categories = await request('/api/admin/options/writing');
   const categoryId = categories.data.categories[0].id;
   const newCategory = { id: `granular-category-${crypto.randomUUID().slice(0, 8)}`,

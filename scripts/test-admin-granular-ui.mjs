@@ -48,6 +48,17 @@ const project = { ...structuredClone(defaults.projects.items[0]), title: '原项
 const aiResources = Object.fromEntries(['agents', 'skills', 'relays'].map((collection) => [collection,
   { ...structuredClone(defaults.ai[collection][0]), id: `ui-${collection}`,
     ...(collection === 'skills' ? { title: '原技能' } : { name: `原${collection}` }) }]));
+const skillCategories = [{ id: 'skill-parent', name: '界面设计', parentId: '' },
+  { id: 'skill-child', name: '页面生成', parentId: 'skill-parent' }];
+const orderedRecords = {
+  tracks: { items: { ...structuredClone(defaults.tracks.items[0]), id: 'ordered-track', title: '原音乐' },
+    playlists: { ...structuredClone(musicSample.playlists[0]), id: 'ordered-playlist', title: '原歌单', color: '#123456' } },
+  films: { items: { ...structuredClone(defaults.films.items[0]), id: 'ordered-film', title: '原电影' } },
+  podcasts: { items: { ...structuredClone(defaults.podcasts.items[0]), id: 'ordered-podcast', title: '原播客' } },
+  travel: { items: { ...structuredClone(defaults.travel.items[0]), id: 'ordered-travel', title: '原旅行' } },
+  hobbies: { items: { ...structuredClone(defaults.hobbies.items[0]), id: 'ordered-hobby', title: '原爱好' } },
+  books: { items: { ...structuredClone(defaults.books.items[0]), id: 'ordered-book', title: '原书籍' } },
+};
 let investment = { ...structuredClone(defaults.investing.sections[0].entries[0]), id: 'ui-investment',
   title: '原投资文章', sectionId: defaults.investing.sections[0].id,
   createdAt: '2026-09-08T01:02:03.000Z', updatedAt: '2026-09-09T01:02:03.000Z' };
@@ -62,6 +73,7 @@ globalThis.fetch = async (input, init = {}) => {
     return Response.json({ categories: defaults.projects.categories, statuses: defaults.projects.statuses });
   if (url.pathname === '/api/admin/options/investing')
     return Response.json({ sections: defaults.investing.sections.map(({ id, title }) => ({ id, name: title })) });
+  if (url.pathname === '/api/admin/options/ai') return Response.json({ skillCategories });
   if (url.pathname.startsWith('/api/admin/options/')) return Response.json({});
   if (url.pathname === '/api/admin/ai' && init.method === 'POST')
     return failStoryImage ? Response.json({ error: '模拟生成失败，原图片已保留' }, { status: 502 })
@@ -95,6 +107,23 @@ globalThis.fetch = async (input, init = {}) => {
       return Response.json({ items: [{ id: value.id, title: value.title ?? value.name, revision: 1,
         published: value._published, position: 0 }], total: 1, page: 1, size: 20 });
     if (url.pathname === `${base}/${value.id}`) return Response.json({ value, revision: 1 });
+  }
+  if (url.pathname === '/api/admin/records/ai/skillCategories')
+    return Response.json({ items: skillCategories.map((item, position) => ({
+      id: item.id, title: item.name, revision: 1, position })),
+      total: skillCategories.length, page: 1, size: 20 });
+  if (url.pathname.startsWith('/api/admin/records/ai/skillCategories/')) {
+    const category = skillCategories.find((item) => url.pathname.endsWith(`/${item.id}`));
+    return Response.json({ value: category, revision: 1 });
+  }
+  for (const [section, collections] of Object.entries(orderedRecords)) {
+    for (const [collection, value] of Object.entries(collections)) {
+      const base = `/api/admin/records/${section}/${collection}`;
+      if (url.pathname === base) return Response.json({ items: [{ id: value.id, title: value.title,
+        revision: 1, published: value._published, position: 0 }], total: 1, page: 1, size: 20 });
+      if (url.pathname === `${base}/${value.id}`)
+        return Response.json({ value: Object.fromEntries(Object.entries(value).reverse()), revision: 1 });
+    }
   }
   if (url.pathname === '/api/admin/records/investing/entries')
     return Response.json({ items: [{ id: investment.id, title: investment.title, revision: 1,
@@ -350,9 +379,12 @@ try {
   await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/1234-abcd.png'));
   assert.equal(screen.getByRole('button', { name: '← 返回列表' }).disabled, false);
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: 'AI', exact: true }));
-  assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['智能体', '技能 Skills', '中转站 API']);
+  assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['智能体', '技能 Skills', '中转站 API', 'Skills分类']);
   await user.click(screen.getByRole('button', { name: '＋ 新增智能体' }));
   assert.equal(screen.getByLabelText('名称').value, '');
+  assert.deepEqual([...window.document.querySelectorAll('.admin-form .admin-fields > .admin-field > label')]
+    .slice(0, 3).map((node) => node.textContent), ['名称', '作者', 'Logo']);
+  assert.ok(screen.getByLabelText('Logo').closest('.admin-resource-logo'));
   await user.type(screen.getByLabelText('名称'), '未保存资源');
   window.confirm = () => false;
   await user.click(screen.getByRole('tab', { name: '技能 Skills' }));
@@ -360,19 +392,36 @@ try {
   window.confirm = () => true;
   await user.click(screen.getByRole('tab', { name: '技能 Skills' }));
   await user.click(screen.getByRole('button', { name: '＋ 新增技能 Skills' }));
+  assert.equal(screen.getByLabelText('名称').value, '');
   assert.equal(screen.getByLabelText('标题').value, '');
-  assert.ok(screen.getByLabelText('子分类'));
+  assert.equal(screen.queryByLabelText('子分类'), null);
+  assert.ok(screen.getByLabelText('分类').querySelector('option[value="skill-child"]'));
   assert.equal(screen.queryByLabelText('提示词'), null);
   await user.click(screen.getByRole('tab', { name: '中转站 API' }));
   await user.click(screen.getByRole('button', { name: '＋ 新增中转站 API' }));
   assert.equal(screen.getByLabelText('名称').value, '');
+  assert.deepEqual([...window.document.querySelectorAll('.admin-form .admin-fields > .admin-field > label')]
+    .slice(0, 4).map((node) => node.textContent), ['名称', '链接地址', 'Logo', '站点标记']);
+  assert.ok(screen.getByLabelText('Logo').closest('.admin-resource-logo'));
+  await user.click(screen.getByRole('tab', { name: 'Skills分类' }));
+  await user.click(screen.getByRole('button', { name: '＋ 新增Skills分类' }));
+  assert.equal(screen.getByLabelText('名称').value, '');
+  assert.ok(screen.getByLabelText('上级分类').querySelector('option[value="skill-parent"]'));
+  assert.equal(screen.getByLabelText('上级分类').querySelector('option[value="skill-child"]'), null);
   await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+  await user.click(screen.getByRole('tab', { name: '中转站 API' }));
   await user.click(await screen.findByRole('button', { name: '原relays' }));
   assert.equal((await screen.findByLabelText('名称')).value, '原relays');
+  assert.ok(screen.getByLabelText('站点标记'));
+  assert.ok(screen.getByLabelText('Logo').closest('.admin-resource-logo'));
   for (const [tab, label, title] of [['智能体', '名称', '原agents'], ['技能 Skills', '标题', '原技能']]) {
     await user.click(screen.getByRole('tab', { name: tab }));
     await user.click(await screen.findByRole('button', { name: title }));
     assert.equal((await screen.findByLabelText(label)).value, title);
+    if (tab === '智能体') {
+      assert.ok(screen.getByLabelText('作者'));
+      assert.ok(screen.getByLabelText('Logo').closest('.admin-resource-logo'));
+    }
   }
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: '投资', exact: true }));
   assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['文章', '栏目']);
@@ -423,6 +472,7 @@ try {
   await user.clear(tags);
   await user.click(within(screen.getByRole('group', { name: /^图片/ })).getByRole('button', { name: '＋ 添加一项' }));
   assert.equal(screen.getByLabelText('素材地址').value, '');
+  assert.ok(screen.getByLabelText('图片标题').closest('.admin-project-image-label'));
   assert.equal(screen.getByRole('button', { name: 'AI 生成配图' }).disabled, true);
   await user.type(screen.getByLabelText('图片描述'), '山上的小型木屋');
   await user.click(screen.getByRole('button', { name: 'AI 生成配图' }));
@@ -438,6 +488,7 @@ try {
   await user.click(await screen.findByRole('button', { name: '原项目' }));
   await screen.findByLabelText('标题');
   assert.deepEqual(labels(), projectLabels, '项目编辑字段顺序与新增一致，即使接口顺序相反');
+  assert.ok(screen.getAllByLabelText('图片标题').every((field) => field.closest('.admin-project-image-label')));
   assert.equal(window.document.querySelector('.admin-record-times'), null);
 
   await user.click(within(nav).getByRole('button', { name: '说说', exact: true }));
@@ -570,8 +621,23 @@ try {
   ]) {
     await user.click(within(nav).getByRole('button', { name: sectionLabel, exact: true }));
     await user.click(screen.getByRole('tab', { name: tabLabel }));
+    if (['音乐', '播客', '旅行', '爱好'].includes(sectionLabel))
+      assert.equal(screen.queryByRole('tab', { name: '设置' }), null);
     await user.click(screen.getByRole('button', { name: `＋ 新增${tabLabel}` }));
     assert.equal(screen.getByLabelText(inputLabel).value, '', `${sectionLabel}/${tabLabel} 新增名称应为空`);
+    if (sectionLabel === '音乐' && tabLabel === '内容')
+      assert.equal(screen.getByLabelText('素材地址').value, '');
+    if (sectionLabel === '音乐' && tabLabel === '内容') {
+      const src = screen.getByLabelText('素材地址').closest('.admin-track-src');
+      assert.ok(src);
+      assert.equal(src.nextElementSibling.querySelector('label').textContent, '时长（秒）');
+    }
+    if (sectionLabel === '音乐' && tabLabel === '歌单') {
+      assert.equal(screen.queryByLabelText('书封颜色'), null);
+      assert.ok(screen.getByRole('group', { name: /^歌曲/ }));
+    }
+    if (sectionLabel === '电影')
+      assert.equal(screen.queryByRole('tab', { name: '设置' }), null);
     if (sectionLabel === '电影' && tabLabel === '内容') {
       assert.equal(screen.getByLabelText('素材地址').value, '');
       for (const label of ['导演', '类型', '国家', '语言']) assert.ok(screen.getByLabelText(label));
@@ -581,7 +647,22 @@ try {
       assert.equal(screen.queryByRole('button', { name: 'AI 生成配图' }), null);
       assert.equal(screen.queryByRole('button', { name: 'AI 生成封面' }), null);
     }
+    if (['旅行', '爱好'].includes(sectionLabel) && tabLabel === '内容')
+      assert.ok(screen.getByRole('group', { name: /^相册/ }));
+    const section = { 音乐: 'tracks', 电影: 'films', 播客: 'podcasts', 旅行: 'travel', 爱好: 'hobbies', 书籍: 'books' }[sectionLabel];
+    const collection = tabLabel === '歌单' ? 'playlists' : 'items';
+    const existing = ['内容', '歌单'].includes(tabLabel) ? orderedRecords[section]?.[collection] : null;
+    const order = () => [...document.querySelector('.admin-form .admin-fields').children]
+      .map((node) => (node.matches('label') ? node : node.querySelector('label,legend'))?.firstChild?.textContent?.trim());
+    const newOrder = existing ? order() : null;
     await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+    if (existing) {
+      await user.click(await screen.findByRole('button', { name: existing.title }));
+      await screen.findByDisplayValue(existing.title);
+      assert.deepEqual(order(), newOrder, `${sectionLabel}/${tabLabel} 编辑字段顺序应与新增一致`);
+      if (sectionLabel === '音乐' && tabLabel === '歌单') assert.equal(screen.queryByLabelText('书封颜色'), null);
+      await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+    }
   }
   cleanup();
   for (const [path, sample, action] of [

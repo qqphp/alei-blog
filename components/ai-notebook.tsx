@@ -1,16 +1,14 @@
 'use client';
 
-import { useRef, useState, useMemo } from 'react';
+import { useRef, useState } from 'react';
 import { Tabs } from '@base-ui/react/tabs';
 import Image from 'next/image';
 import {
   ArrowUpRight,
   Bot,
-  ChevronDown,
   Database,
   Network,
   Puzzle,
-  Sparkles,
 } from 'lucide-react';
 import { useContent } from '@/components/content-provider';
 import { AiModelDataSection } from '@/components/ai-model-data';
@@ -292,95 +290,61 @@ function AgentSection() {
 /* ------------------------------------------------------------------ */
 
 function SkillsSection() {
-  const { ai: { skills: aiSkills } } = useContent();
-  const [categoryFilter, setCategoryFilter] = useState('全部');
-  const allCategories = useMemo(
-    () => [...new Set(aiSkills.map((s) => s.category))],
-    [aiSkills],
-  );
-  const allSubcategories = useMemo(() => {
-    const map = new Map<string, Set<string>>();
-    for (const s of aiSkills) {
-      if (!map.has(s.category)) map.set(s.category, new Set());
-      map.get(s.category)!.add(s.subcategory);
-    }
-    return map;
-  }, [aiSkills]);
-
-  const skills = aiSkills.filter(
-    (skill) =>
-      categoryFilter === '全部' ||
-      skill.category === categoryFilter ||
-      skill.subcategory === categoryFilter,
-  );
+  const { ai: { skills: aiSkills, skillCategories } } = useContent();
+  const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const categoryNames = new Map(skillCategories.map((item) => [item.id, item.name]));
+  const category = skillCategories.find((item) => item.id === categoryFilter);
+  const children = category && !category.parentId
+    ? skillCategories.filter((item) => item.parentId === category.id).map((item) => item.id) : [];
+  const skills = aiSkills.filter((skill) => categoryFilter === null ||
+    (categoryFilter === '' ? !categoryNames.has(skill.categoryId) :
+      skill.categoryId === categoryFilter || children.includes(skill.categoryId)));
+  const count = (id: string) => aiSkills.filter((skill) => skill.categoryId === id ||
+    skillCategories.some((item) => item.parentId === id && item.id === skill.categoryId)).length;
 
   return (
     <section id="ai-skills" className="ai-section" aria-label="技能 Skills">
-      <div className="ai-skill-categories" aria-label="技能分类">
-        <button
-          type="button"
-          aria-pressed={categoryFilter === '全部'}
-          onClick={() => setCategoryFilter('全部')}
-        >
-          全部
-        </button>
-        {allCategories.map((cat) => {
-          const subs = allSubcategories.get(cat);
-          return (
-            <div className="ai-cat-group" key={cat}>
-              <button
-                type="button"
-                aria-pressed={categoryFilter === cat}
-                onClick={() => setCategoryFilter(cat)}
-              >
-                {cat}
-                {subs && subs.size > 1 && (
-                  <ChevronDown size={13} className="ai-cat-chevron" />
-                )}
+      <div className="ai-skill-layout">
+        <nav className="ai-skill-categories" aria-label="技能分类">
+          <button type="button" aria-pressed={categoryFilter === null} onClick={() => setCategoryFilter(null)}>
+            <span>全部</span><small>{aiSkills.length}</small>
+          </button>
+          {skillCategories.filter((item) => !item.parentId).map((parent) => (
+            <div className="ai-cat-group" key={parent.id}>
+              <button type="button" aria-pressed={categoryFilter === parent.id} onClick={() => setCategoryFilter(parent.id)}>
+                <span>{parent.name}</span><small>{count(parent.id)}</small>
               </button>
-              {subs && subs.size > 1 && (
-                <div className="ai-cat-submenu">
-                  {[...subs].map((sub) => (
-                    <button
-                      key={sub}
-                      type="button"
-                      aria-pressed={categoryFilter === sub}
-                      onClick={() => setCategoryFilter(sub)}
-                    >
-                      {sub}
-                    </button>
-                  ))}
+              {skillCategories.filter((item) => item.parentId === parent.id).map((child) => (
+                <button className="ai-cat-child" type="button" key={child.id}
+                  aria-pressed={categoryFilter === child.id} onClick={() => setCategoryFilter(child.id)}>
+                  <span>{child.name}</span><small>{count(child.id)}</small>
+                </button>
+              ))}
+            </div>
+          ))}
+          <button type="button" aria-pressed={categoryFilter === ''} onClick={() => setCategoryFilter('')}>
+            <span>未分类</span><small>{aiSkills.filter((skill) => !categoryNames.has(skill.categoryId)).length}</small>
+          </button>
+        </nav>
+        <div className="ai-skill-results">
+          <div className="ai-skill-heading"><h3>{categoryFilter === null ? '全部技能' : categoryFilter === '' ? '未分类' : category?.name ?? '技能'}</h3><span>{skills.length} 个 Skills</span></div>
+          <div className="ai-skill-list">
+            {skills.map((skill) => (
+              <article className="ai-skill-row" key={skill.id}>
+                <div className="ai-skill-row-copy">
+                  <span className="ai-skill-meta">{categoryNames.get(skill.categoryId) ?? '未分类'} · {skill.name}</span>
+                  <h4>{skill.title}</h4>
+                  <p>{skill.description}</p>
                 </div>
-              )}
-            </div>
-          );
-        })}
+                <a className="ai-resource-link" href={skill.href} target="_blank" rel="noopener noreferrer">
+                  查看技能 <ArrowUpRight size={16} />
+                </a>
+              </article>
+            ))}
+          </div>
+          {!skills.length && <p className="ai-empty">当前分类下暂无技能。</p>}
+        </div>
       </div>
-      <div className="ai-skill-grid">
-        {skills.map((skill) => (
-          <article className="ai-skill-card" key={skill.id}>
-            <div className="ai-skill-meta">
-              <span className="ai-card-icon" aria-hidden="true">
-                <Sparkles size={16} />
-              </span>
-              <span>{skill.category} / {skill.subcategory}</span>
-            </div>
-            <h3>{skill.title}</h3>
-            <p>{skill.description}</p>
-            <a
-              className="ai-resource-link"
-              href={skill.href}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              查看技能 <ArrowUpRight size={16} />
-            </a>
-          </article>
-        ))}
-      </div>
-      {!skills.length && (
-        <p className="ai-empty">当前分类下暂无技能。</p>
-      )}
     </section>
   );
 }
