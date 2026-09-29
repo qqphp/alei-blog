@@ -299,9 +299,9 @@ try {
   const savedSkill = await request(`${skillBase}/${skill.id}`);
   assert.equal(savedSkill.data.value.categoryId, '');
   assert.equal(Object.hasOwn(savedSkill.data.value, 'category'), false);
-  const movedChild = await request(`${skillCategoryPath(skillChild)}/move`, 'POST', { direction: -1, revision: 1 });
+  const movedChild = await request(`${skillCategoryPath(skillChild)}/move`, 'POST', { direction: 1, revision: 1 });
   assert.equal(movedChild.status, 200, JSON.stringify(movedChild.data));
-  assert.equal((await request(skillCategoryBase)).data.items[0].id, skillChild.id);
+  assert.equal((await request(skillCategoryBase)).data.items[0].id, skillParent.id);
   const childDetail = await request(skillCategoryPath(skillChild));
   assert.equal((await request(skillCategoryPath(skillChild), 'DELETE', { revision: childDetail.data.revision })).status, 200);
   const parentDetail = await request(skillCategoryPath(skillParent));
@@ -318,9 +318,9 @@ try {
     id: `duplicate-${crypto.randomUUID().slice(0, 8)}` } })).status, 400);
   const statusPath = `${statusBase}/${agentStatus.id}`;
   assert.equal((await request(statusPath, 'PUT', { value: { ...agentStatus, name: '维护完成' }, revision: 1 })).status, 200);
-  assert.equal((await request(`${statusPath}/move`, 'POST', { direction: -1, revision: 2 })).status, 200);
+  assert.equal((await request(`${statusPath}/move`, 'POST', { direction: 1, revision: 2 })).status, 200);
   const orderedStatuses = (await request('/api/admin/options/ai')).data.agentStatuses;
-  assert.equal(orderedStatuses.at(-2).name, '维护完成');
+  assert.equal(orderedStatuses[1].name, '维护完成');
   const agentWithStatus = { ...defaults.ai.agents[0], id: `test-agent-${crypto.randomUUID().slice(0, 8)}`,
     name: '状态验证智能体', status: agentStatus.id };
   const agentBase = '/api/admin/records/ai/agents';
@@ -332,21 +332,63 @@ try {
   assert.equal((await request(statusPath, 'DELETE', { revision: 3 })).status, 400);
   assert.equal((await request(`${agentBase}/${agentWithStatus.id}`, 'DELETE', { revision: 1 })).status, 200);
   assert.equal((await request(statusPath, 'DELETE', { revision: 3 })).status, 200);
+  const positions = async (table, filter = '') => {
+    const db = new pg.Client({ connectionString: testUrl.toString() });
+    await db.connect();
+    try {
+      return (await db.query(`SELECT id,position,revision,${table === 'article_categories' ? 'null::timestamptz AS updated_at' : 'updated_at'} FROM ${table} ${filter} ORDER BY position,id`)).rows;
+    } finally { await db.end(); }
+  };
+  const originalSlides = await positions('cms_entries', "WHERE section='slides' AND collection='root'");
   const slide = { ...defaults.slides[0], id: `granular-slide-${crypto.randomUUID().slice(0, 8)}`,
-    title: '逐条测试封面', alt: '山间晨雾' };
+    title: '逐条测试封面 A', alt: '山间晨雾' };
+  const newerSlide = { ...slide, id: `granular-slide-${crypto.randomUUID().slice(0, 8)}`,
+    title: '逐条测试封面 B' };
   const slideCreated = await request('/api/admin/records/slides/root', 'POST', { value: slide });
   assert.equal(slideCreated.status, 200, JSON.stringify(slideCreated.data));
+  assert.equal((await request('/api/admin/records/slides/root', 'POST', { value: newerSlide })).status, 200);
   const slideList = await request('/api/admin/records/slides/root');
   const savedSlide = slideList.data.items.find((item) => item.id === slide.id);
   assert.equal(savedSlide?.title, slide.title);
   assert.equal(savedSlide?.excerpt, slide.alt);
+  assert.deepEqual(slideList.data.items.slice(0, 2).map(({ id }) => id), [newerSlide.id, slide.id]);
+  const slidePage = await request('/api/admin/records/slides/root?size=1&page=2');
+  assert.equal(slidePage.data.items[0].id, slide.id);
+  const shiftedSlides = await positions('cms_entries', "WHERE section='slides' AND collection='root'");
+  assert.deepEqual(shiftedSlides.slice(2).map(({ id, position, revision, updated_at }) =>
+    [id, position, revision, updated_at]), originalSlides.map(({ id, position, revision, updated_at }) =>
+    [id, position + 2, revision, updated_at]));
+  const notesHtml = await (await fetch(`${origin}/notes`)).text();
+  assert.ok(notesHtml.indexOf('切换到逐条测试封面 B') < notesHtml.indexOf('切换到逐条测试封面 A'),
+    '前台封面应与后台位置顺序一致');
+  assert.equal((await request(`/api/admin/records/slides/root/${newerSlide.id}/move`, 'POST',
+    { direction: 1, revision: 1 })).status, 200);
+  assert.deepEqual((await request('/api/admin/records/slides/root')).data.items.slice(0, 2).map(({ id }) => id),
+    [slide.id, newerSlide.id]);
   const categories = await request('/api/admin/options/writing');
   const categoryId = categories.data.categories[0].id;
+  const originalCategories = await positions('article_categories');
   const newCategory = { id: `granular-category-${crypto.randomUUID().slice(0, 8)}`,
     name: '逐条测试分类', description: '', parentId: '' };
+  const newerCategory = { ...newCategory, id: `granular-category-${crypto.randomUUID().slice(0, 8)}`,
+    name: '较新测试分类' };
   const categoryCreated = await request('/api/admin/records/writing/categories', 'POST',
     { value: newCategory });
   assert.equal(categoryCreated.status, 200, JSON.stringify(categoryCreated.data));
+  assert.equal((await request('/api/admin/records/writing/categories', 'POST',
+    { value: newerCategory })).status, 200);
+  assert.deepEqual((await request('/api/admin/records/writing/categories')).data.items.slice(0, 2)
+    .map(({ id }) => id), [newerCategory.id, newCategory.id]);
+  assert.deepEqual((await request('/api/admin/options/writing')).data.categories.slice(0, 2)
+    .map(({ id }) => id), [newerCategory.id, newCategory.id]);
+  const shiftedCategories = await positions('article_categories');
+  assert.deepEqual(shiftedCategories.slice(2).map(({ id, position, revision }) => [id, position, revision]),
+    originalCategories.map(({ id, position, revision }) => [id, position + 2, revision]));
+  const duplicateCategory = await request('/api/admin/records/writing/categories', 'POST',
+    { value: { ...newCategory, name: '重复标识测试' } });
+  assert.notEqual(duplicateCategory.status, 200);
+  assert.deepEqual(await positions('article_categories'), shiftedCategories,
+    '新增失败时位置顺延必须回滚');
   const newCategoryPath = `/api/admin/records/writing/categories/${newCategory.id}`;
   const categoryChanged = await request(newCategoryPath, 'PUT', {
     value: { ...newCategory, description: '已修改' }, revision: 1 });
@@ -357,6 +399,8 @@ try {
     _published: false };
   const created = await request('/api/admin/records/writing/articles', 'POST', { value: article });
   assert.equal(created.status, 200, JSON.stringify(created.data));
+  assert.equal((await request('/api/admin/records/writing/articles')).data.items[0].id, article.slug,
+    '文章管理继续按创建时间倒序');
   const articlePath = `/api/admin/records/writing/articles/${article.slug}`;
   const categoryInUse = await request(newCategoryPath, 'DELETE', { revision: 2 });
   assert.equal(categoryInUse.status, 400);
@@ -371,14 +415,19 @@ try {
   assert.equal(removed.status, 200);
   assert.equal((await request(articlePath)).status, 404);
   assert.equal((await request(newCategoryPath, 'DELETE', { revision: 2 })).status, 200);
+  assert.equal((await request(`/api/admin/records/writing/categories/${newerCategory.id}`, 'DELETE',
+    { revision: 1 })).status, 200);
 
   const firstStory = { ...defaults.stories[0], id: `granular-story-${crypto.randomUUID().slice(0, 8)}`,
     text: '逐条测试说说', images: [], _published: false };
   const secondStory = { ...firstStory, id: `granular-story-${crypto.randomUUID().slice(0, 8)}`,
-    text: '第二条测试说说' };
+    text: '第二条测试说说', date: '2000-01-01T00:00:00+08:00' };
   const storyPath = (story) => `/api/admin/records/stories/root/${story.id}`;
   assert.equal((await request('/api/admin/records/stories/root', 'POST', { value: firstStory })).status, 200);
   assert.equal((await request('/api/admin/records/stories/root', 'POST', { value: secondStory })).status, 200);
+  const storyOrder = (await request('/api/admin/records/stories/root')).data.items.map(({ id }) => id);
+  assert.ok(storyOrder.indexOf(firstStory.id) < storyOrder.indexOf(secondStory.id),
+    '说说继续按内容日期排序，补录过去日期不会置顶');
   const firstPublished = await request(storyPath(firstStory), 'PATCH', { published: true, revision: 1 });
   assert.equal(firstPublished.status, 200, JSON.stringify(firstPublished.data));
   const moved = await request(`${storyPath(secondStory)}/move`, 'POST', { direction: -1, revision: 1 });
@@ -392,6 +441,26 @@ try {
   assert.equal(projectCreated.status, 200, JSON.stringify(projectCreated.data));
   assert.equal((await request(`/api/admin/records/projects/items/${project.id}`, 'DELETE',
     { revision: 1 })).status, 200);
+
+  for (const section of ['bookmarks', 'friends']) {
+    const base = `/api/admin/records/${section}/items`;
+    const value = { ...defaults[section].items[0], id: `${section}-${crypto.randomUUID().slice(0, 8)}`,
+      name: `测试${section}`, url: `https://example.com/${section}`,
+      initials: '新', tags: ['首个标签', '第二标签'], _published: false };
+    const added = await request(base, 'POST', { value });
+    assert.equal(added.status, 200, JSON.stringify(added.data));
+    const path = `${base}/${value.id}`;
+    const detail = await request(path);
+    assert.equal(detail.data.value.initials, '新');
+    assert.deepEqual(detail.data.value.tags, ['首个标签', '第二标签']);
+    const edited = await request(path, 'PUT', { value: { ...detail.data.value,
+      initials: '改', tags: ['第二标签'] }, revision: 1 });
+    assert.equal(edited.status, 200, JSON.stringify(edited.data));
+    const reopened = await request(path);
+    assert.equal(reopened.data.value.initials, '改');
+    assert.deepEqual(reopened.data.value.tags, ['第二标签']);
+    assert.equal((await request(path, 'DELETE', { revision: 2 })).status, 200);
+  }
 
   const largeDb = new pg.Client({ connectionString: testUrl.toString() });
   await largeDb.connect();

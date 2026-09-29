@@ -361,16 +361,23 @@ export async function createAdminRecord(section: Section, collection: string, va
           VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,
             (SELECT coalesce(max(position) + 1, 0) FROM articles))`, articleParams(value));
       } else if (section === 'writing' && collection === 'categories') {
+        await db.query('UPDATE article_categories SET position = position + 1');
         await db.query(`INSERT INTO article_categories (id, name, description, parent_id, position)
-          VALUES ($1,$2,$3,nullif($4, ''),
-            (SELECT coalesce(max(position) + 1, 0) FROM article_categories))`,
+          VALUES ($1,$2,$3,nullif($4, ''),0)`,
         [id, value.name, value.description, value.parentId]);
       } else {
+        const dateOrdered = (section === 'stories' && collection === 'root') ||
+          (section === 'investing' && collection === 'entries');
+        if (!dateOrdered)
+          await db.query('UPDATE cms_entries SET position = position + 1 WHERE section = $1 AND collection = $2',
+            [section, collection]);
         const fields = recordFields(value);
+        const position = dateOrdered
+          ? '(SELECT coalesce(max(position) + 1, 0) FROM cms_entries WHERE section = $1 AND collection = $2)'
+          : '0';
         await db.query(`INSERT INTO cms_entries (section, collection, id, position, published,
           title, category_id, status_id, occurred_at, payload, search_text)
-          VALUES ($1,$2,$3,(SELECT coalesce(max(position) + 1, 0) FROM cms_entries
-            WHERE section = $1 AND collection = $2),$4,$5,$6,$7,$8,$9::jsonb,$10)`,
+          VALUES ($1,$2,$3,${position},$4,$5,$6,$7,$8,$9::jsonb,$10)`,
         [section, collection, id, fields.published, fields.title, fields.categoryId, fields.statusId,
           fields.occurredAt, JSON.stringify(payloadValue(section, collection, value)), fields.search]);
       }

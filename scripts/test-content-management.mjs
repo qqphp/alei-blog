@@ -60,11 +60,10 @@ export async function checkContentManagement({ request, origin, testUrl, default
       assert.equal(result.data.total, 1);
       assert.equal(result.data.items[0].id, value.id);
       const initial = await request(`${base}?size=50`);
-      const last = initial.data.items.at(-1);
-      assert.equal(last.id, value.id);
-      assert.equal((await request(`${path}/move`, 'POST', { direction: -1, revision: 3 })).status, 200);
+      assert.equal(initial.data.items[0].id, value.id);
+      assert.equal((await request(`${path}/move`, 'POST', { direction: 1, revision: 3 })).status, 200);
       const reordered = await request(`${base}?size=50`);
-      assert.equal(reordered.data.items.at(-2).id, value.id);
+      assert.equal(reordered.data.items[1].id, value.id);
       const page = await request(`${base}?size=1&page=2`);
       assert.equal(page.data.items[0].id, reordered.data.items[1].id);
       const draft = await request(path, 'PATCH', { published: false, revision: 4 });

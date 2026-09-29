@@ -156,7 +156,7 @@ export function AdminGranularPanel() {
   const [busy, setBusy] = useState(false);
   const [working, setWorking] = useState(false);
   const [pendingStoryTopic, setPendingStoryTopic] = useState('');
-  const [pendingProjectTag, setPendingProjectTag] = useState('');
+  const [pendingTag, setPendingTag] = useState('');
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
   const listRequest = useRef(0);
@@ -165,13 +165,14 @@ export function AdminGranularPanel() {
   const recordSection = section === 'stories' && tab === 'covers' ? 'slides' : section;
   const scopes = section === 'site' ? websiteTabs : configScopes(section);
   const activeCollection = collections.includes(tab) ? tab === 'covers' ? 'root' : tab : null;
+  const hasTagInput = activeCollection === 'items' && ['projects', 'bookmarks', 'friends'].includes(recordSection);
   const activeScope = !activeCollection && scopes.some((scope) => scope.id === tab) ? tab : null;
   const configSection = section === 'site' && tab === 'home' ? 'home' : section;
   const configScope = section === 'site' ? 'root' : activeScope;
   const dirty = Boolean((edit && JSON.stringify(edit.value) !== edit.original) ||
     (config && JSON.stringify(config.value) !== config.original) ||
     (edit && recordSection === 'stories' && pendingStoryTopic.trim()) ||
-    (edit && recordSection === 'projects' && pendingProjectTag.trim()));
+    (edit && hasTagInput && pendingTag.trim()));
   const confirmDiscard = () => !dirty || window.confirm('有未提交的修改，确定放弃吗？');
   const optionFields = useMemo(() => ({
     categoryId: options.categories ?? [], statusId: options.statuses ?? [],
@@ -245,14 +246,14 @@ export function AdminGranularPanel() {
     setSection(next);
     setTab(next === 'site' ? websiteTabs[0].id : adminCollections[next]?.[0] ?? configScopes(next)[0]?.id ?? 'root');
     setEdit(null); setConfig(null); setList(null); setOptions({}); setPage(1); setQuery('');
-    setStatus('all'); setCategoryId(''); setStatusId(''); setMessage('');
+    setStatus('all'); setCategoryId(''); setStatusId(''); setPendingTag(''); setMessage('');
   }
   function changeTab(next: string) {
     if (busy || working || next === tab || !confirmDiscard()) return;
     listRequest.current++;
     editRequest.current++;
     setTab(next); setEdit(null); setConfig(null); setList(null);
-    setPage(1); setQuery(''); setStatus('all'); setCategoryId(''); setStatusId(''); setMessage('');
+    setPage(1); setQuery(''); setStatus('all'); setCategoryId(''); setStatusId(''); setPendingTag(''); setMessage('');
   }
   async function openRecord(id: string) {
     if (busy || working || !confirmDiscard() || !activeCollection) return;
@@ -265,7 +266,7 @@ export function AdminGranularPanel() {
       setEdit({ id, value: result.value, revision: result.revision,
         original: JSON.stringify(result.value) });
       setPendingStoryTopic('');
-      setPendingProjectTag('');
+      setPendingTag('');
     } catch (error) { if (request === editRequest.current) setMessage(String(error)); }
     finally { if (request === editRequest.current) setBusy(false); }
   }
@@ -276,7 +277,7 @@ export function AdminGranularPanel() {
       const value = sampleRecord(recordSection, activeCollection, options);
       setEdit({ id: null, value, revision: 0, original: JSON.stringify(value) });
       setPendingStoryTopic('');
-      setPendingProjectTag('');
+      setPendingTag('');
       setMessage('');
     } catch (error) { setMessage(String(error)); }
   }
@@ -286,7 +287,7 @@ export function AdminGranularPanel() {
       setMessage('话题输入框还有未创建的内容，请先按 Enter 创建话题。');
       return;
     }
-    if (recordSection === 'projects' && edit && pendingProjectTag.trim()) {
+    if (hasTagInput && edit && pendingTag.trim()) {
       setMessage('标签输入框还有未创建的内容，请先按 Enter 创建标签。');
       return;
     }
@@ -301,7 +302,12 @@ export function AdminGranularPanel() {
           body: JSON.stringify({ value: prepared, revision: edit.revision }),
         });
         setEdit(null);
-        await refreshList();
+        if (!edit.id) {
+          const reset = page !== 1 || query !== '' || status !== 'all' || categoryId !== '' || statusId !== '';
+          setPage(1); setQuery(''); setStatus('all'); setCategoryId(''); setStatusId('');
+          if (reset) { listRequest.current++; setList(null); }
+          else await refreshList();
+        } else await refreshList();
         if (['categories', 'statuses', 'scenes', 'sections', 'agentStatuses', 'skillCategories'].includes(activeCollection))
           await refreshOptions();
         setMessage(result.failedMedia?.length ? '已保存，但部分旧素材清理失败。' : '已保存，内容已入库。');
@@ -406,7 +412,7 @@ export function AdminGranularPanel() {
         </div>
         {activeCollection && (edit ? <section className="admin-form" aria-label="内容表单">
           <div className="admin-section-heading"><button type="button" disabled={busy || working} onClick={() => {
-            if (confirmDiscard()) { editRequest.current++; setEdit(null); setMessage(''); }
+            if (confirmDiscard()) { editRequest.current++; setEdit(null); setPendingTag(''); setMessage(''); }
           }}>← 返回列表</button><span>{edit.id ? '编辑内容' : '新增内容'}</span></div>
           <fieldset disabled={busy || working}>
             {section === 'writing' && activeCollection === 'articles' ?
@@ -427,7 +433,7 @@ export function AdminGranularPanel() {
               <Field path={`${recordSection}.${activeCollection}`} label={collectionName(recordSection, activeCollection)}
                 value={edit.value} sample={recordSample ?? edit.value} options={optionFields}
                 onWorking={setWorking}
-                pendingProjectTag={pendingProjectTag} onPendingProjectTagChange={setPendingProjectTag}
+                pendingTag={pendingTag} onPendingTagChange={setPendingTag}
                 immutableIdentity={Boolean(edit.id)}
                 onChange={(value) => setEdit({ ...edit, value })} />}
           </fieldset>

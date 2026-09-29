@@ -253,28 +253,30 @@ export async function upload(file: File, includeSize = false) {
   });
   return dimensions ? { ...result, ...dimensions } : result;
 }
-function ProjectTagsField({ value, onChange, pending, onPendingChange }: {
+function TagsField({ path, value, onChange, pending, onPendingChange }: {
+  path: string;
   value: string[]; onChange: (value: Json) => void;
   pending: string; onPendingChange: (value: string) => void;
 }) {
   const [message, setMessage] = useState('');
+  const inputId = path === 'projects.items.tags' ? 'project-tags' : `${path}-tags`;
   function add() {
     const tag = pending.trim();
     if (!tag) { setMessage('请输入标签内容'); return; }
     if (value.includes(tag)) { setMessage('标签不能重复'); return; }
-    if (value.length >= 500) { setMessage('标签最多 500 项'); return; }
+    if (path === 'projects.items.tags' && value.length >= 500) { setMessage('标签最多 500 项'); return; }
     onChange([...value, tag]);
     onPendingChange('');
     setMessage('');
   }
   return <div className="admin-field admin-wide">
-    <label htmlFor="project-tags">标签</label>
+    <label htmlFor={inputId}>标签</label>
     <div className="admin-story-topics">
       {value.map((tag) => <span className="admin-story-topic" key={tag}>{tag}
         <button type="button" aria-label={`删除标签 ${tag}`}
           onClick={() => onChange(value.filter((old) => old !== tag))}>×</button>
       </span>)}
-      <input id="project-tags" value={pending} placeholder="输入标签后按 Enter 创建"
+      <input id={inputId} value={pending} placeholder="输入标签后按 Enter 创建"
         onChange={(event) => { onPendingChange(event.target.value); setMessage(''); }}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && !event.nativeEvent.isComposing) {
@@ -425,8 +427,8 @@ export function Field({
   onWorking,
   onUploaded,
   onAudioUploaded,
-  pendingProjectTag = '',
-  onPendingProjectTagChange,
+  pendingTag = '',
+  onPendingTagChange,
 }: {
   value: Json;
   sample: Json;
@@ -438,13 +440,13 @@ export function Field({
   onWorking?: (working: boolean) => void;
   onUploaded?: (result: { url: string; width: number; height: number }) => void;
   onAudioUploaded?: (result: { url: string; duration: number }) => void;
-  pendingProjectTag?: string;
-  onPendingProjectTagChange?: (value: string) => void;
+  pendingTag?: string;
+  onPendingTagChange?: (value: string) => void;
 }) {
   const [message, setMessage] = useState('');
-  if (path === 'projects.items.tags' && Array.isArray(value))
-    return <ProjectTagsField value={value as string[]} onChange={onChange}
-      pending={pendingProjectTag} onPendingChange={onPendingProjectTagChange ?? (() => {})} />;
+  if (['projects.items.tags', 'bookmarks.items.tags', 'friends.items.tags'].includes(path) && Array.isArray(value))
+    return <TagsField path={path} value={value as string[]} onChange={onChange}
+      pending={pendingTag} onPendingChange={onPendingTagChange ?? (() => {})} />;
   if (path === 'projects.items.images' && Array.isArray(value))
     return <ProjectImagesField value={value as unknown as ProjectImage[]}
       onChange={onChange} onWorking={onWorking} />;
@@ -502,8 +504,8 @@ export function Field({
               options={options}
               immutableIdentity={immutableIdentity}
               onWorking={onWorking}
-              pendingProjectTag={pendingProjectTag}
-              onPendingProjectTagChange={onPendingProjectTagChange}
+              pendingTag={pendingTag}
+              onPendingTagChange={onPendingTagChange}
             />
           </details>
         ))}
@@ -523,6 +525,8 @@ export function Field({
         : {};
     const keys = path === 'slides.root' ? ['title', 'src', 'alt', ...Object.keys(value)]
       : path === 'writing.categories' ? ['name', 'parentId', 'description']
+        : path === 'bookmarks.items' || path === 'friends.items'
+          ? ['name', 'url', 'description', 'initials', 'categoryId', 'tags', '_published', ...Object.keys(value)]
         : orderedRecordPaths.has(path) ? Object.keys(template) : Object.keys(value);
     return (
       <div className={`admin-object${path === 'slides.root' ? ' admin-slide-cover' : ''}${path === 'writing.categories' ? ' admin-article-category' : ''}${path === 'ai.agents' ? ' admin-agent-resource' : ''}`}>
@@ -553,8 +557,8 @@ export function Field({
               onAudioUploaded={path === 'tracks.items' && key === 'src'
                 ? ({ url, duration }) => onChange({ ...value, src: url, duration })
                 : undefined}
-              pendingProjectTag={pendingProjectTag}
-              onPendingProjectTagChange={onPendingProjectTagChange}
+              pendingTag={pendingTag}
+              onPendingTagChange={onPendingTagChange}
             />
           ))}
         </div>

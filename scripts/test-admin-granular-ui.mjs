@@ -50,6 +50,7 @@ let storyRevision = 1;
 let failStoryImage = false;
 const slide = { ...structuredClone(defaults.slides[0]), id: 'ui-slide', title: '原封面', alt: '原有封面描述' };
 let addedSlide = null;
+let failNextSlideWrite = false;
 const project = { ...structuredClone(defaults.projects.items[0]), title: '原项目' };
 const aiResources = Object.fromEntries(['agents', 'skills', 'relays'].map((collection) => [collection,
   { ...structuredClone(defaults.ai[collection][0]), id: `ui-${collection}`,
@@ -57,6 +58,13 @@ const aiResources = Object.fromEntries(['agents', 'skills', 'relays'].map((colle
 const skillCategories = [{ id: 'skill-parent', name: '界面设计', parentId: '' },
   { id: 'skill-child', name: '页面生成', parentId: 'skill-parent' }];
 const agentStatuses = structuredClone(defaults.ai.agentStatuses);
+const directoryRecords = Object.fromEntries(['bookmarks', 'friends'].map((section) => [section, [{
+  ...structuredClone(defaults[section].items[0]), id: `ui-${section}`,
+  name: section === 'bookmarks' ? '原书签' : '原友链',
+  initials: section === 'bookmarks' ? '书' : '友', tags: ['原标签'],
+}]]));
+const directoryRevisions = { bookmarks: {}, friends: {} };
+for (const section of ['bookmarks', 'friends']) directoryRevisions[section][`ui-${section}`] = 1;
 const orderedRecords = {
   tracks: { items: { ...structuredClone(defaults.tracks.items[0]), id: 'ordered-track', title: '原音乐' },
     playlists: { ...structuredClone(musicSample.playlists[0]), id: 'ordered-playlist', title: '原歌单', color: '#123456' } },
@@ -71,13 +79,15 @@ let investment = { ...structuredClone(defaults.investing.sections[0].entries[0])
   createdAt: '2026-09-08T01:02:03.000Z', updatedAt: '2026-09-09T01:02:03.000Z' };
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url, 'http://localhost:3000');
-  calls.push({ path: url.pathname, method: init.method ?? 'GET', body: init.body ? JSON.parse(init.body) : null });
+  calls.push({ path: url.pathname, search: url.search, method: init.method ?? 'GET', body: init.body ? JSON.parse(init.body) : null });
   if (url.pathname === '/api/admin/session')
     return Response.json({ authenticated: true, configured: true });
   if (url.pathname === '/api/admin/options/writing')
     return Response.json({ categories: [category] });
   if (url.pathname === '/api/admin/options/projects')
     return Response.json({ categories: defaults.projects.categories, statuses: defaults.projects.statuses });
+  if (url.pathname === '/api/admin/options/bookmarks' || url.pathname === '/api/admin/options/friends')
+    return Response.json({ categories: defaults[url.pathname.split('/').at(-1)].categories });
   if (url.pathname === '/api/admin/options/investing')
     return Response.json({ sections: defaults.investing.sections.map(({ id, title }) => ({ id, name: title })) });
   if (url.pathname === '/api/admin/options/ai') return Response.json({ agentStatuses, skillCategories });
@@ -98,7 +108,10 @@ globalThis.fetch = async (input, init = {}) => {
     return Response.json({ value: story, revision: storyRevision });
   }
   if (url.pathname === '/api/admin/records/slides/root') {
-    if (init.method === 'POST') { addedSlide = JSON.parse(init.body).value; return Response.json({ revision: 1 }); }
+    if (init.method === 'POST') {
+      if (failNextSlideWrite) { failNextSlideWrite = false; return Response.json({ error: '模拟保存失败' }, { status: 500 }); }
+      addedSlide = JSON.parse(init.body).value; return Response.json({ revision: 1 });
+    }
     const items = [slide, addedSlide].filter(Boolean).map((value, position) => ({
       id: value.id, title: value.title, excerpt: value.alt, revision: 1, position,
     }));
@@ -117,6 +130,31 @@ globalThis.fetch = async (input, init = {}) => {
   }
   if (url.pathname === `/api/admin/records/projects/items/${project.id}`)
     return Response.json({ value: Object.fromEntries(Object.entries(project).reverse()), revision: 1 });
+  for (const section of ['bookmarks', 'friends']) {
+    const base = `/api/admin/records/${section}/items`;
+    if (url.pathname === base) {
+      if (init.method === 'POST') {
+        const value = JSON.parse(init.body).value;
+        directoryRecords[section].unshift(value);
+        directoryRevisions[section][value.id] = 1;
+        return Response.json({ revision: 1 });
+      }
+      return Response.json({ items: directoryRecords[section].map((value, position) => ({
+        id: value.id, title: value.name, revision: directoryRevisions[section][value.id], position,
+      })), total: directoryRecords[section].length, page: 1, size: 20 });
+    }
+    if (url.pathname.startsWith(`${base}/`)) {
+      const id = url.pathname.slice(base.length + 1);
+      let value = directoryRecords[section].find((item) => item.id === id);
+      if (init.method === 'PUT') {
+        value = JSON.parse(init.body).value;
+        directoryRecords[section] = directoryRecords[section].map((item) => item.id === id ? value : item);
+        directoryRevisions[section][id]++;
+      }
+      return Response.json({ value: Object.fromEntries(Object.entries(value).reverse()),
+        revision: directoryRevisions[section][id] });
+    }
+  }
   for (const [collection, value] of Object.entries(aiResources)) {
     const base = `/api/admin/records/ai/${collection}`;
     if (url.pathname === base)
@@ -181,10 +219,11 @@ globalThis.fetch = async (input, init = {}) => {
   }
   if (url.pathname === '/api/admin/records/writing/categories') {
     if (init.method === 'POST') { addedCategory = JSON.parse(init.body).value; return Response.json({ revision: 1 }); }
-    const items = [category, addedCategory].filter(Boolean).map((value, position) => ({
+    const page = Number(url.searchParams.get('page') ?? 1);
+    const items = (page === 1 ? [addedCategory, category] : [category]).filter(Boolean).map((value, position) => ({
       id: value.id, title: value.name, revision: value === category ? categoryRevision : 1, position,
     }));
-    return Response.json({ items, total: items.length, page: 1, size: 20 });
+    return Response.json({ items, total: 21, page, size: 20 });
   }
   if (url.pathname === `/api/admin/records/writing/categories/${category.id}`) {
     if (init.method === 'PUT') { Object.assign(category, JSON.parse(init.body).value); categoryRevision++; }
@@ -289,6 +328,8 @@ try {
   assert.equal(calls.some((call) => call.method === 'POST' && call.path.includes('/records/')), false);
   await user.click(screen.getByRole('tab', { name: '文章分类' }));
   await screen.findByRole('button', { name: '测试分类' });
+  await user.click(screen.getByRole('button', { name: '下一页' }));
+  await screen.findByText('第 2 / 2 页');
   await user.click(screen.getByRole('button', { name: '＋ 新增文章分类' }));
   assert.deepEqual([...window.document.querySelectorAll('.admin-article-category > .admin-fields > .admin-field > label')]
     .map((node) => node.textContent), ['名称', '上级分类', '说明']);
@@ -296,8 +337,12 @@ try {
   assert.equal(screen.getByLabelText('说明').value, '');
   await user.type(screen.getByLabelText('名称'), '新增分类');
   await user.type(screen.getByLabelText('说明'), '新增说明');
+  const beforeCategorySave = calls.length;
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   await screen.findByRole('button', { name: '新增分类' });
+  assert.ok(calls.slice(beforeCategorySave).some((call) => call.method === 'GET' &&
+    call.path === '/api/admin/records/writing/categories' && new URLSearchParams(call.search).get('page') === '1'),
+  '新增成功后应返回列表第一页');
   assert.equal(addedCategory.description, '新增说明');
   await user.click(screen.getByRole('button', { name: '测试分类' }));
   await screen.findByLabelText('上级分类');
@@ -444,6 +489,7 @@ try {
     savedCoverView, '编辑已有封面上传时只替换素材地址');
   globalThis.fetch = immediateFetch;
   await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+  await user.type(screen.getByRole('searchbox', { name: '搜索此列表' }), '原封面');
   await user.click(screen.getByRole('button', { name: '＋ 新增说说封面' }));
   await screen.findByLabelText('素材地址');
   assert.deepEqual([...window.document.querySelectorAll('.admin-slide-cover > .admin-fields > .admin-field > label')]
@@ -494,8 +540,19 @@ try {
   assert.equal(screen.getByRole('button', { name: '← 返回列表' }).disabled, false);
   await user.type(screen.getByLabelText('标题'), '新增封面');
   await user.type(screen.getByLabelText('图片描述'), '山间晨雾');
+  failNextSlideWrite = true;
+  const beforeFailedSlideSave = calls.length;
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await screen.findByText(/模拟保存失败/);
+  assert.equal(screen.getByLabelText('标题').value, '新增封面');
+  assert.equal(calls.slice(beforeFailedSlideSave).filter((call) => call.method === 'GET' &&
+    call.path === '/api/admin/records/slides/root').length, 0, '保存失败应保留当前列表请求状态');
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   const newSlideRow = (await screen.findByRole('button', { name: '新增封面' })).closest('tr');
+  assert.equal(screen.getByRole('searchbox', { name: '搜索此列表' }).value, '');
+  assert.ok(calls.slice(beforeFailedSlideSave).some((call) => call.method === 'GET' &&
+    call.path === '/api/admin/records/slides/root' && new URLSearchParams(call.search).get('q') === ''),
+  '新增成功后应清除搜索');
   assert.equal(newSlideRow.querySelector('small').textContent, '山间晨雾');
   assert.equal(addedSlide.alt, '山间晨雾');
   assert.equal(addedSlide.width, 1881);
@@ -812,6 +869,59 @@ try {
       if (sectionLabel === '音乐' && tabLabel === '歌单') assert.equal(screen.queryByLabelText('书封颜色'), null);
       await user.click(screen.getByRole('button', { name: '← 返回列表' }));
     }
+  }
+  for (const [section, label] of [['bookmarks', '书签'], ['friends', '友链']]) {
+    await user.click(within(nav).getByRole('button', { name: label, exact: true }));
+    await screen.findByRole('button', { name: section === 'bookmarks' ? '原书签' : '原友链' });
+    await user.click(screen.getByRole('button', { name: '＋ 新增内容' }));
+    const fieldOrder = () => [...document.querySelectorAll('.admin-form .admin-object > .admin-fields > .admin-field > label')]
+      .map((node) => node.textContent);
+    const expectedOrder = ['名称', '网址', '说明', '头像文字', '分类', '标签'];
+    assert.deepEqual(fieldOrder(), expectedOrder, `${label}新增字段顺序`);
+    assert.equal(screen.getByLabelText('头像文字').closest('.admin-field').nextElementSibling,
+      screen.getByLabelText('分类').closest('.admin-field'), `${label}头像文字应紧邻分类`);
+    assert.ok(screen.getByLabelText('标签').closest('.admin-story-topics'));
+    await user.type(screen.getByLabelText('名称'), `新增${label}`);
+    await user.type(screen.getByLabelText('网址'), `https://example.com/${section}`);
+    await user.type(screen.getByLabelText('头像文字'), '新');
+    await user.selectOptions(screen.getByLabelText('分类'), defaults[section].categories[0].id);
+    const tagInput = screen.getByLabelText('标签');
+    await user.type(tagInput, '  新标签  {Enter}');
+    assert.ok(screen.getByRole('button', { name: '删除标签 新标签' }));
+    await user.type(tagInput, '新标签{Enter}');
+    assert.ok(screen.getByText('标签不能重复'));
+    await user.clear(tagInput);
+    await user.type(tagInput, '待删除{Enter}');
+    await user.click(screen.getByRole('button', { name: '删除标签 待删除' }));
+    await user.type(tagInput, '尚未创建');
+    const postsBeforePending = calls.filter((call) => call.path === `/api/admin/records/${section}/items` && call.method === 'POST').length;
+    await user.click(screen.getByRole('button', { name: '确认提交' }));
+    assert.ok(screen.getByText('标签输入框还有未创建的内容，请先按 Enter 创建标签。'));
+    assert.equal(calls.filter((call) => call.path === `/api/admin/records/${section}/items` && call.method === 'POST').length,
+      postsBeforePending, `${label}未确认标签不能保存`);
+    await user.clear(tagInput);
+    await user.type(tagInput, '保留标签{Enter}');
+    await user.click(screen.getByRole('button', { name: '确认提交' }));
+    await screen.findByRole('button', { name: `新增${label}` });
+    const created = directoryRecords[section][0];
+    assert.deepEqual(created.tags, ['新标签', '保留标签']);
+    assert.equal(created.initials, '新');
+    await user.click(screen.getByRole('button', { name: `新增${label}` }));
+    await screen.findByLabelText('标签');
+    assert.deepEqual(fieldOrder(), expectedOrder, `${label}编辑字段顺序与新增一致`);
+    assert.ok(screen.getByRole('button', { name: '删除标签 保留标签' }));
+    assert.equal(screen.getByLabelText('标签').value, '');
+    await user.type(screen.getByLabelText('标签'), '编辑标签{Enter}');
+    await user.click(screen.getByRole('button', { name: '确认提交' }));
+    await screen.findByRole('button', { name: `新增${label}` });
+    await user.click(screen.getByRole('button', { name: `新增${label}` }));
+    await screen.findByLabelText('标签');
+    assert.ok(screen.getByRole('button', { name: '删除标签 编辑标签' }));
+    await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+    await user.click(screen.getByRole('button', { name: section === 'bookmarks' ? '原书签' : '原友链' }));
+    await screen.findByLabelText('标签');
+    assert.deepEqual(fieldOrder(), expectedOrder, `${label}已有记录的逆序接口字段不影响布局`);
+    assert.ok(screen.getByRole('button', { name: '删除标签 原标签' }));
   }
   cleanup();
   const originalAudioObjectUrl = URL.createObjectURL.bind(URL);
