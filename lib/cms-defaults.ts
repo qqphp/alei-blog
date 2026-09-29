@@ -12,7 +12,7 @@ import { bookmarks, friends } from './directory-data';
 import { books, booklists } from './books';
 import { tracks } from './music';
 import { lifeContent } from './life-content';
-import { aiAgents, aiSkills, aiRelays, type AiSkillCategory } from './ai-resources';
+import { aiAgents, aiSkills, aiRelays, agentStatuses, type AiSkillCategory } from './ai-resources';
 import { researchContent } from './research-content';
 import articleSeed from './article-seed.json';
 import { categoryId, stripArticleExtras } from './article-categories';
@@ -166,7 +166,8 @@ export const defaults = {
     },
   ]),
   profile,
-  ai: { agents: publish(aiAgents), skills: publish(aiSkills), relays: publish(aiRelays), skillCategories: [] as AiSkillCategory[] },
+  ai: { agents: publish(aiAgents), skills: publish(aiSkills), relays: publish(aiRelays),
+    agentStatuses, skillCategories: [] as AiSkillCategory[] },
   investing: {
     ...researchContent.investing,
     sections: researchContent.investing.sections.map((section) => ({

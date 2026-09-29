@@ -94,7 +94,8 @@ export async function listAdminRecords(section: Section, collection: string, inp
     const order = section === 'investing' && collection === 'entries'
       ? 'created_at DESC NULLS LAST, position, id'
       : section === 'stories' ? 'occurred_at DESC NULLS LAST, position, id' : 'position, id';
-    const excerpt = section === 'stories' ? "left(payload->>'text', 160)" : 'left(search_text, 160)';
+    const excerpt = section === 'stories' ? "left(payload->>'text', 160)"
+      : section === 'slides' ? "left(payload->>'alt', 160)" : 'left(search_text, 160)';
     const rows = await db.query(`SELECT id, title, ${excerpt} AS excerpt,
       category_id AS "categoryId", published, occurred_at AS date, position, revision,
       created_at AS "createdAt", updated_at AS "updatedAt"
@@ -147,7 +148,7 @@ export async function getAdminRecord(key: RecordKey) {
 export async function getAdminOptions(section: Section) {
   const collections = adminCollections[section] ?? [];
   const optionCollections = collections.filter((name) =>
-    ['categories', 'statuses', 'scenes', 'sections', 'skillCategories'].includes(name) &&
+    ['categories', 'statuses', 'scenes', 'sections', 'agentStatuses', 'skillCategories'].includes(name) &&
     name !== 'items');
   if (section === 'writing') return withDatabase(async (db) => {
     const rows = await db.query('SELECT id, name, description, coalesce(parent_id, \'\') AS "parentId" FROM article_categories ORDER BY position');
@@ -280,7 +281,7 @@ async function validateRecord(db: Client, key: Omit<RecordKey, 'id'>, value: Ite
   const doc: Item = { ...sample };
   for (const name of collections) doc[name] = name === collection ? [value] : [];
   for (const name of collections.filter((name) =>
-    ['categories', 'statuses', 'scenes'].includes(name) && name !== collection)) {
+    ['categories', 'statuses', 'scenes', 'agentStatuses'].includes(name) && name !== collection)) {
     const rows = await db.query<{ payload: Item }>(
       'SELECT payload FROM cms_entries WHERE section = $1 AND collection = $2 ORDER BY position',
       [section, name]);
@@ -292,7 +293,7 @@ async function validateRecord(db: Client, key: Omit<RecordKey, 'id'>, value: Ite
     if (scene) value.mood = scene.name;
   }
   validateContent(section, doc);
-  if (['categories', 'statuses', 'scenes'].includes(collection)) {
+  if (['categories', 'statuses', 'scenes', 'agentStatuses'].includes(collection)) {
     const existing = await db.query<{ payload: Item }>(
       'SELECT payload FROM cms_entries WHERE section = $1 AND collection = $2 AND id <> $3',
       [section, collection, oldId ?? '']);
@@ -449,6 +450,10 @@ export async function deleteAdminRecord(key: RecordKey, revision: number) {
           EXISTS (SELECT 1 FROM articles WHERE category_id = $1) OR
           EXISTS (SELECT 1 FROM article_categories WHERE parent_id = $1) AS used`, [key.id]);
         if (used.rows[0].used) throw new Error('分类仍被文章或子分类使用');
+      } else if (key.section === 'ai' && key.collection === 'agentStatuses') {
+        const used = await db.query(`SELECT 1 FROM cms_entries WHERE section='ai' AND
+          collection='agents' AND payload->>'status'=$1 LIMIT 1`, [key.id]);
+        if (used.rowCount) throw new Error('状态仍被智能体使用');
       } else if (key.section === 'ai' && key.collection === 'skillCategories') {
         const used = await db.query(`SELECT 1 FROM cms_entries WHERE section='ai' AND
           ((collection='skillCategories' AND payload->>'parentId'=$1) OR

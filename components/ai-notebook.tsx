@@ -228,18 +228,13 @@ function PianoBoard() {
   );
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  active: '已上线',
-  beta: '公测中',
-  coming: '即将推出',
-};
-
 /* ------------------------------------------------------------------ */
 /*  01 · Agents                                                        */
 /* ------------------------------------------------------------------ */
 
 function AgentSection() {
-  const { ai: { agents } } = useContent();
+  const { ai: { agents, agentStatuses } } = useContent();
+  const statusNames = new Map(agentStatuses.map((item) => [item.id, item.name]));
   const [failedLogos, setFailedLogos] = useState<string[]>([]);
 
   return (
@@ -256,7 +251,7 @@ function AgentSection() {
               <span
                 className={`ai-agent-status ai-status-${agent.status}`}
               >
-                {STATUS_LABEL[agent.status] ?? agent.status}
+                {statusNames.get(agent.status) ?? agent.status}
               </span>
             </div>
             <h3>{agent.name}</h3>

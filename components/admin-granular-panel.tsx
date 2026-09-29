@@ -41,7 +41,7 @@ const websiteTabs = [
 ];
 const EMPTY_COLLECTIONS: readonly string[] = [];
 const blankNameCollections: Partial<Record<Section, readonly string[]>> = {
-  projects: ['items'], bookmarks: ['items'], friends: ['items'],
+  projects: ['items', 'statuses', 'categories'], bookmarks: ['items', 'categories'], friends: ['items', 'categories'],
   tracks: ['items', 'scenes', 'playlists'], films: ['items', 'categories'],
   podcasts: ['items', 'categories'], travel: ['items', 'categories'],
   hobbies: ['items', 'categories'], books: ['items', 'categories', 'lists'],
@@ -77,6 +77,8 @@ function sampleRecord(section: Section, collection: string, options: Record<stri
     return { id: `category-${crypto.randomUUID()}`, name: '', description: '', parentId: '' };
   if (section === 'ai' && collection === 'skillCategories')
     return { id: crypto.randomUUID(), name: '', parentId: '' };
+  if (section === 'ai' && collection === 'agentStatuses')
+    return { id: crypto.randomUUID(), name: '' };
   if (section === 'investing' && collection === 'entries') {
     const sample = defaults.investing.sections[0].entries[0];
     return { ...fresh(asJson(sample)) as Item, title: '', id: crypto.randomUUID(),
@@ -91,14 +93,23 @@ function sampleRecord(section: Section, collection: string, options: Record<stri
   if (!sample) throw new Error('此列表没有可用的表单模板');
   const value = fresh(asJson(sample)) as Item;
   value.id = crypto.randomUUID();
+  if (section === 'slides') {
+    value.src = '';
+    value.title = '';
+    value.width = null;
+    value.height = null;
+  }
   if (section === 'ai' || section === 'investing' || blankNameCollections[section]?.includes(collection)) {
     for (const key of ['title', 'name']) if (key in value) value[key] = '';
   }
+  if (['tracks', 'podcasts', 'travel', 'hobbies', 'books'].includes(section)) {
+    for (const key of ['src', 'audio', 'cover', 'image']) if (key in value) value[key] = '';
+  }
   if (section === 'projects' && collection === 'items') value.images = [];
-  if (section === 'tracks' && collection === 'items') value.src = '';
+  if (section === 'tracks' && collection === 'items') value.duration = null;
   if (section === 'films' && collection === 'items') value.cover = '';
   if (section === 'investing' && collection === 'sections') delete value.entries;
-  if (section === 'ai' && collection === 'agents') value.status = 'active';
+  if (section === 'ai' && collection === 'agents') value.status = '';
   if (section === 'stories') {
     value.date = storyDate(new Date());
     value.images = [];
@@ -291,7 +302,7 @@ export function AdminGranularPanel() {
         });
         setEdit(null);
         await refreshList();
-        if (['categories', 'statuses', 'scenes', 'sections', 'skillCategories'].includes(activeCollection))
+        if (['categories', 'statuses', 'scenes', 'sections', 'agentStatuses', 'skillCategories'].includes(activeCollection))
           await refreshOptions();
         setMessage(result.failedMedia?.length ? '已保存，但部分旧素材清理失败。' : '已保存，内容已入库。');
       } else if (activeScope && config) {
@@ -320,8 +331,8 @@ export function AdminGranularPanel() {
         method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
       await refreshList();
-      if ((action === 'delete' && ['categories', 'statuses', 'scenes', 'sections', 'skillCategories'].includes(activeCollection)) ||
-        (activeCollection === 'skillCategories' && (action === 'up' || action === 'down')))
+      if ((action === 'delete' && ['categories', 'statuses', 'scenes', 'sections', 'agentStatuses', 'skillCategories'].includes(activeCollection)) ||
+        (['agentStatuses', 'skillCategories'].includes(activeCollection) && (action === 'up' || action === 'down')))
         await refreshOptions();
       setMessage(action === 'delete' ? '已删除。' : '已更新并入库。');
     } catch (error) { setMessage(String(error)); }
@@ -353,7 +364,7 @@ export function AdminGranularPanel() {
     ? asJson(Object.fromEntries(Object.entries(config.value as Item).filter(([key]) => websiteTab.keys.includes(key))))
     : config?.value;
   const recordSample = activeCollection ? sampleRecord(recordSection, activeCollection, options) : null;
-  const canPublish = activeCollection && !['categories', 'statuses', 'scenes', 'sections', 'skillCategories'].includes(activeCollection)
+  const canPublish = activeCollection && !['categories', 'statuses', 'scenes', 'sections', 'agentStatuses', 'skillCategories'].includes(activeCollection)
     && !(section === 'writing' && activeCollection === 'categories');
   const showTimes = (section === 'writing' && activeCollection === 'articles') ||
     (section === 'projects' && activeCollection === 'items') || (section === 'investing' && activeCollection === 'entries');
@@ -408,6 +419,7 @@ export function AdminGranularPanel() {
                 onWorking={setWorking} disabled={busy || working}
                 onChange={(value) => setEdit({ ...edit, value: asJson(value) })} /> :
               section === 'ai' ? <AdminAiResources collection={activeCollection} value={edit.value} sample={recordSample!}
+                agentStatuses={options.agentStatuses ?? []}
                 skillCategories={options.skillCategories ?? []}
                 onChange={(value) => setEdit({ ...edit, value })} /> :
               section === 'investing' && activeCollection === 'entries' ? <AdminInvestmentEditor value={edit.value} sample={recordSample!}
@@ -452,7 +464,7 @@ export function AdminGranularPanel() {
             <thead><tr><th scope="col">内容</th>{showTimes && <><th scope="col">{section === 'investing' ? '添加时间' : '创建时间'}</th><th scope="col">最后更新时间</th></>}<th scope="col">状态</th><th scope="col">操作</th></tr></thead>
             <tbody>{list?.items.map((item, index) => <tr key={item.id}>
               <td><button type="button" className="admin-table-title" disabled={busy || working} onClick={() => void openRecord(item.id)}>
-                {section === 'stories' ? item.date ? formatRecordTime(item.date).replaceAll('/', '-') : '—'
+                {section === 'stories' && tab !== 'covers' ? item.date ? formatRecordTime(item.date).replaceAll('/', '-') : '—'
                   : item.title || item.excerpt || item.id}</button>
                 <small>{section === 'stories' ? item.excerpt?.slice(0, 100) ?? '' : item.excerpt?.slice(0, 100) || item.id}</small></td>
               {showTimes && <><td>{formatRecordTime(item.createdAt)}</td><td>{item.updatedAt ? formatRecordTime(item.updatedAt) : '—'}</td></>}

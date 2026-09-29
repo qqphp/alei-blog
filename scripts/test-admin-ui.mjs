@@ -488,6 +488,7 @@ try {
   aiView.unmount();
   const managedAi = {
     agents: [],
+    agentStatuses: defaults.ai.agentStatuses,
     skillCategories: [
       { id: 'parent', name: '后台分类', parentId: '' },
       { id: 'child', name: '自定义子类', parentId: 'parent' },
@@ -580,6 +581,10 @@ try {
   validateCollections('projects', { ...defaults.projects, items: [{ ...noImageProject, images: [defaults.projects.items[0].images[0]] }] });
   assert.throws(() => validateCollections('tracks', { ...musicSample,
     items: [{ ...musicSample.items[0], src: '' }] }), /请填写图片或音频地址/);
+  assert.throws(() => validateCollections('tracks', { ...musicSample,
+    items: [{ ...musicSample.items[0], duration: null }] }), /请上传音频或填写时长/);
+  validateCollections('tracks', { ...musicSample,
+    items: [{ ...musicSample.items[0], duration: 49 }] });
   assert.deepEqual(configScopes('films'), []);
   validateCollections('aiSettings', defaults.aiSettings);
   assert.throws(() => validateCollections('aiSettings', {

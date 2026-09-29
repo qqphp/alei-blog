@@ -198,14 +198,60 @@ async function compressImage(file: File) {
     bitmap.close?.();
   }
 }
-export async function upload(file: File) {
+async function imageDimensions(file: File) {
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(file);
+    try { return { width: bitmap.width, height: bitmap.height }; }
+    finally { bitmap.close?.(); }
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    return await new Promise<{ width: number; height: number }>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+      image.onerror = () => reject(new Error('无法读取图片尺寸，请更换图片后重试'));
+      image.src = url;
+    });
+  } finally { URL.revokeObjectURL(url); }
+}
+async function audioDuration(file: File) {
+  const url = URL.createObjectURL(file);
+  const audio = document.createElement('audio');
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const duration = await new Promise<number>((resolve, reject) => {
+      timeout = setTimeout(() => reject(new Error('读取音频时长超时，请更换文件后重试')), 15000);
+      audio.onloadedmetadata = () => resolve(audio.duration);
+      audio.onerror = () => reject(new Error('无法读取音频时长，请更换文件后重试'));
+      audio.preload = 'metadata';
+      audio.src = url;
+      audio.load();
+    });
+    if (!Number.isFinite(duration) || duration <= 0)
+      throw new Error('无法读取音频时长，请更换文件后重试');
+    return Math.ceil(duration);
+  } finally {
+    clearTimeout(timeout);
+    audio.onloadedmetadata = null;
+    audio.onerror = null;
+    audio.removeAttribute('src');
+    audio.load();
+    URL.revokeObjectURL(url);
+  }
+}
+
+export async function upload(file: File, includeSize: true): Promise<{ url: string; name: string; width: number; height: number }>;
+export async function upload(file: File, includeSize?: false): Promise<{ url: string; name: string }>;
+export async function upload(file: File, includeSize = false) {
   if (file.size > 20 * 1024 * 1024) throw new Error('文件不能超过 20 MB');
   file = await compressImage(file);
-  return api('/api/admin/media', {
+  const dimensions = includeSize ? await imageDimensions(file) : null;
+  const result = await api<{ url: string; name: string }>('/api/admin/media', {
     method: 'POST',
     headers: { 'X-File-Name': encodeURIComponent(file.name) },
     body: file,
   });
+  return dimensions ? { ...result, ...dimensions } : result;
 }
 function ProjectTagsField({ value, onChange, pending, onPendingChange }: {
   value: string[]; onChange: (value: Json) => void;
@@ -377,6 +423,8 @@ export function Field({
   options = {},
   immutableIdentity = false,
   onWorking,
+  onUploaded,
+  onAudioUploaded,
   pendingProjectTag = '',
   onPendingProjectTagChange,
 }: {
@@ -388,6 +436,8 @@ export function Field({
   options?: Record<string, { id: string; name: string }[]>;
   immutableIdentity?: boolean;
   onWorking?: (working: boolean) => void;
+  onUploaded?: (result: { url: string; width: number; height: number }) => void;
+  onAudioUploaded?: (result: { url: string; duration: number }) => void;
   pendingProjectTag?: string;
   onPendingProjectTagChange?: (value: string) => void;
 }) {
@@ -471,13 +521,14 @@ export function Field({
       sample && typeof sample === 'object' && !Array.isArray(sample)
         ? sample
         : {};
+    const keys = path === 'slides.root' ? ['title', 'src', 'alt', ...Object.keys(value)]
+      : path === 'writing.categories' ? ['name', 'parentId', 'description']
+        : orderedRecordPaths.has(path) ? Object.keys(template) : Object.keys(value);
     return (
-      <div className="admin-object">
+      <div className={`admin-object${path === 'slides.root' ? ' admin-slide-cover' : ''}${path === 'writing.categories' ? ' admin-article-category' : ''}${path === 'ai.agents' ? ' admin-agent-resource' : ''}`}>
         <h3>{label}</h3>
         <div className="admin-fields">
-          {(orderedRecordPaths.has(path)
-            ? Object.keys(template).filter((key) => Object.hasOwn(value, key)).map((key) => [key, value[key]] as const)
-            : Object.entries(value)).filter(([key]) =>
+          {[...new Set(keys)].filter((key) => Object.hasOwn(value, key)).map((key) => [key, value[key]] as const).filter(([key]) =>
             !['id', 'coverGeneratedFor', 'generatedFor', 'createdAt', 'updatedAt'].includes(key) &&
             !(describedCoverActions[path] && ['coverDescription', 'coverMode'].includes(key)) &&
             !(key === 'category' && Object.hasOwn(value, 'categoryId')) &&
@@ -496,6 +547,12 @@ export function Field({
               options={options}
               immutableIdentity={immutableIdentity}
               onWorking={onWorking}
+              onUploaded={path === 'slides.root' && key === 'src' && !immutableIdentity
+                ? ({ url, width, height }) => onChange({ ...value, src: url, width, height, position: 'center 55%' })
+                : undefined}
+              onAudioUploaded={path === 'tracks.items' && key === 'src'
+                ? ({ url, duration }) => onChange({ ...value, src: url, duration })
+                : undefined}
               pendingProjectTag={pendingProjectTag}
               onPendingProjectTagChange={onPendingProjectTagChange}
             />
@@ -517,6 +574,8 @@ export function Field({
       </label>
     );
   const field = path.split('.').at(-1)!;
+  const blankNumeric = path === 'slides.root.width' || path === 'slides.root.height' || path === 'tracks.items.duration';
+  const numeric = typeof value === 'number' || (blankNumeric && value === null);
   if (path === 'projects.items.body')
     return (
       <AdminMarkdownEditor
@@ -550,13 +609,13 @@ export function Field({
       ) : (
         <input
           id={path}
-          type={typeof value === 'number' ? 'number' : 'text'}
+          type={numeric ? 'number' : 'text'}
           disabled={immutableIdentity && field === 'id'}
           value={String(value ?? '')}
           onChange={(e) =>
             onChange(
-              typeof value === 'number'
-                ? Number(e.target.value)
+              numeric
+                ? blankNumeric && e.target.value === '' ? null : Number(e.target.value)
                 : e.target.value,
             )
           }
@@ -581,8 +640,11 @@ export function Field({
                 setMessage('上传中…');
                 onWorking?.(true);
                 try {
-                  const result = await upload(file);
-                  onChange(result.url);
+                  if (onAudioUploaded) {
+                    const duration = await audioDuration(file);
+                    onAudioUploaded({ ...(await upload(file)), duration });
+                  } else if (onUploaded) onUploaded(await upload(file, true));
+                  else onChange((await upload(file)).url);
                   setMessage('已上传，点击表单底部“确认提交”后生效。');
                 } catch (error) {
                   setMessage(String(error));

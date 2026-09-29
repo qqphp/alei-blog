@@ -57,7 +57,7 @@ try {
   const replay = new pg.Client({ connectionString: testUrl.toString() });
   await replay.connect();
   try {
-    for (const file of ['0016_ai_skill_categories.sql', '0017_remove_playlist_color.sql'])
+    for (const file of ['0016_ai_skill_categories.sql', '0017_remove_playlist_color.sql', '0018_ai_agent_statuses.sql'])
       await replay.query(await readFile(resolve('db/migrations', file), 'utf8'));
   }
   finally { await replay.end(); }
@@ -308,6 +308,38 @@ try {
   assert.equal((await request(skillCategoryPath(skillParent), 'DELETE', { revision: parentDetail.data.revision })).status, 200);
   const skillAfter = await request(`${skillBase}/${skill.id}`);
   assert.equal((await request(`${skillBase}/${skill.id}`, 'DELETE', { revision: skillAfter.data.revision })).status, 200);
+  const statusBase = '/api/admin/records/ai/agentStatuses';
+  const seededStatuses = (await request('/api/admin/options/ai')).data.agentStatuses;
+  assert.deepEqual(seededStatuses.map(({ id, name }) => [id, name]),
+    [['active', '已上线'], ['beta', '公测中'], ['coming', '即将推出']]);
+  const agentStatus = { id: `test-status-${crypto.randomUUID().slice(0, 8)}`, name: '维护中' };
+  assert.equal((await request(statusBase, 'POST', { value: agentStatus })).status, 200);
+  assert.equal((await request(statusBase, 'POST', { value: { ...agentStatus,
+    id: `duplicate-${crypto.randomUUID().slice(0, 8)}` } })).status, 400);
+  const statusPath = `${statusBase}/${agentStatus.id}`;
+  assert.equal((await request(statusPath, 'PUT', { value: { ...agentStatus, name: '维护完成' }, revision: 1 })).status, 200);
+  assert.equal((await request(`${statusPath}/move`, 'POST', { direction: -1, revision: 2 })).status, 200);
+  const orderedStatuses = (await request('/api/admin/options/ai')).data.agentStatuses;
+  assert.equal(orderedStatuses.at(-2).name, '维护完成');
+  const agentWithStatus = { ...defaults.ai.agents[0], id: `test-agent-${crypto.randomUUID().slice(0, 8)}`,
+    name: '状态验证智能体', status: agentStatus.id };
+  const agentBase = '/api/admin/records/ai/agents';
+  assert.equal((await request(agentBase, 'POST', { value: { ...agentWithStatus, status: '' } })).status, 400);
+  assert.equal((await request(agentBase, 'POST', { value: agentWithStatus })).status, 200);
+  const aiPage = await (await fetch(`${origin}/ai`)).text();
+  assert.ok(aiPage.includes('状态验证智能体') && aiPage.includes('维护完成'),
+    '前台应接收智能体及其自定义状态名称');
+  assert.equal((await request(statusPath, 'DELETE', { revision: 3 })).status, 400);
+  assert.equal((await request(`${agentBase}/${agentWithStatus.id}`, 'DELETE', { revision: 1 })).status, 200);
+  assert.equal((await request(statusPath, 'DELETE', { revision: 3 })).status, 200);
+  const slide = { ...defaults.slides[0], id: `granular-slide-${crypto.randomUUID().slice(0, 8)}`,
+    title: '逐条测试封面', alt: '山间晨雾' };
+  const slideCreated = await request('/api/admin/records/slides/root', 'POST', { value: slide });
+  assert.equal(slideCreated.status, 200, JSON.stringify(slideCreated.data));
+  const slideList = await request('/api/admin/records/slides/root');
+  const savedSlide = slideList.data.items.find((item) => item.id === slide.id);
+  assert.equal(savedSlide?.title, slide.title);
+  assert.equal(savedSlide?.excerpt, slide.alt);
   const categories = await request('/api/admin/options/writing');
   const categoryId = categories.data.categories[0].id;
   const newCategory = { id: `granular-category-${crypto.randomUUID().slice(0, 8)}`,

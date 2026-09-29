@@ -65,7 +65,7 @@ export function validateContent(key: Section, value: unknown) {
       if (!Array.isArray(input)) fail('需要列表');
       const list = input as unknown[];
       const growingCollection = path === key || path === `${key}.items` || path === `${key}.lists` ||
-        (key === 'ai' && ['ai.agents', 'ai.skills', 'ai.relays', 'ai.skillCategories'].includes(path));
+        (key === 'ai' && ['ai.agents', 'ai.skills', 'ai.relays', 'ai.agentStatuses', 'ai.skillCategories'].includes(path));
       if (list.length > (growingCollection ? 10000 : 500))
         fail(growingCollection ? '最多 10000 项' : '最多 500 项');
       const itemSample = path === 'ai.skillCategories' ? skillCategorySample : sample[0] ?? '';
@@ -89,6 +89,8 @@ export function validateContent(key: Section, value: unknown) {
       for (const [name, example] of Object.entries(sample))
         walk(object[name], example, `${path}.${name}`, name);
     } else {
+      if (key === 'tracks' && field === 'duration' && input === null)
+        fail('请上传音频或填写时长');
       if (typeof input !== typeof sample) fail(`需要 ${typeof sample}`);
       if (typeof input === 'string') {
         if (input.length > (field === 'body' || (key === 'investing' && path.includes('.paragraphs[')) ? 200000 : 30000))
@@ -158,6 +160,10 @@ export function validateContent(key: Section, value: unknown) {
   );
   if (key === 'ai') {
     const document = value as typeof defaults.ai;
+    const statusIds = new Set(document.agentStatuses.map((item) => item.id));
+    const statusNames = document.agentStatuses.map((item) => item.name.trim());
+    if (statusNames.some((name) => !name) || new Set(statusNames).size !== statusNames.length)
+      throw new Error('智能体状态名称不能为空或重复');
     const categories = new Map(document.skillCategories.map((item) => [item.id, item]));
     const names = document.skillCategories.map((item) => JSON.stringify([item.parentId, item.name.trim()]));
     if (new Set(names).size !== names.length || document.skillCategories.some((item) => item.name.trim() === '全部' || item.name.trim() === '未分类'))
@@ -179,7 +185,7 @@ export function validateContent(key: Section, value: unknown) {
       } catch { throw new Error('资源链接必须是有效的 HTTP/HTTPS 地址'); }
     }
     for (const item of document.agents) {
-      if (!['active', 'beta', 'coming'].includes(item.status)) throw new Error('智能体状态无效');
+      if (!statusIds.has(item.status)) throw new Error('智能体状态无效');
     }
     for (const item of [...document.agents, ...document.relays]) {
       const isEmoji = document.agents.includes(item as typeof document.agents[number]) &&

@@ -23,9 +23,13 @@ const { defaults } = await import('../lib/cms-defaults.ts');
 const { coverInput } = await import('../lib/article-categories.ts');
 const { musicSample } = await import('../lib/music-content.ts');
 const { Field } = await import('../components/admin-fields.tsx');
+const { AiNotebook } = await import('../components/ai-notebook.tsx');
+const { ContentProvider } = await import('../components/content-provider.tsx');
 const user = userEvent.setup({ document: window.document });
 const calls = [];
-const category = { id: 'ui-category', name: '测试分类', description: '', parentId: '' };
+const category = { id: 'ui-category', name: '测试分类', description: '已有说明', parentId: '' };
+let categoryRevision = 1;
+let addedCategory = null;
 let article = { ...defaults.writing[0], slug: 'ui-granular', title: '原文章', body: '正文',
   excerpt: '摘要', categoryId: category.id, category: category.name,
   cover: '/notes/paper-v2.png', coverMode: 'upload', coverGeneratedFor: '',
@@ -44,12 +48,15 @@ let story = { ...structuredClone(defaults.stories[0]), id: 'ui-story', text: '�
   ] };
 let storyRevision = 1;
 let failStoryImage = false;
+const slide = { ...structuredClone(defaults.slides[0]), id: 'ui-slide', title: '原封面', alt: '原有封面描述' };
+let addedSlide = null;
 const project = { ...structuredClone(defaults.projects.items[0]), title: '原项目' };
 const aiResources = Object.fromEntries(['agents', 'skills', 'relays'].map((collection) => [collection,
   { ...structuredClone(defaults.ai[collection][0]), id: `ui-${collection}`,
     ...(collection === 'skills' ? { title: '原技能' } : { name: `原${collection}` }) }]));
 const skillCategories = [{ id: 'skill-parent', name: '界面设计', parentId: '' },
   { id: 'skill-child', name: '页面生成', parentId: 'skill-parent' }];
+const agentStatuses = structuredClone(defaults.ai.agentStatuses);
 const orderedRecords = {
   tracks: { items: { ...structuredClone(defaults.tracks.items[0]), id: 'ordered-track', title: '原音乐' },
     playlists: { ...structuredClone(musicSample.playlists[0]), id: 'ordered-playlist', title: '原歌单', color: '#123456' } },
@@ -73,7 +80,7 @@ globalThis.fetch = async (input, init = {}) => {
     return Response.json({ categories: defaults.projects.categories, statuses: defaults.projects.statuses });
   if (url.pathname === '/api/admin/options/investing')
     return Response.json({ sections: defaults.investing.sections.map(({ id, title }) => ({ id, name: title })) });
-  if (url.pathname === '/api/admin/options/ai') return Response.json({ skillCategories });
+  if (url.pathname === '/api/admin/options/ai') return Response.json({ agentStatuses, skillCategories });
   if (url.pathname.startsWith('/api/admin/options/')) return Response.json({});
   if (url.pathname === '/api/admin/ai' && init.method === 'POST')
     return failStoryImage ? Response.json({ error: '模拟生成失败，原图片已保留' }, { status: 502 })
@@ -90,6 +97,15 @@ globalThis.fetch = async (input, init = {}) => {
     if (init.method === 'PUT') { story = JSON.parse(init.body).value; storyRevision++; }
     return Response.json({ value: story, revision: storyRevision });
   }
+  if (url.pathname === '/api/admin/records/slides/root') {
+    if (init.method === 'POST') { addedSlide = JSON.parse(init.body).value; return Response.json({ revision: 1 }); }
+    const items = [slide, addedSlide].filter(Boolean).map((value, position) => ({
+      id: value.id, title: value.title, excerpt: value.alt, revision: 1, position,
+    }));
+    return Response.json({ items, total: items.length, page: 1, size: 20 });
+  }
+  if (url.pathname === `/api/admin/records/slides/root/${slide.id}`)
+    return Response.json({ value: slide, revision: 1 });
   if (url.pathname === '/api/admin/records/projects/items') {
     if (init.method === 'POST') {
       if (!JSON.parse(init.body).value.images.length)
@@ -115,6 +131,16 @@ globalThis.fetch = async (input, init = {}) => {
   if (url.pathname.startsWith('/api/admin/records/ai/skillCategories/')) {
     const category = skillCategories.find((item) => url.pathname.endsWith(`/${item.id}`));
     return Response.json({ value: category, revision: 1 });
+  }
+  if (url.pathname === '/api/admin/records/ai/agentStatuses') {
+    if (init.method === 'POST') { agentStatuses.push(JSON.parse(init.body).value); return Response.json({ revision: 1 }); }
+    return Response.json({ items: agentStatuses.map((item, position) => ({
+      id: item.id, title: item.name, revision: 1, position })),
+      total: agentStatuses.length, page: 1, size: 20 });
+  }
+  if (url.pathname.startsWith('/api/admin/records/ai/agentStatuses/')) {
+    const item = agentStatuses.find((status) => url.pathname.endsWith(`/${status.id}`));
+    return Response.json({ value: item, revision: 1 });
   }
   for (const [section, collections] of Object.entries(orderedRecords)) {
     for (const [collection, value] of Object.entries(collections)) {
@@ -152,6 +178,17 @@ globalThis.fetch = async (input, init = {}) => {
       return Response.json({ revision: articleRevision, value: article });
     }
     return Response.json({ value: article, revision: articleRevision });
+  }
+  if (url.pathname === '/api/admin/records/writing/categories') {
+    if (init.method === 'POST') { addedCategory = JSON.parse(init.body).value; return Response.json({ revision: 1 }); }
+    const items = [category, addedCategory].filter(Boolean).map((value, position) => ({
+      id: value.id, title: value.name, revision: value === category ? categoryRevision : 1, position,
+    }));
+    return Response.json({ items, total: items.length, page: 1, size: 20 });
+  }
+  if (url.pathname === `/api/admin/records/writing/categories/${category.id}`) {
+    if (init.method === 'PUT') { Object.assign(category, JSON.parse(init.body).value); categoryRevision++; }
+    return Response.json({ value: category, revision: categoryRevision });
   }
   if (['/api/admin/config/site/root', '/api/admin/config/home/root'].includes(url.pathname)) {
     const isSite = url.pathname.includes('/site/');
@@ -250,6 +287,39 @@ try {
   assert.equal(calls.some((call) => call.method === 'POST' && call.path.includes('/records/')), false);
   await user.click(screen.getByRole('button', { name: '← 返回列表' }));
   assert.equal(calls.some((call) => call.method === 'POST' && call.path.includes('/records/')), false);
+  await user.click(screen.getByRole('tab', { name: '文章分类' }));
+  await screen.findByRole('button', { name: '测试分类' });
+  await user.click(screen.getByRole('button', { name: '＋ 新增文章分类' }));
+  assert.deepEqual([...window.document.querySelectorAll('.admin-article-category > .admin-fields > .admin-field > label')]
+    .map((node) => node.textContent), ['名称', '上级分类', '说明']);
+  assert.equal(screen.getByLabelText('名称').value, '');
+  assert.equal(screen.getByLabelText('说明').value, '');
+  await user.type(screen.getByLabelText('名称'), '新增分类');
+  await user.type(screen.getByLabelText('说明'), '新增说明');
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await screen.findByRole('button', { name: '新增分类' });
+  assert.equal(addedCategory.description, '新增说明');
+  await user.click(screen.getByRole('button', { name: '测试分类' }));
+  await screen.findByLabelText('上级分类');
+  assert.equal(screen.getByLabelText('说明').value, '已有说明');
+  await user.type(screen.getByLabelText('名称'), '已修改');
+  await user.type(screen.getByLabelText('说明'), '已更新');
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await screen.findByRole('button', { name: '测试分类已修改' });
+  assert.equal(category.description, '已有说明已更新');
+  assert.equal(calls.find((call) => call.method === 'PUT' && call.path.includes('/writing/categories/')).body.value.description, '已有说明已更新');
+  await user.click(screen.getByRole('button', { name: '测试分类已修改' }));
+  await screen.findByLabelText('上级分类');
+  assert.equal(screen.getByLabelText('名称').value, '测试分类已修改');
+  assert.equal(screen.getByLabelText('说明').value, '已有说明已更新');
+  await user.click(within(nav).getByRole('button', { name: '项目' }));
+  await user.click(screen.getByRole('tab', { name: '状态' }));
+  await user.click(screen.getByRole('button', { name: '＋ 新增状态' }));
+  assert.equal(screen.getByLabelText('名称').value, '');
+  await user.click(screen.getByRole('button', { name: '← 返回列表' }));
+  await user.click(screen.getByRole('tab', { name: '分类' }));
+  await user.click(screen.getByRole('button', { name: '＋ 新增分类' }));
+  assert.equal(screen.getByLabelText('名称').value, '');
   await user.click(within(nav).getByRole('button', { name: '网站设置' }));
   await screen.findByLabelText('站点标记');
   assert.ok(screen.getByRole('heading', { name: '网站设置' }));
@@ -359,16 +429,54 @@ try {
   assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['说说', '说说封面']);
   await user.click(screen.getByRole('tab', { name: '说说封面' }));
   await waitFor(() => assert.ok(calls.some((call) => call.path === '/api/admin/records/slides/root')));
+  const slideRow = screen.getByRole('button', { name: '原封面' }).closest('tr');
+  assert.equal(slideRow.querySelector('small').textContent, '原有封面描述');
+  await user.click(screen.getByRole('button', { name: '原封面' }));
+  await screen.findByLabelText('标题');
+  assert.deepEqual([...window.document.querySelectorAll('.admin-slide-cover > .admin-fields > .admin-field > label')]
+    .slice(0, 3).map((node) => node.textContent), ['标题', '素材地址', '图片描述']);
+  const savedCoverView = ['宽度', '高度', '图片取景位置'].map((label) => screen.getByLabelText(label).value);
+  globalThis.fetch = async (input, init) => input === '/api/admin/media'
+    ? Response.json({ url: '/api/media/edit-cover.png' }) : immediateFetch(input, init);
+  await user.upload(screen.getByLabelText('上传替换'), new window.File(['image'], 'edit.png', { type: 'image/png' }));
+  await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/edit-cover.png'));
+  assert.deepEqual(['宽度', '高度', '图片取景位置'].map((label) => screen.getByLabelText(label).value),
+    savedCoverView, '编辑已有封面上传时只替换素材地址');
+  globalThis.fetch = immediateFetch;
+  await user.click(screen.getByRole('button', { name: '← 返回列表' }));
   await user.click(screen.getByRole('button', { name: '＋ 新增说说封面' }));
   await screen.findByLabelText('素材地址');
+  assert.deepEqual([...window.document.querySelectorAll('.admin-slide-cover > .admin-fields > .admin-field > label')]
+    .slice(0, 3).map((node) => node.textContent), ['标题', '素材地址', '图片描述']);
+  for (const label of ['标题', '素材地址', '图片描述', '宽度', '高度', '图片取景位置'])
+    assert.equal(screen.getByLabelText(label).value, '', `新增说说封面不预填${label}`);
+  assert.equal(screen.getByLabelText('宽度').type, 'number');
+  assert.equal(screen.getByRole('checkbox', { name: /发布到前台/ }).checked, false);
+  const originalImage = globalThis.Image;
+  const originalObjectUrl = URL.createObjectURL.bind(URL);
+  const originalRevokeUrl = URL.revokeObjectURL.bind(URL);
+  globalThis.Image = class {
+    naturalWidth = 1881;
+    naturalHeight = 836;
+    set src(_value) { queueMicrotask(() => this.onload?.()); }
+  };
+  URL.createObjectURL = () => 'blob:test-cover';
+  URL.revokeObjectURL = () => {};
   let finishUpload;
+  let failUpload = true;
   globalThis.fetch = async (input, init) => {
     if (input === '/api/admin/media') {
+      if (failUpload) return Response.json({ error: '模拟上传失败' }, { status: 503 });
       await new Promise((done) => { finishUpload = done; });
       return Response.json({ url: '/api/media/1234-abcd.png' });
     }
     return immediateFetch(input, init);
   };
+  await user.upload(screen.getByLabelText('上传替换'), new window.File(['image'], 'test.png', { type: 'image/png' }));
+  await screen.findByText(/模拟上传失败/);
+  for (const label of ['素材地址', '宽度', '高度', '图片取景位置'])
+    assert.equal(screen.getByLabelText(label).value, '', `上传失败不修改${label}`);
+  failUpload = false;
   await user.upload(screen.getByLabelText('上传替换'), new window.File(['image'], 'test.png', { type: 'image/png' }));
   assert.equal(screen.getByRole('tab', { name: '说说', exact: true }).disabled, true);
   assert.equal(screen.getByRole('button', { name: '← 返回列表' }).disabled, true);
@@ -376,14 +484,40 @@ try {
   assert.equal(within(nav).getByRole('button', { name: 'AI', exact: true }).disabled, true);
   await act(async () => finishUpload());
   globalThis.fetch = immediateFetch;
+  globalThis.Image = originalImage;
+  URL.createObjectURL = originalObjectUrl;
+  URL.revokeObjectURL = originalRevokeUrl;
   await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/1234-abcd.png'));
+  assert.equal(screen.getByLabelText('宽度').value, '1881');
+  assert.equal(screen.getByLabelText('高度').value, '836');
+  assert.equal(screen.getByLabelText('图片取景位置').value, 'center 55%');
   assert.equal(screen.getByRole('button', { name: '← 返回列表' }).disabled, false);
+  await user.type(screen.getByLabelText('标题'), '新增封面');
+  await user.type(screen.getByLabelText('图片描述'), '山间晨雾');
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  const newSlideRow = (await screen.findByRole('button', { name: '新增封面' })).closest('tr');
+  assert.equal(newSlideRow.querySelector('small').textContent, '山间晨雾');
+  assert.equal(addedSlide.alt, '山间晨雾');
+  assert.equal(addedSlide.width, 1881);
+  assert.equal(addedSlide.height, 836);
+  assert.equal(addedSlide.position, 'center 55%');
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: 'AI', exact: true }));
-  assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['智能体', '技能 Skills', '中转站 API', 'Skills分类']);
+  assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['智能体', '技能 Skills', '中转站 API', '智能体状态', 'Skills分类']);
+  await user.click(screen.getByRole('tab', { name: '智能体状态' }));
+  await screen.findByRole('button', { name: '已上线' });
+  await user.click(screen.getByRole('button', { name: '＋ 新增智能体状态' }));
+  assert.equal(screen.getByLabelText('名称').value, '');
+  await user.type(screen.getByLabelText('名称'), '维护中');
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await screen.findByRole('button', { name: '维护中' });
+  await user.click(screen.getByRole('tab', { name: '智能体' }));
   await user.click(screen.getByRole('button', { name: '＋ 新增智能体' }));
   assert.equal(screen.getByLabelText('名称').value, '');
   assert.deepEqual([...window.document.querySelectorAll('.admin-form .admin-fields > .admin-field > label')]
-    .slice(0, 3).map((node) => node.textContent), ['名称', '作者', 'Logo']);
+    .slice(0, 4).map((node) => node.textContent), ['名称', '作者', '链接地址', 'Logo']);
+  assert.equal(screen.getByLabelText('内容状态').value, '');
+  assert.ok(screen.getByLabelText('内容状态').querySelector(`option[value="${agentStatuses.at(-1).id}"]`));
+  await user.selectOptions(screen.getByLabelText('内容状态'), agentStatuses.at(-1).id);
   assert.ok(screen.getByLabelText('Logo').closest('.admin-resource-logo'));
   await user.type(screen.getByLabelText('名称'), '未保存资源');
   window.confirm = () => false;
@@ -421,6 +555,9 @@ try {
     if (tab === '智能体') {
       assert.ok(screen.getByLabelText('作者'));
       assert.ok(screen.getByLabelText('Logo').closest('.admin-resource-logo'));
+      assert.equal(screen.getByLabelText('内容状态').value, 'active');
+      assert.deepEqual([...window.document.querySelectorAll('.admin-agent-resource > .admin-fields > .admin-field > label')]
+        .slice(0, 4).map((node) => node.textContent), ['名称', '作者', '链接地址', 'Logo']);
     }
   }
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: '投资', exact: true }));
@@ -611,7 +748,8 @@ try {
   assert.equal(article.coverGeneratedFor, coverInput(article.title, article.excerpt));
   globalThis.fetch = immediateFetch;
   for (const [sectionLabel, tabLabel, inputLabel] of [
-    ['书签', '内容', '名称'], ['友链', '内容', '名称'],
+    ['书签', '内容', '名称'], ['书签', '分类', '名称'],
+    ['友链', '内容', '名称'], ['友链', '分类', '名称'],
     ['音乐', '内容', '标题'], ['音乐', '音乐场景', '名称'], ['音乐', '歌单', '标题'],
     ['电影', '内容', '标题'], ['电影', '分类', '名称'],
     ['播客', '内容', '标题'], ['播客', '分类', '名称'],
@@ -625,6 +763,15 @@ try {
       assert.equal(screen.queryByRole('tab', { name: '设置' }), null);
     await user.click(screen.getByRole('button', { name: `＋ 新增${tabLabel}` }));
     assert.equal(screen.getByLabelText(inputLabel).value, '', `${sectionLabel}/${tabLabel} 新增名称应为空`);
+    if (['音乐', '播客', '旅行', '爱好', '书籍'].includes(sectionLabel)) {
+      const form = document.querySelector('.admin-form');
+      for (const input of form.querySelectorAll('.admin-fields input[type="text"], .admin-fields input[type="number"], .admin-fields textarea, .admin-fields select'))
+        assert.equal(input.value, '', `${sectionLabel}/${tabLabel} 不应预填 ${input.id}`);
+      for (const count of form.querySelectorAll('.admin-array legend small'))
+        assert.equal(count.textContent, '0 项', `${sectionLabel}/${tabLabel} 不应带入示例条目`);
+      for (const checkbox of form.querySelectorAll('input[type="checkbox"]'))
+        assert.equal(checkbox.checked, false, `${sectionLabel}/${tabLabel} 不应默认发布`);
+    }
     if (sectionLabel === '音乐' && tabLabel === '内容')
       assert.equal(screen.getByLabelText('素材地址').value, '');
     if (sectionLabel === '音乐' && tabLabel === '内容') {
@@ -649,6 +796,8 @@ try {
     }
     if (['旅行', '爱好'].includes(sectionLabel) && tabLabel === '内容')
       assert.ok(screen.getByRole('group', { name: /^相册/ }));
+    if (sectionLabel === '旅行' && tabLabel === '内容')
+      assert.equal(screen.getByLabelText('素材地址').value, '');
     const section = { 音乐: 'tracks', 电影: 'films', 播客: 'podcasts', 旅行: 'travel', 爱好: 'hobbies', 书籍: 'books' }[sectionLabel];
     const collection = tabLabel === '歌单' ? 'playlists' : 'items';
     const existing = ['内容', '歌单'].includes(tabLabel) ? orderedRecords[section]?.[collection] : null;
@@ -665,6 +814,71 @@ try {
     }
   }
   cleanup();
+  const originalAudioObjectUrl = URL.createObjectURL.bind(URL);
+  const originalAudioRevokeUrl = URL.revokeObjectURL.bind(URL);
+  const audioPrototype = window.HTMLMediaElement.prototype;
+  const originalAudioLoad = Object.getOwnPropertyDescriptor(audioPrototype, 'load');
+  const originalAudioDuration = Object.getOwnPropertyDescriptor(audioPrototype, 'duration');
+  let failMetadata = false;
+  let failAudioUpload = false;
+  let audioUploadCount = 0;
+  audioPrototype.load = function () {
+    if (this.src) queueMicrotask(() => failMetadata ? this.onerror?.() : this.onloadedmetadata?.());
+  };
+  Object.defineProperty(audioPrototype, 'duration', { configurable: true, get: () => 48.2 });
+  URL.createObjectURL = () => 'blob:track-audio';
+  URL.revokeObjectURL = () => {};
+  globalThis.fetch = async (input, init) => {
+    if (input === '/api/admin/media') {
+      audioUploadCount++;
+      return failAudioUpload ? Response.json({ error: '模拟音频上传失败' }, { status: 503 })
+        : Response.json({ url: '/api/media/new-track.wav' });
+    }
+    return immediateFetch(input, init);
+  };
+  function TrackForm({ existing = false }) {
+    const [value, setValue] = useState(() => ({ ...defaults.tracks.items[0],
+      src: existing ? '/audio/existing.wav' : '', duration: existing ? 32 : null }));
+    return createElement(Field, { path: 'tracks.items', label: '音乐', value,
+      sample: defaults.tracks.items[0], immutableIdentity: existing, onChange: setValue });
+  }
+  try {
+    render(createElement(TrackForm));
+    assert.equal(screen.getByLabelText('时长（秒）').type, 'number');
+    assert.equal(screen.getByLabelText('时长（秒）').value, '');
+    failMetadata = true;
+    await user.upload(screen.getByLabelText('上传替换'), new window.File(['audio'], 'track.wav', { type: 'audio/wav' }));
+    await screen.findByText(/无法读取音频时长/);
+    assert.equal(audioUploadCount, 0);
+    assert.equal(screen.getByLabelText('素材地址').value, '');
+    assert.equal(screen.getByLabelText('时长（秒）').value, '');
+    failMetadata = false;
+    failAudioUpload = true;
+    await user.upload(screen.getByLabelText('上传替换'), new window.File(['audio'], 'track.wav', { type: 'audio/wav' }));
+    await screen.findByText(/模拟音频上传失败/);
+    assert.equal(screen.getByLabelText('素材地址').value, '');
+    assert.equal(screen.getByLabelText('时长（秒）').value, '');
+    failAudioUpload = false;
+    await user.upload(screen.getByLabelText('上传替换'), new window.File(['audio'], 'track.wav', { type: 'audio/wav' }));
+    await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/new-track.wav'));
+    assert.equal(screen.getByLabelText('时长（秒）').value, '49');
+    await user.clear(screen.getByLabelText('时长（秒）'));
+    assert.equal(screen.getByLabelText('时长（秒）').value, '');
+    await user.type(screen.getByLabelText('时长（秒）'), '73');
+    assert.equal(screen.getByLabelText('时长（秒）').value, '73');
+    cleanup();
+    render(createElement(TrackForm, { existing: true }));
+    await user.upload(screen.getByLabelText('上传替换'), new window.File(['audio'], 'replacement.wav', { type: 'audio/wav' }));
+    await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/new-track.wav'));
+    assert.equal(screen.getByLabelText('时长（秒）').value, '49');
+  } finally {
+    cleanup();
+    Object.defineProperty(audioPrototype, 'load', originalAudioLoad);
+    Object.defineProperty(audioPrototype, 'duration', originalAudioDuration);
+    URL.createObjectURL = originalAudioObjectUrl;
+    URL.revokeObjectURL = originalAudioRevokeUrl;
+    globalThis.fetch = immediateFetch;
+  }
   for (const [path, sample, action] of [
     ['tracks.playlists', musicSample.playlists[0], 'playlist-cover'],
     ['films.items', defaults.films.items[0], 'film-cover'],
@@ -701,6 +915,15 @@ try {
     assert.equal(screen.getByLabelText('图片描述').value, '薄雾中的白色灯塔');
     cleanup();
   }
+  render(createElement(ContentProvider, { content: { ai: {
+    ...defaults.ai,
+    agents: [{ ...defaults.ai.agents[0], id: 'ui-custom-agent', status: 'maintenance' }],
+    agentStatuses: [...defaults.ai.agentStatuses, { id: 'maintenance', name: '维护中' }],
+  } } }, createElement(AiNotebook)));
+  await user.click(screen.getByRole('tab', { name: '智能体' }));
+  const customStatus = await screen.findByText('维护中');
+  assert.equal(customStatus.className, 'ai-agent-status ai-status-maintenance');
+  cleanup();
   console.log('PASS seven description image fields, exact AI request data and explicit generation controls');
   console.log('PASS unified writing/project forms, story time/Enter topics/IME/limits, per-image generation/failure/reorder and explicit persistence');
   console.log('PASS per-record admin UI and website settings tabs: explicit submit, navigation editing, preserved fields, unsaved drafts and conflict retention');

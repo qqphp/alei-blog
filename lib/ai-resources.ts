@@ -7,7 +7,7 @@ export interface AiAgent {
   description: string;
   capabilities: string[];
   tags: string[];
-  status: 'active' | 'beta' | 'coming';
+  status: string;
   href: string;
 }
 
@@ -45,6 +45,17 @@ export interface AiSkillCategory {
 }
 
 export const skillCategorySample: AiSkillCategory = { id: 'skill-category-sample', name: '', parentId: '' };
+
+export interface AiAgentStatus {
+  id: string;
+  name: string;
+}
+
+export const agentStatuses: AiAgentStatus[] = [
+  { id: 'active', name: '已上线' },
+  { id: 'beta', name: '公测中' },
+  { id: 'coming', name: '即将推出' },
+];
 
 export const aiAgents: AiAgent[] = [
   {
