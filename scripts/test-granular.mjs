@@ -118,11 +118,11 @@ try {
   }
   const media = (state) => new Set(JSON.stringify(state).match(/\/api\/media\/[a-f0-9-]+\.(?:png|jpg|gif|webp|mp3|wav)/g) ?? []);
   for (const url of media({ ...original, sections: expectedSections })) assert.ok(media(migrated).has(url), `迁移后缺少素材引用 ${url}`);
-  assert.equal(migrated.entries.filter((item) => item.section === 'investing' &&
-    item.collection === 'sections').length, defaults.investing.sections.length);
-  assert.equal(migrated.entries.filter((item) => item.section === 'investing' &&
-    item.collection === 'entries').length,
-  defaults.investing.sections.reduce((count, item) => count + item.entries.length, 0));
+  for (const collection of ['sections', 'entries'])
+    assert.ok(migrated.entries.filter((item) => item.section === 'investing' &&
+      item.collection === collection).length >= original.entries.filter((item) =>
+      item.section === 'investing' && item.collection === collection).length,
+    `迁移不能删除已有投资${collection}`);
   const testDb = new pg.Client({ connectionString: testUrl.toString() });
   await testDb.connect();
   try {

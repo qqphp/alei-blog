@@ -359,6 +359,11 @@
   flex: 0 1 190px;
   width: auto;
 }
+.admin-sort-hint {
+  margin: -12px 0 14px;
+  color: #718174;
+  font-size: 12px;
+}
 .admin-table-scroll {
   overflow-x: auto;
 }

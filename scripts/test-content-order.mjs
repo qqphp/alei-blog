@@ -57,6 +57,13 @@ const { stripArticleExtras } = await import('../lib/article-categories.ts');
 const { newestArticlesFirst, newestProjectsFirst } =
   await import('../lib/content-order.ts');
 const { validateContent } = await import('../lib/cms-validation.ts');
+const { articleHeadings } = await import('../components/article-detail.tsx');
+assert.deepEqual(articleHeadings('# 标题\n## 第一节 **重点**\n```md\n## 代码示例\n```\n> ## 引用中的标题\n## 第二节\n## 第二节'), [
+  { id: 'heading-2', text: '第一节 重点' },
+  { id: 'heading-6', text: '引用中的标题' },
+  { id: 'heading-7', text: '第二节' },
+  { id: 'heading-8', text: '第二节' },
+]);
 const user = userEvent.setup({ document: window.document });
 let realFetch = globalThis.fetch;
 try {

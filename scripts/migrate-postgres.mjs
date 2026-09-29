@@ -18,6 +18,7 @@ try {
     if (applied.rowCount) continue;
     await client.query('BEGIN');
     try {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('cms-backup'))");
       await client.query(await readFile(resolve('db/migrations', file), 'utf8'));
       await client.query('INSERT INTO schema_migrations (version) VALUES ($1)', [file]);
       await client.query('COMMIT');

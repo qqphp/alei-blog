@@ -44,6 +44,7 @@ function itemId(section: Section, collection: string, value: Item) {
 }
 // Related records and their options must be checked and written in the same order.
 async function lockSection(db: Client, section: Section) {
+  await db.query("SELECT pg_advisory_xact_lock(hashtext('cms-backup'))");
   await db.query("SELECT pg_advisory_xact_lock(hashtext('cms-records'), hashtext($1))", [section]);
 }
 function payloadValue(section: Section, collection: string, value: Item) {
@@ -194,6 +195,7 @@ export async function saveAdminConfig(section: Section, scope: string, value: It
   const saved = await withDatabase(async (db) => {
     await db.query('BEGIN');
     try {
+      await db.query("SELECT pg_advisory_xact_lock(hashtext('cms-backup'))");
       const row = await db.query<{ value: Item; revision: number }>(
         'SELECT value, revision FROM cms_sections WHERE section = $1 FOR UPDATE', [section]);
       const previous = savedConfig(section, row.rows[0]?.value);

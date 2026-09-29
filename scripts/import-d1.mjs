@@ -18,6 +18,7 @@ const collections = {
   films: ['categories', 'items'], podcasts: ['categories', 'items'],
   travel: ['categories', 'items'], hobbies: ['categories', 'items'],
 };
+const historicalCreatedAt = '2026-01-01T00:00:00.000Z';
 const client = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await client.connect();
 try {
@@ -25,6 +26,7 @@ try {
   if (existing.rows[0].count) throw new Error('目标数据库已有博客内容，已取消导入以避免覆盖');
   await client.query('BEGIN');
   try {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('cms-backup'))");
     for (const { key, value, revision } of source.documents) {
       const names = collections[key] ?? [];
       const metadata = names.length
@@ -39,10 +41,10 @@ try {
     const articles = source.documents.find((row) => row.key === 'writing')?.value ?? [];
     for (const [position, article] of articles.entries())
       await client.query(`INSERT INTO articles (slug, title, excerpt, body, category_id, published_on, published, cover_url, cover_mode, cover_generated_for, position, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11, NULL)`,
+        VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12)`,
       [article.slug, article.title, article.excerpt, article.body, article.categoryId,
         article.date.replaceAll('.', '-'), article._published === true, article.cover,
-        article.coverMode ?? 'upload', article.coverGeneratedFor ?? '', position]);
+        article.coverMode ?? 'upload', article.coverGeneratedFor ?? '', position, historicalCreatedAt]);
     let entries = 0;
     for (const { key, value } of source.documents) {
       for (const collection of collections[key] ?? []) {
@@ -60,7 +62,7 @@ try {
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)`,
           [key, collection, item.id ?? `slide-${position}`, position, fields.published,
             fields.title, fields.categoryId, fields.occurredAt,
-            JSON.stringify(item), key === 'projects' && item.createdAt && Number.isFinite(Date.parse(item.createdAt)) ? new Date(item.createdAt) : null,
+            JSON.stringify(item), key === 'projects' && item.createdAt && Number.isFinite(Date.parse(item.createdAt)) ? new Date(item.createdAt) : historicalCreatedAt,
             fields.statusId, fields.search]);
           entries++;
         }

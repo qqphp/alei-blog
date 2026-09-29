@@ -5,12 +5,14 @@ import { ensureManagedPostgres } from './managed-postgres.mjs';
 import { recordFields } from '../lib/content-record-fields.mjs';
 
 if (!process.env.DATABASE_URL) throw new Error('未配置 DATABASE_URL');
+const historicalCreatedAt = '2026-01-01T00:00:00.000Z';
 await ensureManagedPostgres();
 const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await db.connect();
 const seeded = [];
 try {
   await db.query('BEGIN');
+  await db.query("SELECT pg_advisory_xact_lock(hashtext('cms-backup'))");
   for (const [section, value] of Object.entries(defaults)) {
     const collections = adminCollections[section] ?? [];
     const metadata = sectionMetadata(section);
@@ -29,10 +31,10 @@ try {
       for (const [position, item] of value.entries())
         await db.query(`INSERT INTO articles (slug,title,excerpt,body,category_id,published_on,
           published,cover_url,cover_mode,cover_generated_for,position,created_at)
-          VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,NULL) ON CONFLICT (slug) DO NOTHING`,
+          VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,$12) ON CONFLICT (slug) DO NOTHING`,
         [item.slug, item.title, item.excerpt, item.body, item.categoryId,
           item.date.replaceAll('.', '-'), item._published, item.cover, item.coverMode,
-          item.coverGeneratedFor, position]);
+          item.coverGeneratedFor, position, historicalCreatedAt]);
       continue;
     }
     for (const collection of collections) {
@@ -47,7 +49,7 @@ try {
         [section, collection, item.id ?? `slide-${position}`, position,
           fields.published, fields.title, fields.categoryId, fields.statusId,
           fields.occurredAt, JSON.stringify(item), fields.search,
-          section === 'ai' ? new Date() : section === 'projects' && item.createdAt && Number.isFinite(Date.parse(item.createdAt)) ? new Date(item.createdAt) : null]);
+          section === 'ai' ? new Date() : section === 'projects' && item.createdAt && Number.isFinite(Date.parse(item.createdAt)) ? new Date(item.createdAt) : historicalCreatedAt]);
       }
     }
     if (section === 'investing') {
@@ -60,9 +62,9 @@ try {
         for (const item of entries)
           await db.query(`INSERT INTO cms_entries (section,collection,id,position,published,title,
             category_id,payload,search_text,created_at)
-            VALUES ('investing','entries',$1,$2,$3,$4,$5,$6::jsonb,$7,NULL) ON CONFLICT (section,collection,id) DO NOTHING`,
+            VALUES ('investing','entries',$1,$2,$3,$4,$5,$6::jsonb,$7,$8) ON CONFLICT (section,collection,id) DO NOTHING`,
           [item.id, entryPosition++, item._published, item.title, group.id,
-            JSON.stringify(item), [item.title, item.tag, item.description, ...(item.paragraphs ?? [])].filter(Boolean).join(' ')]);
+            JSON.stringify(item), [item.title, item.tag, item.description, ...(item.paragraphs ?? [])].filter(Boolean).join(' '), historicalCreatedAt]);
       }
     }
   }

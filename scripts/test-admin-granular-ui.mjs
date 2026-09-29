@@ -490,6 +490,7 @@ try {
   globalThis.fetch = immediateFetch;
   await user.click(screen.getByRole('button', { name: '← 返回列表' }));
   await user.type(screen.getByRole('searchbox', { name: '搜索此列表' }), '原封面');
+  await screen.findByText('清除筛选后可调整排序。');
   await user.click(screen.getByRole('button', { name: '＋ 新增说说封面' }));
   await screen.findByLabelText('素材地址');
   assert.deepEqual([...window.document.querySelectorAll('.admin-slide-cover > .admin-fields > .admin-field > label')]
@@ -558,6 +559,13 @@ try {
   assert.equal(addedSlide.width, 1881);
   assert.equal(addedSlide.height, 836);
   assert.equal(addedSlide.position, 'center 55%');
+  assert.equal(screen.getAllByRole('button', { name: '上移' }).at(-1).disabled, false);
+  await user.selectOptions(screen.getByRole('combobox', { name: '按发布状态筛选' }), 'draft');
+  await screen.findByText('清除筛选后可调整排序。');
+  assert.ok(screen.getAllByRole('button', { name: '上移' }).every((button) => button.disabled));
+  assert.ok(screen.getAllByRole('button', { name: '下移' }).every((button) => button.disabled));
+  await user.selectOptions(screen.getByRole('combobox', { name: '按发布状态筛选' }), 'all');
+  await waitFor(() => assert.equal(screen.queryByText('清除筛选后可调整排序。'), null));
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: 'AI', exact: true }));
   assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['智能体', '技能 Skills', '中转站 API', '智能体状态', 'Skills分类']);
   await user.click(screen.getByRole('tab', { name: '智能体状态' }));
@@ -679,6 +687,12 @@ try {
   assert.equal(createdProject.images.length, 1);
   assert.deepEqual(createdProject.tags, ['新标签']);
   assert.equal(window.document.querySelector('.admin-record-times'), null);
+  await user.selectOptions(screen.getByRole('combobox', { name: '按分类筛选' }), defaults.projects.categories[0].id);
+  await screen.findByText('清除筛选后可调整排序。');
+  await user.selectOptions(screen.getByRole('combobox', { name: '按分类筛选' }), '');
+  await user.selectOptions(screen.getByRole('combobox', { name: '按项目状态筛选' }), defaults.projects.statuses[0].id);
+  await screen.findByText('清除筛选后可调整排序。');
+  await user.selectOptions(screen.getByRole('combobox', { name: '按项目状态筛选' }), '');
   await user.click(await screen.findByRole('button', { name: '原项目' }));
   await screen.findByLabelText('标题');
   assert.deepEqual(labels(), projectLabels, '项目编辑字段顺序与新增一致，即使接口顺序相反');

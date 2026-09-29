@@ -84,7 +84,7 @@ npm run admin:password -- --reset
 
 ### 完整本地备份
 
-定期执行 `npm run db:backup`，它会把 PostgreSQL 自定义格式备份和 `.local/media` 素材复制到 `.local/backups/` 下的带时间戳目录。也可指定外部硬盘目录：`npm run db:backup -- E:\你的备份目录`。请单独妥善备份 `.dev.vars` 和 `.local/postgres18/admin-password`。恢复时先用 `pg_restore` 恢复数据库，再还原素材目录。数据库备份包含内容与后台保存的 API 密钥，请保护备份文件；只保存在项目所在硬盘不足以应对硬盘故障。
+定期执行 `npm run db:backup`，它会把 PostgreSQL 自定义格式备份和素材目录复制到 `.local/backups/` 下的带时间戳目录。素材目录默认是 `.local/media`，设置了 `CMS_MEDIA_DIRECTORY` 时使用该目录；目录不存在则备份失败。备份期间内容写入会等待数据库与素材复制完成。也可指定外部硬盘目录：`npm run db:backup -- E:\你的备份目录`。请单独妥善备份 `.dev.vars` 和 `.local/postgres18/admin-password`。恢复时先用 `pg_restore` 恢复数据库，再还原素材目录。数据库备份包含内容与后台保存的 API 密钥，请保护备份文件；只保存在项目所在硬盘不足以应对硬盘故障。
 
 `.wrangler/`、`.local/`、`.dev.vars`、测试临时文件和构建产物均已加入 Git 忽略规则。旧 D1 状态保留作迁移核对；不要删除 `.local/postgres18` 或 `.local/media`，否则数据库或上传素材会丢失。
 

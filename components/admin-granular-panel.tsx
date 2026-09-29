@@ -375,6 +375,7 @@ export function AdminGranularPanel() {
   const showTimes = (section === 'writing' && activeCollection === 'articles') ||
     (section === 'projects' && activeCollection === 'items') || (section === 'investing' && activeCollection === 'entries');
   const canMove = !['writing', 'stories'].includes(recordSection) && !(section === 'investing' && activeCollection === 'entries');
+  const moveFiltered = Boolean(query || status !== 'all' || categoryId || statusId);
   return <main className="admin-shell">
     <aside className="admin-sidebar">
       <div className="admin-brand"><span>ALEI ADMIN</span><strong>后台管理系统</strong></div>
@@ -465,6 +466,7 @@ export function AdminGranularPanel() {
               </select> : null}
             <button className="admin-primary" type="button" disabled={busy || working} onClick={addRecord}>＋ 新增{collectionName(section, tab)}</button>
           </div>
+          {canMove && moveFiltered && <p className="admin-sort-hint">清除筛选后可调整排序。</p>}
           <div className="admin-table-scroll"><table className="admin-data-table">
             <caption>共 {list?.total ?? 0} 条；每页最多 20 条</caption>
             <thead><tr><th scope="col">内容</th>{showTimes && <><th scope="col">{section === 'investing' ? '添加时间' : '创建时间'}</th><th scope="col">最后更新时间</th></>}<th scope="col">状态</th><th scope="col">操作</th></tr></thead>
@@ -480,9 +482,9 @@ export function AdminGranularPanel() {
                 <button type="button" disabled={busy} onClick={() => void openRecord(item.id)}>编辑</button>
                 {canPublish && <button type="button" disabled={busy}
                   onClick={() => void quickAction(item, 'publish')}>{item.published ? '转草稿' : '发布'}</button>}
-                {canMove && <><button type="button" disabled={busy || (index === 0 && page === 1) || Boolean(query)}
+                {canMove && <><button type="button" disabled={busy || moveFiltered || (index === 0 && page === 1)}
                   onClick={() => void quickAction(item, 'up')}>上移</button>
-                <button type="button" disabled={busy || (index === (list?.items.length ?? 0) - 1 && page >= Math.ceil((list?.total ?? 0) / 20)) || Boolean(query)}
+                <button type="button" disabled={busy || moveFiltered || (index === (list?.items.length ?? 0) - 1 && page >= Math.ceil((list?.total ?? 0) / 20))}
                   onClick={() => void quickAction(item, 'down')}>下移</button></>}
                 <button type="button" className="admin-danger" disabled={busy}
                   onClick={() => void quickAction(item, 'delete')}>删除</button>

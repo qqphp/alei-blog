@@ -35,6 +35,10 @@ try {
   const { defaults } = await import('../lib/cms-defaults.ts');
   const expected = defaults.investing.sections.reduce((count, group) => count + group.entries.length, 0);
   assert.equal((await db.query("SELECT count(*)::int AS n FROM cms_entries WHERE section='investing' AND collection='entries'")).rows[0].n, expected);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM articles WHERE created_at IS NULL')).rows[0].n, 0);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM cms_entries WHERE created_at IS NULL')).rows[0].n, 0);
+  assert.equal((await db.query('SELECT created_at FROM articles LIMIT 1')).rows[0].created_at.toISOString(),
+    '2026-01-01T00:00:00.000Z');
   const seedSnapshot = (await db.query('SELECT section,collection,id,position,payload FROM cms_entries ORDER BY section,collection,id')).rows;
   run(['--import', 'tsx', 'scripts/seed-missing-sections.mjs']);
   assert.deepEqual((await db.query('SELECT section,collection,id,position,payload FROM cms_entries ORDER BY section,collection,id')).rows, seedSnapshot);
@@ -42,6 +46,8 @@ try {
 
   await db.query('TRUNCATE cms_sections,cms_entries,articles,article_categories,aa_language_model_snapshots,api_integration_keys CASCADE');
   run(['scripts/import-d1.mjs']);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM articles WHERE created_at IS NULL')).rows[0].n, 0);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM cms_entries WHERE created_at IS NULL')).rows[0].n, 0);
   const imported = (await db.query("SELECT section,collection,id,payload,revision,updated_at FROM cms_entries ORDER BY section,collection,id")).rows;
   assert.ok(imported.length > 0, '使用真实旧 D1 数据验证导入');
   assert.equal((await db.query("SELECT count(*)::int AS n FROM cms_entries WHERE btrim(search_text)='' AND (payload ? 'title' OR payload ? 'name' OR payload ? 'text')")).rows[0].n, 0);

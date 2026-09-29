@@ -2,8 +2,22 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import remarkParse from 'remark-parse';
+import { toString } from 'mdast-util-to-string';
+import { visit } from 'unist-util-visit';
+import { unified } from 'unified';
 import { getPublicArticle, getPublicContent } from '@/lib/cms-server';
 import { SiteFooter, SiteHeader } from '@/components/site-chrome';
+
+export function articleHeadings(body: string) {
+  const headings: { id: string; text: string }[] = [];
+  const tree = unified().use(remarkParse).use(remarkGfm).parse(body);
+  visit(tree, 'heading', (node) => {
+    if (node.depth === 2 && node.position)
+      headings.push({ id: `heading-${node.position.start.line}`, text: toString(node) });
+  });
+  return headings;
+}
 
 export default async function ArticlePage({
   params,
@@ -15,13 +29,7 @@ export default async function ArticlePage({
     getPublicContent(['site']), getPublicArticle(slug),
   ]);
   if (!article) notFound();
-  const headings = article.body
-    .split('\n')
-    .flatMap((line, index) =>
-      line.startsWith('## ')
-        ? [{ text: line.slice(3), id: `heading-${index + 1}` }]
-        : [],
-    );
+  const headings = articleHeadings(article.body);
   return (
     <main className="site-shell">
       <SiteHeader />
