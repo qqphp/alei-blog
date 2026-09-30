@@ -40,6 +40,11 @@ const websiteTabs = [
   { id: 'home', label: '首页', keys: ['eyebrow', 'title', 'description', 'noteTitle', 'noteText'] },
 ];
 const EMPTY_COLLECTIONS: readonly string[] = [];
+const listSubtitlePaths = new Set([
+  'travel.items', 'hobbies.items', 'podcasts.items', 'films.items', 'tracks.items',
+  'bookmarks.items', 'friends.items', 'books.items', 'investing.entries',
+  'projects.items', 'ai.agents', 'ai.skills', 'ai.relays',
+]);
 const blankNameCollections: Partial<Record<Section, readonly string[]>> = {
   projects: ['items', 'statuses', 'categories'], bookmarks: ['items', 'categories'], friends: ['items', 'categories'],
   tracks: ['items', 'scenes', 'playlists'], films: ['items', 'categories'],
@@ -474,7 +479,8 @@ export function AdminGranularPanel() {
               <td><button type="button" className="admin-table-title" disabled={busy || working} onClick={() => void openRecord(item.id)}>
                 {section === 'stories' && tab !== 'covers' ? item.date ? formatRecordTime(item.date).replaceAll('/', '-') : '—'
                   : item.title || item.excerpt || item.id}</button>
-                <small>{section === 'stories' ? item.excerpt?.slice(0, 100) ?? '' : item.excerpt?.slice(0, 100) || item.id}</small></td>
+                <small>{section === 'stories' || listSubtitlePaths.has(`${section}.${tab}`)
+                  ? item.excerpt?.slice(0, 100) ?? '' : item.excerpt?.slice(0, 100) || item.id}</small></td>
               {showTimes && <><td>{formatRecordTime(item.createdAt)}</td><td>{item.updatedAt ? formatRecordTime(item.updatedAt) : '—'}</td></>}
               <td>{canPublish ? <span className={`admin-status-badge ${item.published ? 'published' : ''}`}>
                 {item.published ? '已发布' : '草稿'}</span> : '—'}</td>

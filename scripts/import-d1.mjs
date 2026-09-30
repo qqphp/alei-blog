@@ -40,10 +40,10 @@ try {
         [category.id, category.name, category.description, category.parentId || null, position]);
     const articles = source.documents.find((row) => row.key === 'writing')?.value ?? [];
     for (const [position, article] of articles.entries())
-      await client.query(`INSERT INTO articles (slug, title, excerpt, body, category_id, published_on, published, cover_url, cover_mode, cover_generated_for, position, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6::date, $7, $8, $9, $10, $11, $12)`,
+      await client.query(`INSERT INTO articles (slug, title, excerpt, body, category_id, published, cover_url, cover_mode, cover_generated_for, position, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
       [article.slug, article.title, article.excerpt, article.body, article.categoryId,
-        article.date.replaceAll('.', '-'), article._published === true, article.cover,
+        article._published === true, article.cover,
         article.coverMode ?? 'upload', article.coverGeneratedFor ?? '', position, historicalCreatedAt]);
     let entries = 0;
     for (const { key, value } of source.documents) {

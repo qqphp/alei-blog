@@ -51,31 +51,33 @@ let failStoryImage = false;
 const slide = { ...structuredClone(defaults.slides[0]), id: 'ui-slide', title: '原封面', alt: '原有封面描述' };
 let addedSlide = null;
 let failNextSlideWrite = false;
-const project = { ...structuredClone(defaults.projects.items[0]), title: '原项目' };
+const project = { ...structuredClone(defaults.projects.items[0]), title: '原项目', subtitle: '项目副标题' };
 const aiResources = Object.fromEntries(['agents', 'skills', 'relays'].map((collection) => [collection,
   { ...structuredClone(defaults.ai[collection][0]), id: `ui-${collection}`,
-    ...(collection === 'skills' ? { title: '原技能' } : { name: `原${collection}` }) }]));
+    href: `https://example.com/${collection}`,
+    ...(collection === 'skills' ? { name: '原技能', title: '技能展示标题' } : { name: `原${collection}` }) }]));
 const skillCategories = [{ id: 'skill-parent', name: '界面设计', parentId: '' },
   { id: 'skill-child', name: '页面生成', parentId: 'skill-parent' }];
 const agentStatuses = structuredClone(defaults.ai.agentStatuses);
 const directoryRecords = Object.fromEntries(['bookmarks', 'friends'].map((section) => [section, [{
   ...structuredClone(defaults[section].items[0]), id: `ui-${section}`,
   name: section === 'bookmarks' ? '原书签' : '原友链',
+  url: `https://example.com/${section}`, description: '不应显示的说明',
   initials: section === 'bookmarks' ? '书' : '友', tags: ['原标签'],
 }]]));
 const directoryRevisions = { bookmarks: {}, friends: {} };
 for (const section of ['bookmarks', 'friends']) directoryRevisions[section][`ui-${section}`] = 1;
 const orderedRecords = {
-  tracks: { items: { ...structuredClone(defaults.tracks.items[0]), id: 'ordered-track', title: '原音乐' },
+  tracks: { items: { ...structuredClone(defaults.tracks.items[0]), id: 'ordered-track', title: '原音乐', artist: '测试音乐作者' },
     playlists: { ...structuredClone(musicSample.playlists[0]), id: 'ordered-playlist', title: '原歌单', color: '#123456' } },
-  films: { items: { ...structuredClone(defaults.films.items[0]), id: 'ordered-film', title: '原电影' } },
-  podcasts: { items: { ...structuredClone(defaults.podcasts.items[0]), id: 'ordered-podcast', title: '原播客' } },
-  travel: { items: { ...structuredClone(defaults.travel.items[0]), id: 'ordered-travel', title: '原旅行' } },
-  hobbies: { items: { ...structuredClone(defaults.hobbies.items[0]), id: 'ordered-hobby', title: '原爱好' } },
-  books: { items: { ...structuredClone(defaults.books.items[0]), id: 'ordered-book', title: '原书籍' } },
+  films: { items: { ...structuredClone(defaults.films.items[0]), id: 'ordered-film', title: '原电影', director: '测试导演' } },
+  podcasts: { items: { ...structuredClone(defaults.podcasts.items[0]), id: 'ordered-podcast', title: '原播客', host: '测试专辑主播' } },
+  travel: { items: { ...structuredClone(defaults.travel.items[0]), id: 'ordered-travel', title: '原旅行', description: '旅行说明', body: '不应显示的旅行正文' } },
+  hobbies: { items: { ...structuredClone(defaults.hobbies.items[0]), id: 'ordered-hobby', title: '原爱好', description: '爱好说明', body: '不应显示的爱好正文' } },
+  books: { items: { ...structuredClone(defaults.books.items[0]), id: 'ordered-book', title: '原书籍', author: '书籍作者' } },
 };
 let investment = { ...structuredClone(defaults.investing.sections[0].entries[0]), id: 'ui-investment',
-  title: '原投资文章', sectionId: defaults.investing.sections[0].id,
+  title: '原投资文章', description: '投资说明', sectionId: defaults.investing.sections[0].id,
   createdAt: '2026-09-08T01:02:03.000Z', updatedAt: '2026-09-09T01:02:03.000Z' };
 globalThis.fetch = async (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url, 'http://localhost:3000');
@@ -125,7 +127,7 @@ globalThis.fetch = async (input, init = {}) => {
         return Response.json({ error: '项目至少需要一张图片' }, { status: 400 });
       return Response.json({ revision: 1 });
     }
-    return Response.json({ items: [{ id: project.id, title: project.title, revision: 1,
+    return Response.json({ items: [{ id: project.id, title: project.title, excerpt: project.subtitle, revision: 1,
       published: project._published, position: 0 }], total: 1, page: 1, size: 20 });
   }
   if (url.pathname === `/api/admin/records/projects/items/${project.id}`)
@@ -140,7 +142,7 @@ globalThis.fetch = async (input, init = {}) => {
         return Response.json({ revision: 1 });
       }
       return Response.json({ items: directoryRecords[section].map((value, position) => ({
-        id: value.id, title: value.name, revision: directoryRevisions[section][value.id], position,
+        id: value.id, title: value.name, excerpt: value.url, revision: directoryRevisions[section][value.id], position,
       })), total: directoryRecords[section].length, page: 1, size: 20 });
     }
     if (url.pathname.startsWith(`${base}/`)) {
@@ -158,7 +160,8 @@ globalThis.fetch = async (input, init = {}) => {
   for (const [collection, value] of Object.entries(aiResources)) {
     const base = `/api/admin/records/ai/${collection}`;
     if (url.pathname === base)
-      return Response.json({ items: [{ id: value.id, title: value.title ?? value.name, revision: 1,
+      return Response.json({ items: [{ id: value.id, title: collection === 'skills' ? value.name : value.title ?? value.name,
+        excerpt: value.href, revision: 1,
         published: value._published, position: 0 }], total: 1, page: 1, size: 20 });
     if (url.pathname === `${base}/${value.id}`) return Response.json({ value, revision: 1 });
   }
@@ -183,14 +186,24 @@ globalThis.fetch = async (input, init = {}) => {
   for (const [section, collections] of Object.entries(orderedRecords)) {
     for (const [collection, value] of Object.entries(collections)) {
       const base = `/api/admin/records/${section}/${collection}`;
-      if (url.pathname === base) return Response.json({ items: [{ id: value.id, title: value.title,
-        revision: 1, published: value._published, position: 0 }], total: 1, page: 1, size: 20 });
-      if (url.pathname === `${base}/${value.id}`)
+      if (url.pathname === base) {
+        const subtitle = { tracks: 'artist', films: 'director', podcasts: 'host', travel: 'description', hobbies: 'description', books: 'author' }[section];
+        const items = [{ id: value.id, title: value.title, excerpt: subtitle ? value[subtitle] : undefined,
+          revision: 1, published: value._published, position: 0 }];
+        if (section === 'hobbies' && collection === 'items')
+          items.push({ id: 'empty-hobby', title: '空说明爱好', excerpt: '', revision: 1, published: false, position: 1 });
+        if (section === 'books' && collection === 'items')
+          items.push({ id: 'empty-book', title: '空作者书籍', excerpt: '', revision: 1, published: false, position: 1 });
+        return Response.json({ items, total: items.length, page: 1, size: 20 });
+      }
+      if (url.pathname === `${base}/${value.id}`) {
+        if (init.method === 'PUT') Object.assign(value, JSON.parse(init.body).value);
         return Response.json({ value: Object.fromEntries(Object.entries(value).reverse()), revision: 1 });
+      }
     }
   }
   if (url.pathname === '/api/admin/records/investing/entries')
-    return Response.json({ items: [{ id: investment.id, title: investment.title, revision: 1,
+    return Response.json({ items: [{ id: investment.id, title: investment.title, excerpt: investment.description, revision: 1,
       createdAt: investment.createdAt, updatedAt: investment.updatedAt,
       published: investment._published, position: 0 }], total: 1, page: 1, size: 20 });
   if (url.pathname === `/api/admin/records/investing/entries/${investment.id}`) {
@@ -568,6 +581,15 @@ try {
   await waitFor(() => assert.equal(screen.queryByText('清除筛选后可调整排序。'), null));
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: 'AI', exact: true }));
   assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['智能体', '技能 Skills', '中转站 API', '智能体状态', 'Skills分类']);
+  for (const [tab, collection, name] of [
+    ['智能体', 'agents', '原agents'], ['技能 Skills', 'skills', '原技能'],
+    ['中转站 API', 'relays', '原relays'],
+  ]) {
+    await user.click(screen.getByRole('tab', { name: tab }));
+    const row = (await screen.findByRole('button', { name })).closest('tr');
+    assert.equal(row.querySelector('td > small').textContent, `https://example.com/${collection}`);
+    if (collection === 'skills') assert.equal(screen.queryByRole('button', { name: '技能展示标题' }), null);
+  }
   await user.click(screen.getByRole('tab', { name: '智能体状态' }));
   await screen.findByRole('button', { name: '已上线' });
   await user.click(screen.getByRole('button', { name: '＋ 新增智能体状态' }));
@@ -613,10 +635,13 @@ try {
   assert.equal((await screen.findByLabelText('名称')).value, '原relays');
   assert.ok(screen.getByLabelText('站点标记'));
   assert.ok(screen.getByLabelText('Logo').closest('.admin-resource-logo'));
-  for (const [tab, label, title] of [['智能体', '名称', '原agents'], ['技能 Skills', '标题', '原技能']]) {
+  for (const [tab, label, title, stored] of [
+    ['智能体', '名称', '原agents', '原agents'],
+    ['技能 Skills', '标题', '原技能', '技能展示标题'],
+  ]) {
     await user.click(screen.getByRole('tab', { name: tab }));
     await user.click(await screen.findByRole('button', { name: title }));
-    assert.equal((await screen.findByLabelText(label)).value, title);
+    assert.equal((await screen.findByLabelText(label)).value, stored);
     if (tab === '智能体') {
       assert.ok(screen.getByLabelText('作者'));
       assert.ok(screen.getByLabelText('Logo').closest('.admin-resource-logo'));
@@ -634,6 +659,7 @@ try {
   assert.equal(screen.queryByLabelText('添加时间'), null);
   await user.click(screen.getByRole('button', { name: '← 返回列表' }));
   await screen.findByRole('button', { name: '原投资文章' });
+  assert.equal(screen.getByRole('button', { name: '原投资文章' }).closest('tr').querySelector('td > small').textContent, '投资说明');
   assert.ok(screen.getByRole('columnheader', { name: '添加时间' }));
   assert.ok(screen.getByRole('columnheader', { name: '最后更新时间' }));
   await user.click(screen.getByRole('button', { name: '原投资文章' }));
@@ -655,6 +681,7 @@ try {
   assert.equal('copy' in defaults, false);
   await user.click(within(nav).getByRole('button', { name: '项目', exact: true }));
   await screen.findByRole('button', { name: '原项目' });
+  assert.equal(screen.getByRole('button', { name: '原项目' }).closest('tr').querySelector('td > small').textContent, '项目副标题');
   await user.click(screen.getByRole('button', { name: '＋ 新增内容' }));
   const labels = () => [...window.document.querySelectorAll('.admin-form .admin-field > label, .admin-form .admin-array > legend, .admin-form .admin-check')]
     .filter((node) => !node.closest('details,.admin-story-image'))
@@ -830,6 +857,19 @@ try {
   ]) {
     await user.click(within(nav).getByRole('button', { name: sectionLabel, exact: true }));
     await user.click(screen.getByRole('tab', { name: tabLabel }));
+    const expectedSubtitle = { 音乐: '测试音乐作者', 电影: '测试导演', 播客: '测试专辑主播',
+      旅行: '旅行说明', 爱好: '爱好说明' }[sectionLabel];
+    if (tabLabel === '内容' && expectedSubtitle) {
+      const row = (await screen.findByRole('button', { name: `原${sectionLabel}` })).closest('tr');
+      assert.equal(row.querySelector('td > small').textContent, expectedSubtitle);
+      assert.equal(row.textContent.includes('不应显示的'), false);
+      if (sectionLabel === '爱好')
+        assert.equal(screen.getByRole('button', { name: '空说明爱好' }).closest('tr').querySelector('td > small').textContent, '');
+    }
+    if (sectionLabel === '书籍' && tabLabel === '内容')
+      assert.equal(screen.getByRole('button', { name: '原书籍' }).closest('tr').querySelector('td > small').textContent, '书籍作者');
+    if (sectionLabel === '书籍' && tabLabel === '内容')
+      assert.equal(screen.getByRole('button', { name: '空作者书籍' }).closest('tr').querySelector('td > small').textContent, '');
     if (['音乐', '播客', '旅行', '爱好'].includes(sectionLabel))
       assert.equal(screen.queryByRole('tab', { name: '设置' }), null);
     await user.click(screen.getByRole('button', { name: `＋ 新增${tabLabel}` }));
@@ -857,7 +897,7 @@ try {
     if (sectionLabel === '电影')
       assert.equal(screen.queryByRole('tab', { name: '设置' }), null);
     if (sectionLabel === '电影' && tabLabel === '内容') {
-      assert.equal(screen.getByLabelText('素材地址').value, '');
+      assert.equal(screen.getByLabelText('封面图').value, '');
       for (const label of ['导演', '类型', '国家', '语言']) assert.ok(screen.getByLabelText(label));
     }
     if (sectionLabel === '播客' && tabLabel === '内容') assert.ok(screen.getByLabelText('专辑主播'));
@@ -867,8 +907,16 @@ try {
     }
     if (['旅行', '爱好'].includes(sectionLabel) && tabLabel === '内容')
       assert.ok(screen.getByRole('group', { name: /^相册/ }));
-    if (sectionLabel === '旅行' && tabLabel === '内容')
-      assert.equal(screen.getByLabelText('素材地址').value, '');
+    if ((tabLabel === '歌单' || tabLabel === '书单' || tabLabel === '内容' &&
+      ['电影', '播客', '旅行', '爱好', '书籍'].includes(sectionLabel))) {
+      assert.equal(screen.getByLabelText('封面图').value, '');
+      assert.equal(screen.queryByLabelText('素材地址'), null);
+    }
+    if (['旅行', '爱好'].includes(sectionLabel) && tabLabel === '内容') {
+      await screen.findByRole('textbox', { name: '正文 Markdown' });
+      for (const mode of ['编辑', '分屏', '预览'])
+        assert.ok(screen.getByRole('button', { name: mode, exact: true }));
+    }
     const section = { 音乐: 'tracks', 电影: 'films', 播客: 'podcasts', 旅行: 'travel', 爱好: 'hobbies', 书籍: 'books' }[sectionLabel];
     const collection = tabLabel === '歌单' ? 'playlists' : 'items';
     const existing = ['内容', '歌单'].includes(tabLabel) ? orderedRecords[section]?.[collection] : null;
@@ -881,12 +929,26 @@ try {
       await screen.findByDisplayValue(existing.title);
       assert.deepEqual(order(), newOrder, `${sectionLabel}/${tabLabel} 编辑字段顺序应与新增一致`);
       if (sectionLabel === '音乐' && tabLabel === '歌单') assert.equal(screen.queryByLabelText('书封颜色'), null);
+      if (['旅行', '爱好'].includes(sectionLabel) && tabLabel === '内容') {
+        assert.ok(screen.getByLabelText('封面图'));
+        const markdown = await screen.findByRole('textbox', { name: '正文 Markdown' });
+        await user.type(markdown, `\n\n## ${sectionLabel} Markdown 测试`);
+        await user.click(screen.getByRole('button', { name: '预览', exact: true }));
+        assert.ok(screen.getByRole('heading', { name: `${sectionLabel} Markdown 测试` }));
+        await user.click(screen.getByRole('button', { name: '编辑', exact: true }));
+        await user.click(screen.getByRole('button', { name: '分屏', exact: true }));
+        await user.click(screen.getByRole('button', { name: '确认提交' }));
+        await user.click(await screen.findByRole('button', { name: existing.title }));
+        assert.ok((await screen.findByRole('textbox', { name: '正文 Markdown' })).value.includes(`${sectionLabel} Markdown 测试`));
+      }
       await user.click(screen.getByRole('button', { name: '← 返回列表' }));
     }
   }
   for (const [section, label] of [['bookmarks', '书签'], ['friends', '友链']]) {
     await user.click(within(nav).getByRole('button', { name: label, exact: true }));
-    await screen.findByRole('button', { name: section === 'bookmarks' ? '原书签' : '原友链' });
+    const directoryRow = (await screen.findByRole('button', { name: section === 'bookmarks' ? '原书签' : '原友链' })).closest('tr');
+    assert.equal(directoryRow.querySelector('td > small').textContent, `https://example.com/${section}`);
+    assert.equal(directoryRow.textContent.includes('不应显示的说明'), false);
     await user.click(screen.getByRole('button', { name: '＋ 新增内容' }));
     const fieldOrder = () => [...document.querySelectorAll('.admin-form .admin-object > .admin-fields > .admin-field > label')]
       .map((node) => node.textContent);
@@ -1020,20 +1082,20 @@ try {
     }
     render(createElement(Form));
     assert.deepEqual([...window.document.querySelectorAll('.admin-description-image .admin-field > label')]
-      .map((node) => node.textContent), ['素材地址', '图片描述']);
+      .map((node) => node.textContent), ['封面图', '图片描述']);
     assert.equal(screen.queryByLabelText('封面来源'), null);
     assert.equal(screen.getByRole('button', { name: 'AI 生成配图' }).disabled, true);
     await user.type(screen.getByLabelText('图片描述'), '薄雾中的白色灯塔');
     if (action === 'film-cover') {
-      const previousCover = screen.getByLabelText('素材地址').value;
+      const previousCover = screen.getByLabelText('封面图').value;
       failStoryImage = true;
       await user.click(screen.getByRole('button', { name: 'AI 生成配图' }));
       await screen.findByText(/模拟生成失败/);
-      assert.equal(screen.getByLabelText('素材地址').value, previousCover);
+      assert.equal(screen.getByLabelText('封面图').value, previousCover);
       failStoryImage = false;
     }
     await user.click(screen.getByRole('button', { name: 'AI 生成配图' }));
-    await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/story-generated.png'));
+    await waitFor(() => assert.equal(screen.getByLabelText('封面图').value, '/api/media/story-generated.png'));
     assert.deepEqual(calls.filter((call) => call.path === '/api/admin/ai').at(-1).body,
       { action, description: '薄雾中的白色灯塔' });
     assert.equal(screen.getByLabelText('图片描述').value, '薄雾中的白色灯塔');

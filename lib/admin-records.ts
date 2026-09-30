@@ -95,9 +95,19 @@ export async function listAdminRecords(section: Section, collection: string, inp
     const order = section === 'investing' && collection === 'entries'
       ? 'created_at DESC NULLS LAST, position, id'
       : section === 'stories' ? 'occurred_at DESC NULLS LAST, position, id' : 'position, id';
-    const excerpt = section === 'stories' ? "left(payload->>'text', 160)"
-      : section === 'slides' ? "left(payload->>'alt', 160)" : 'left(search_text, 160)';
-    const rows = await db.query(`SELECT id, title, ${excerpt} AS excerpt,
+    const listSubtitleFields: Record<string, string> = {
+      'travel.items': 'description', 'hobbies.items': 'description',
+      'podcasts.items': 'host', 'films.items': 'director', 'tracks.items': 'artist',
+      'bookmarks.items': 'url', 'friends.items': 'url', 'books.items': 'author',
+      'investing.entries': 'description', 'projects.items': 'subtitle',
+      'ai.agents': 'href', 'ai.skills': 'href', 'ai.relays': 'href',
+    };
+    const listSubtitleField = listSubtitleFields[`${section}.${collection}`];
+    const excerpt = listSubtitleField ? `left(payload->>'${listSubtitleField}', 160)`
+      : section === 'stories' ? "left(payload->>'text', 160)"
+        : section === 'slides' ? "left(payload->>'alt', 160)" : 'left(search_text, 160)';
+    const title = section === 'ai' && collection === 'skills' ? "payload->>'name'" : 'title';
+    const rows = await db.query(`SELECT id, ${title} AS title, ${excerpt} AS excerpt,
       category_id AS "categoryId", published, occurred_at AS date, position, revision,
       created_at AS "createdAt", updated_at AS "updatedAt"
       FROM cms_entries WHERE ${where} ORDER BY ${order} LIMIT $8 OFFSET $9`,
@@ -343,8 +353,7 @@ async function cleanupUnreferencedMedia(before: unknown, after: unknown) {
 
 function articleParams(value: Item) {
   return [value.slug, value.title, value.excerpt, value.body, value.categoryId,
-    String(value.date).replaceAll('.', '-'), value._published, value.cover,
-    value.coverMode, value.coverGeneratedFor];
+    value._published, value.cover, value.coverMode, value.coverGeneratedFor];
 }
 
 export async function createAdminRecord(section: Section, collection: string, value: Item) {
@@ -358,9 +367,9 @@ export async function createAdminRecord(section: Section, collection: string, va
       value = recordInput(section, collection, value, clock.rows[0].now.toISOString());
       await validateRecord(db, { section, collection }, value);
       if (section === 'writing' && collection === 'articles') {
-        await db.query(`INSERT INTO articles (slug, title, excerpt, body, category_id, published_on,
+        await db.query(`INSERT INTO articles (slug, title, excerpt, body, category_id,
           published, cover_url, cover_mode, cover_generated_for, position)
-          VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
             (SELECT coalesce(max(position) + 1, 0) FROM articles))`, articleParams(value));
       } else if (section === 'writing' && collection === 'categories') {
         await db.query('UPDATE article_categories SET position = position + 1');
@@ -414,9 +423,9 @@ export async function updateAdminRecord(key: RecordKey, value: Item, revision: n
       let updated;
       if (key.section === 'writing' && key.collection === 'articles') {
         updated = await db.query(`UPDATE articles SET slug=$1,title=$2,excerpt=$3,body=$4,
-          category_id=$5,published_on=$6::date,published=$7,cover_url=$8,
-          cover_mode=$9,cover_generated_for=$10,revision=revision+1,updated_at=now()
-          WHERE slug=$11 AND revision=$12`, [...articleParams(value), key.id, revision]);
+          category_id=$5,published=$6,cover_url=$7,
+          cover_mode=$8,cover_generated_for=$9,revision=revision+1,updated_at=now()
+          WHERE slug=$10 AND revision=$11`, [...articleParams(value), key.id, revision]);
       } else if (key.section === 'writing' && key.collection === 'categories') {
         updated = await db.query(`UPDATE article_categories SET name=$1,description=$2,
           parent_id=nullif($3,''),revision=revision+1 WHERE id=$4 AND revision=$5`,

@@ -137,14 +137,12 @@ export async function checkContentManagement({ request, origin, testUrl, default
           .format(new Date(created.data.value.createdAt)).replaceAll('-', '.');
         assert.equal(created.data.value.date, expected);
         assert.equal(edit.data.value.date, expected);
-        await db.query("UPDATE articles SET published_on='1990-01-01' WHERE slug=$1", [value.slug]);
         assert.equal((await request(path)).data.value.date, expected, '后台日期取创建时间');
         const list = await request('/api/writing');
         assert.equal(list.data.items.find((item) => item.slug === value.slug).date, expected);
         assert.ok((await getHtml(`/writing/${value.slug}`)).includes(expected), '详情日期取创建时间');
         const home = await getHtml('/');
         assert.ok(home.includes('时间验收更新'));
-        assert.equal(home.includes('1990.01.01'), false);
       }
       assert.equal((await request(path, 'DELETE', { revision: 3 })).status, 200);
     }
@@ -174,7 +172,7 @@ export async function checkContentManagement({ request, origin, testUrl, default
     for (const topics of [Array.from({ length: 7 }, (_, i) => `话题${i}`), ['重复', '重复'], [''], ['长'.repeat(41)]])
       assert.equal((await request(storyPath, 'PUT', { value: { ...storedStory, topics }, revision: 2 })).status, 400);
     assert.equal((await request(storyPath, 'DELETE', { revision: 2 })).status, 200);
-    console.log('PASS article creation-date display despite old publication date, immutable edits and story seconds/topics/image persistence');
+    console.log('PASS article creation-date display, immutable edits and story seconds/topics/image persistence');
     // Test saved empty/draft states, without touching the user's database.
     await db.query("UPDATE cms_entries SET published=false,payload=jsonb_set(payload,'{_published}','false') WHERE section='ai'");
     const emptyAi = await getHtml('/ai');

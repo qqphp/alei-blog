@@ -386,7 +386,7 @@ function DescriptionImageField({ path, value, onChange, onWorking }: {
   }
   return <div className="admin-description-image">
     <div className="admin-story-image-fields">
-      <div className="admin-field"><label htmlFor={`${path}.cover`}>素材地址</label>
+      <div className="admin-field"><label htmlFor={`${path}.cover`}>封面图</label>
         <input id={`${path}.cover`} value={cover} onChange={(event) => onChange({ ...value,
           cover: event.target.value,
           ...('coverMode' in value ? { coverMode: 'upload' } : {}),
@@ -580,10 +580,10 @@ export function Field({
   const field = path.split('.').at(-1)!;
   const blankNumeric = path === 'slides.root.width' || path === 'slides.root.height' || path === 'tracks.items.duration';
   const numeric = typeof value === 'number' || (blankNumeric && value === null);
-  if (path === 'projects.items.body')
+  if (path === 'projects.items.body' || path === 'travel.items.body' || path === 'hobbies.items.body')
     return (
       <AdminMarkdownEditor
-        label="项目正文"
+        label={path === 'projects.items.body' ? '项目正文' : '正文'}
         value={String(value ?? '')}
         onChange={onChange}
       />

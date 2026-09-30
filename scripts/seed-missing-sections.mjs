@@ -29,11 +29,11 @@ try {
     }
     if (section === 'writing') {
       for (const [position, item] of value.entries())
-        await db.query(`INSERT INTO articles (slug,title,excerpt,body,category_id,published_on,
+        await db.query(`INSERT INTO articles (slug,title,excerpt,body,category_id,
           published,cover_url,cover_mode,cover_generated_for,position,created_at)
-          VALUES ($1,$2,$3,$4,$5,$6::date,$7,$8,$9,$10,$11,$12) ON CONFLICT (slug) DO NOTHING`,
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) ON CONFLICT (slug) DO NOTHING`,
         [item.slug, item.title, item.excerpt, item.body, item.categoryId,
-          item.date.replaceAll('.', '-'), item._published, item.cover, item.coverMode,
+          item._published, item.cover, item.coverMode,
           item.coverGeneratedFor, position, historicalCreatedAt]);
       continue;
     }

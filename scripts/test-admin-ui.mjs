@@ -614,15 +614,36 @@ try {
   assert.deepEqual(legacyPlaylist.playlists[0].songs, [{ title: defaults.tracks.items[0].title, artist: defaults.tracks.items[0].artist }]);
   const travel = structuredClone(defaults.travel);
   travel.categories[0] = { ...travel.categories[0], name: '改名分类' };
-  travel.items = [...travel.items, { ...travel.items[0], id: 'new-trip', title: '新记录', description: '测试简介', body: '正文第一段\n\n正文第二段', album: ['/api/media/album-1.png'], _published: true }];
+  travel.items = [...travel.items, { ...travel.items[0], id: 'new-trip', title: '新记录', description: '测试简介',
+    body: '## 沿途记录\n\n正文第一段\n\n- 正文第二段\n\n[路线](https://example.com/route)\n\n`提示`\n\n| 地点 | 天气 |\n| --- | --- |\n| 海边 | 晴 |',
+    album: ['/api/media/album-1.png'], _published: true }];
   render(h(ContentProvider, { content: { ...defaults, travel } }, h(ActivityLibrary, { section: 'travel' })));
   assert.ok(screen.getByRole('button', { name: '改名分类' }));
   await user.type(screen.getByLabelText('搜索旅行'), '新记录');
   assert.equal(document.querySelectorAll('.activity-card').length, 1);
   await user.click(screen.getByRole('button', { name: '阅读新记录' }));
   const travelDialog = await screen.findByRole('dialog');
-  assert.ok(travelDialog.querySelector('.activity-full-text').textContent.startsWith('正文第一段\n\n正文第二段'));
+  const travelBody = travelDialog.querySelector('.activity-markdown');
+  assert.equal(travelBody.querySelector('h2').textContent, '沿途记录');
+  assert.equal(travelBody.querySelector('li').textContent, '正文第二段');
+  assert.equal(travelBody.querySelector('a').getAttribute('href'), 'https://example.com/route');
+  assert.equal(travelBody.querySelector('code').textContent, '提示');
+  assert.equal(travelBody.querySelector('table tbody td').textContent, '海边');
   assert.ok(within(travelDialog).getByRole('img', { name: '新记录 · 风景 1' }));
+  cleanup();
+  const hobbies = structuredClone(defaults.hobbies);
+  hobbies.items = [{ ...hobbies.items[0], id: 'new-hobby', title: '新爱好', description: '爱好简介',
+    body: '# 制作笔记\n\n**重点**与普通文字', _published: true }];
+  render(h(ContentProvider, { content: { ...defaults, hobbies } }, h(ActivityLibrary, { section: 'hobbies' })));
+  await user.click(screen.getByRole('button', { name: '阅读新爱好' }));
+  const hobbyDialog = await screen.findByRole('dialog');
+  assert.equal(hobbyDialog.querySelector('.activity-markdown h1').textContent, '制作笔记');
+  assert.equal(hobbyDialog.querySelector('.activity-markdown strong').textContent, '重点');
+  cleanup();
+  hobbies.items[0].body = '';
+  render(h(ContentProvider, { content: { ...defaults, hobbies } }, h(ActivityLibrary, { section: 'hobbies' })));
+  await user.click(screen.getByRole('button', { name: '阅读新爱好' }));
+  assert.equal((await screen.findByRole('dialog')).querySelector('.activity-markdown p').textContent, '暂无详细内容。');
   cleanup();
   const bookDoc = structuredClone(defaults.books);
   bookDoc.items = [];

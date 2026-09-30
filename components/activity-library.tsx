@@ -1,6 +1,8 @@
 'use client';
 import { useState } from 'react';
 import Image from 'next/image';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { Compass, Sparkles } from 'lucide-react';
 import { useContent } from './content-provider';
 import {
@@ -102,7 +104,11 @@ export function ActivityLibrary({
                   </div>
                   <DialogDescription>{item.description}</DialogDescription>
                   <div className="activity-full-text">
-                    {item.body || '暂无详细内容。'}
+                    <div className="activity-markdown">
+                      {item.body
+                        ? <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{item.body}</ReactMarkdown>
+                        : <p>暂无详细内容。</p>}
+                    </div>
                     {section === 'travel' && item.album.length > 0 && (
                       <section
                         className="activity-album"

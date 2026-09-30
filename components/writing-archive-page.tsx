@@ -97,7 +97,7 @@ export default function WritingPage({ initial }: { initial: WritingArchive & { c
                 '全部文章'}
             </span>
             <span>
-              {"按最新发布"}
+              {"按创建时间"}
             </span>
           </div>
           {archive.items.map((entry) => (

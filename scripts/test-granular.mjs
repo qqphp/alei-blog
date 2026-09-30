@@ -31,7 +31,7 @@ try {
     const db = new pg.Client({ connectionString: testUrl.toString() });
     await db.connect();
     try {
-      const articles = await db.query('SELECT slug, position, published, published_on, cover_url, body, updated_at FROM articles ORDER BY slug');
+      const articles = await db.query('SELECT slug, position, published, created_at, cover_url, body, updated_at FROM articles ORDER BY slug');
       const categories = await db.query('SELECT id, position, parent_id FROM article_categories ORDER BY id');
       const entries = await db.query('SELECT section, collection, id, position, published, occurred_at, payload, updated_at FROM cms_entries ORDER BY section, collection, id');
       const sections = await db.query('SELECT section, value FROM cms_sections ORDER BY section');
@@ -291,6 +291,9 @@ try {
   assert.equal((await request(skillBase, 'POST', { value: { ...skill, categoryId: '' } })).status, 400);
   assert.equal((await request(skillBase, 'POST', { value: { ...skill, categoryId: 'missing' } })).status, 400);
   assert.equal((await request(skillBase, 'POST', { value: skill })).status, 200);
+  const skillSummary = (await request(`${skillBase}?q=${encodeURIComponent(skill.name)}`)).data.items.find((item) => item.id === skill.id);
+  assert.equal(skillSummary?.title, skill.name, '技能列表显示名称而非标题');
+  assert.equal(skillSummary?.excerpt, skill.href);
   assert.equal((await request(skillCategoryPath(skillChild), 'DELETE', { revision: 1 })).status, 400);
   const skillDetail = await request(`${skillBase}/${skill.id}`);
   assert.equal((await request(`${skillBase}/${skill.id}`, 'PUT', { value: { ...skillDetail.data.value,
@@ -326,6 +329,9 @@ try {
   const agentBase = '/api/admin/records/ai/agents';
   assert.equal((await request(agentBase, 'POST', { value: { ...agentWithStatus, status: '' } })).status, 400);
   assert.equal((await request(agentBase, 'POST', { value: agentWithStatus })).status, 200);
+  const agentSummary = (await request(`${agentBase}?q=${encodeURIComponent(agentWithStatus.name)}`)).data.items.find((item) => item.id === agentWithStatus.id);
+  assert.equal(agentSummary?.title, agentWithStatus.name);
+  assert.equal(agentSummary?.excerpt, agentWithStatus.href);
   const aiPage = await (await fetch(`${origin}/ai`)).text();
   assert.ok(aiPage.includes('状态验证智能体') && aiPage.includes('维护完成'),
     '前台应接收智能体及其自定义状态名称');
@@ -436,11 +442,82 @@ try {
   assert.equal((await request(storyPath(secondStory), 'DELETE', { revision: 2 })).status, 200);
 
   const project = { ...defaults.projects.items[0], id: `granular-project-${crypto.randomUUID().slice(0, 8)}`,
-    title: '逐条测试项目', _published: false };
+    title: '逐条测试项目', subtitle: '列表项目副标题', _published: false };
   const projectCreated = await request('/api/admin/records/projects/items', 'POST', { value: project });
   assert.equal(projectCreated.status, 200, JSON.stringify(projectCreated.data));
+  const projectSummary = (await request(`/api/admin/records/projects/items?q=${encodeURIComponent(project.title)}`)).data.items.find((item) => item.id === project.id);
+  assert.equal(projectSummary?.title, project.title);
+  assert.equal(projectSummary?.excerpt, project.subtitle);
   assert.equal((await request(`/api/admin/records/projects/items/${project.id}`, 'DELETE',
     { revision: 1 })).status, 200);
+
+  const bookBase = '/api/admin/records/books/items';
+  const bookCategories = (await request('/api/admin/options/books')).data.categories;
+  const book = { ...defaults.books.items[0], id: `list-book-${crypto.randomUUID().slice(0, 8)}`,
+    title: '列表测试书籍', author: '列表书籍作者', categoryId: bookCategories[0].id, _published: false };
+  const addedBook = await request(bookBase, 'POST', { value: book });
+  assert.equal(addedBook.status, 200, JSON.stringify(addedBook.data));
+  const bookSummary = (await request(`${bookBase}?q=${encodeURIComponent(book.title)}`)).data.items.find((item) => item.id === book.id);
+  assert.equal(bookSummary?.title, book.title);
+  assert.equal(bookSummary?.excerpt, book.author);
+  assert.equal((await request(`${bookBase}/${book.id}`, 'PUT', {
+    value: { ...addedBook.data.value, author: '' }, revision: 1 })).status, 200);
+  const emptyBookSummary = (await request(`${bookBase}?q=${encodeURIComponent(book.title)}`)).data.items.find((item) => item.id === book.id);
+  assert.equal(emptyBookSummary?.excerpt, '');
+  assert.equal((await request(`${bookBase}/${book.id}`, 'DELETE', { revision: 2 })).status, 200);
+
+  const investmentBase = '/api/admin/records/investing/entries';
+  const investmentSections = (await request('/api/admin/options/investing')).data.sections;
+  const investment = { ...defaults.investing.sections[0].entries[0],
+    id: `list-investment-${crypto.randomUUID().slice(0, 8)}`, title: '列表测试投资',
+    description: '列表投资说明', sectionId: investmentSections[0].id, _published: false };
+  const addedInvestment = await request(investmentBase, 'POST', { value: investment });
+  assert.equal(addedInvestment.status, 200, JSON.stringify(addedInvestment.data));
+  const investmentSummary = (await request(`${investmentBase}?q=${encodeURIComponent(investment.title)}`)).data.items.find((item) => item.id === investment.id);
+  assert.equal(investmentSummary?.title, investment.title);
+  assert.equal(investmentSummary?.excerpt, investment.description);
+  assert.equal((await request(`${investmentBase}/${investment.id}`, 'DELETE', { revision: 1 })).status, 200);
+
+  const relayBase = '/api/admin/records/ai/relays';
+  const relay = { ...defaults.ai.relays[0], id: `list-relay-${crypto.randomUUID().slice(0, 8)}`,
+    name: '列表测试中转站', href: 'https://example.com/relay-summary', _published: false };
+  const addedRelay = await request(relayBase, 'POST', { value: relay });
+  assert.equal(addedRelay.status, 200, JSON.stringify(addedRelay.data));
+  const relaySummary = (await request(`${relayBase}?q=${encodeURIComponent(relay.name)}`)).data.items.find((item) => item.id === relay.id);
+  assert.equal(relaySummary?.title, relay.name);
+  assert.equal(relaySummary?.excerpt, relay.href);
+  assert.equal((await request(`${relayBase}/${relay.id}`, 'DELETE', { revision: 1 })).status, 200);
+
+  for (const [section, field, subtitle] of [
+    ['tracks', 'artist', '列表音乐作者'], ['films', 'director', '列表电影导演'],
+    ['podcasts', 'host', '列表专辑主播'], ['travel', 'description', '列表旅行说明'],
+    ['hobbies', 'description', '列表爱好说明'],
+  ]) {
+    const base = `/api/admin/records/${section}/items`;
+    const options = (await request(`/api/admin/options/${section}`)).data;
+    const value = { ...defaults[section].items[0], id: `${section}-${crypto.randomUUID().slice(0, 8)}`,
+      title: `列表字段测试${section}`, [field]: subtitle,
+      ...(section === 'tracks' ? { moodId: options.scenes[0].id } : { categoryId: options.categories[0].id }),
+      ...(['travel', 'hobbies'].includes(section) ? { body: '不应显示在列表中的正文' } : {}),
+      _published: false };
+    const created = await request(base, 'POST', { value });
+    assert.equal(created.status, 200, JSON.stringify(created.data));
+    const list = await request(`${base}?q=${encodeURIComponent(value.title)}`);
+    const summary = list.data.items.find((item) => item.id === value.id);
+    assert.equal(summary?.title, value.title);
+    assert.equal(summary?.excerpt, subtitle);
+    if ('body' in value) assert.equal(JSON.stringify(summary).includes(value.body), false);
+    let revision = 1;
+    if (section === 'hobbies') {
+      const updated = await request(`${base}/${value.id}`, 'PUT', {
+        value: { ...created.data.value, description: '' }, revision });
+      assert.equal(updated.status, 200, JSON.stringify(updated.data));
+      revision++;
+      const empty = await request(`${base}?q=${encodeURIComponent(value.title)}`);
+      assert.equal(empty.data.items.find((item) => item.id === value.id)?.excerpt, '');
+    }
+    assert.equal((await request(`${base}/${value.id}`, 'DELETE', { revision })).status, 200);
+  }
 
   for (const section of ['bookmarks', 'friends']) {
     const base = `/api/admin/records/${section}/items`;
@@ -449,6 +526,9 @@ try {
       initials: '新', tags: ['首个标签', '第二标签'], _published: false };
     const added = await request(base, 'POST', { value });
     assert.equal(added.status, 200, JSON.stringify(added.data));
+    const summary = (await request(`${base}?q=${encodeURIComponent(value.name)}`)).data.items.find((item) => item.id === value.id);
+    assert.equal(summary?.title, value.name);
+    assert.equal(summary?.excerpt, value.url);
     const path = `${base}/${value.id}`;
     const detail = await request(path);
     assert.equal(detail.data.value.initials, '新');
