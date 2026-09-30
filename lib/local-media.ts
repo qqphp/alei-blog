@@ -38,6 +38,19 @@ export async function saveLocalMedia(
   if (!response.ok) throw new Error('保存文件到本地素材库失败。');
 }
 
+export async function convertGeneratedImage(data: Uint8Array, contentType: string) {
+  const response = await mediaRequest('/images/webp', {
+    method: 'POST',
+    headers: { 'Content-Type': contentType },
+    body: data as BodyInit,
+  });
+  if (!response.ok) throw new Error('生成图片转为 WebP 失败。');
+  const bytes = new Uint8Array(await response.arrayBuffer());
+  if (!bytes.length || bytes.length > 20 * 1024 * 1024)
+    throw new Error('生成图片转为 WebP 后超过大小限制。');
+  return bytes;
+}
+
 export async function deleteLocalMedia(key: string) {
   const response = await mediaRequest(`/media/${encodeURIComponent(key)}`, {
     method: 'DELETE',

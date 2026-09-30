@@ -155,44 +155,6 @@ export function AdminAiSettings({
               />
             </div>
           ))}
-          <div className="admin-field">
-            <label htmlFor="ai-image-output-format">图片输出格式</label>
-            <select
-              id="ai-image-output-format"
-              value={value.imageOutputFormat}
-              onChange={(event) =>
-                onChange({
-                  ...value,
-                  imageOutputFormat: event.target.value as
-                    | 'png'
-                    | 'jpeg'
-                    | 'webp',
-                })
-              }
-            >
-              <option value="webp">WebP</option>
-              <option value="jpeg">JPEG</option>
-              <option value="png">PNG（不支持有损压缩）</option>
-            </select>
-          </div>
-          <div className="admin-field">
-            <label htmlFor="ai-image-compression">图片压缩质量</label>
-            <input
-              id="ai-image-compression"
-              type="number"
-              min={1}
-              max={100}
-              step={1}
-              value={value.imageCompression}
-              onChange={(event) =>
-                onChange({
-                  ...value,
-                  imageCompression: Number(event.target.value),
-                })
-              }
-            />
-            <small>1 最小、100 最大；WebP 和 JPEG 生效。</small>
-          </div>
           <div className="admin-ai-checks admin-wide">
             <button
               type="button"
@@ -267,7 +229,7 @@ export function AdminAiSettings({
         </div>
         <p>
           封面通过 /images/generations 生成，支持返回 Base64 图片或 HTTPS
-          图片地址。生成请求会使用上面的格式和压缩质量，生成后自动存入本地素材库；失败不替换原封面，也不自动重试。
+          图片地址。生成结果会以质量 80 转为 WebP 并存入本地素材库；失败不替换原封面，也不自动重试。
         </p>
       </Tabs.Panel>
       <Tabs.Panel value="projects">

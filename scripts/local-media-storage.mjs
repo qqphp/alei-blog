@@ -9,6 +9,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { resolve } from 'node:path';
+import sharp from 'sharp';
 
 const keyPattern = /^[a-f0-9-]+\.(png|jpg|gif|webp|mp3|wav)$/;
 const contentTypes = {
@@ -73,6 +74,35 @@ export async function startLocalMediaStorage() {
     }
     try {
       const url = new URL(request.url || '/', 'http://localhost');
+      if (url.pathname === '/images/webp') {
+        if (request.method !== 'POST') {
+          response.writeHead(405).end();
+          return;
+        }
+        if (!['image/png', 'image/jpeg', 'image/webp'].includes(request.headers['content-type'])) {
+          response.writeHead(400).end();
+          return;
+        }
+        const data = await readBody(request, 20 * 1024 * 1024);
+        if (!data.length) {
+          response.writeHead(400).end();
+          return;
+        }
+        let webp;
+        try {
+          webp = await sharp(data).rotate().webp({ quality: 80 }).toBuffer();
+        } catch {
+          response.writeHead(422).end();
+          return;
+        }
+        if (webp.length > 20 * 1024 * 1024) {
+          response.writeHead(413).end();
+          return;
+        }
+        response.writeHead(200, { 'Content-Type': 'image/webp', 'Content-Length': webp.length });
+        response.end(webp);
+        return;
+      }
       const key = decodeURIComponent(url.pathname.slice('/media/'.length));
       if (!url.pathname.startsWith('/media/') || !keyPattern.test(key)) {
         response.writeHead(404).end();

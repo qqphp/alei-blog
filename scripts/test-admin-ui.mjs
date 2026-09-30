@@ -306,6 +306,8 @@ try {
   await user.type(screen.getByLabelText('文章封面风格'), ' 新风格');
   await user.click(screen.getByRole('tab', { name: '模型配置' }));
   assert.ok(screen.getByLabelText('API Base URL'));
+  assert.equal(screen.queryByLabelText('图片输出格式'), null);
+  assert.equal(screen.queryByLabelText('图片压缩质量'), null);
   await user.click(screen.getByRole('tab', { name: '写作配置' }));
   assert.equal(screen.getByLabelText('文章封面风格').value, '纸艺 新风格');
   assert.equal(screen.getByLabelText('文章封面尺寸').value, '2048x1152');
@@ -575,7 +577,7 @@ try {
   const { migrateFilms } = await import('../lib/film-content.ts');
   const { musicSample, migrateMusic, publicMusic } = await import('../lib/music-content.ts');
   const { validateContent: validateCollections } = await import('../lib/cms-validation.ts');
-  const { configScopes } = await import('../lib/admin-sections.ts');
+  const { configKeys, configScopes } = await import('../lib/admin-sections.ts');
   const noImageProject = { ...defaults.projects.items[0], id: 'project-without-image', title: '测试项目', images: [], _published: true };
   assert.throws(() => validateCollections('projects', { ...defaults.projects, items: [noImageProject] }), /项目至少需要一张图片/);
   validateCollections('projects', { ...defaults.projects, items: [{ ...noImageProject, images: [defaults.projects.items[0].images[0]] }] });
@@ -586,6 +588,8 @@ try {
   validateCollections('tracks', { ...musicSample,
     items: [{ ...musicSample.items[0], duration: 49 }] });
   assert.deepEqual(configScopes('films'), []);
+  assert.ok(!configKeys('aiSettings', 'root').includes('imageOutputFormat'));
+  assert.ok(!configKeys('aiSettings', 'root').includes('imageCompression'));
   validateCollections('aiSettings', defaults.aiSettings);
   assert.throws(() => validateCollections('aiSettings', {
     ...defaults.aiSettings, filmCoverPrompt: '电影名称：{{title}}',

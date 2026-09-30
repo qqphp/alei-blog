@@ -60,8 +60,6 @@ export const defaults = {
     baseUrl: 'https://api.teamorouter.com/v1',
     textModel: 'gpt-5.4-mini',
     imageModel: 'gpt-image-2',
-    imageOutputFormat: 'webp' as 'png' | 'jpeg' | 'webp',
-    imageCompression: 80,
     coverSize: '1536x1024',
     coverStyle:
       '现代编辑插画，简洁构图，温暖纸张质感，墨绿与米白为主色，少量暖金色点缀',

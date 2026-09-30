@@ -292,10 +292,6 @@ export function validateContent(key: Section, value: unknown) {
     validateProviderUrl(settings.baseUrl);
     if (!settings.textModel.trim() || !settings.imageModel.trim())
       throw new Error('请填写模型名称');
-    if (!['png', 'jpeg', 'webp'].includes(settings.imageOutputFormat))
-      throw new Error('图片输出格式无效');
-    if (!Number.isInteger(settings.imageCompression) || settings.imageCompression < 1 || settings.imageCompression > 100)
-      throw new Error('图片压缩质量须为 1 到 100 的整数');
     if (
       !settings.coverPrompt.includes('{{title}}') ||
       !settings.coverPrompt.includes('{{excerpt}}')

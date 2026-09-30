@@ -2,7 +2,7 @@ import { bindings, getDocuments } from './cms-server';
 import { readLimitedBody } from './admin-auth';
 import { validateProviderUrl } from './cms-validation';
 import { coverInput } from './article-categories';
-import { saveLocalMedia } from './local-media';
+import { convertGeneratedImage, saveLocalMedia } from './local-media';
 import type { Content } from './cms-defaults';
 
 function aiFetch(url: string | URL, init: RequestInit) {
@@ -100,10 +100,6 @@ export async function generateCover(input: {
     model: settings.imageModel,
     prompt,
     n: 1,
-    output_format: settings.imageOutputFormat,
-    ...(settings.imageOutputFormat !== 'png'
-      ? { output_compression: settings.imageCompression }
-      : {}),
     ...(size ? { size } : {}),
   }, settings);
   const first = result.data?.[0];
@@ -137,19 +133,20 @@ export async function generateCover(input: {
     throw new Error('生成图片超过大小限制。');
   const ascii = (start: number, end: number) =>
     String.fromCharCode(...bytes.slice(start, end));
-  const format =
+  const contentType =
     bytes[0] === 137 && ascii(1, 4) === 'PNG'
-      ? ['png', 'image/png']
+      ? 'image/png'
       : bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
-        ? ['jpg', 'image/jpeg']
+        ? 'image/jpeg'
         : ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP'
-          ? ['webp', 'image/webp']
+          ? 'image/webp'
           : null;
-  if (!format)
+  if (!contentType)
     throw new Error('模型返回的图片格式不受支持，请使用 PNG、JPEG 或 WebP。');
-  const key = `${crypto.randomUUID()}.${format[0]}`;
-  await saveLocalMedia(key, bytes, {
-    contentType: format[1],
+  const webp = await convertGeneratedImage(bytes, contentType);
+  const key = `${crypto.randomUUID()}.webp`;
+  await saveLocalMedia(key, webp, {
+    contentType: 'image/webp',
     name: `${(input.description ?? input.title ?? '').slice(0, 80)} · AI${input.action === 'story-image' || input.action === 'project-cover' ? '配图' : '封面'}`,
     source: 'ai',
   });
