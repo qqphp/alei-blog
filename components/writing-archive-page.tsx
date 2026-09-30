@@ -1,4 +1,6 @@
 'use client';
+import { contentPageSizes } from '@/lib/content-page-sizes';
+
 import { WritingCategoryTree } from '@/components/writing-category-tree';
 import {
   ContentPagination,
@@ -142,7 +144,7 @@ export default function WritingPage({ initial }: { initial: WritingArchive & { c
             itemCount={archive.total}
             itemLabel="篇文章"
             page={page}
-            pageSize={10}
+            pageSize={contentPageSizes.writing}
             onPageChange={setPage}
           />
         </div>

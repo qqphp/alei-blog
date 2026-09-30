@@ -1,4 +1,6 @@
 'use client';
+import { contentPageSizes } from '@/lib/content-page-sizes';
+
 import {
   ContentPagination,
 } from '@/components/content-pagination';
@@ -145,7 +147,7 @@ export default function StoriesPage({ initial }: { initial: StoryArchive }) {
             itemCount={archive.total}
             itemLabel="条说说"
             page={page}
-            pageSize={10}
+            pageSize={contentPageSizes.stories}
             onPageChange={setPage}
           />
         </div>

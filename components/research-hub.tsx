@@ -1,4 +1,7 @@
 'use client';
+import { contentPageSizes } from '@/lib/content-page-sizes';
+import { ContentPagination, paginateItems } from '@/components/content-pagination';
+
 
 import { InvestmentPond } from '@/components/investment-pond';
 import { useContent } from '@/components/content-provider';
@@ -17,6 +20,7 @@ const investmentIcons: Record<string, LucideIcon> = {
 export function ResearchHub() {
   const { investing } = useContent();
   const [category, setCategory] = useState('all');
+  const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const sectionsForDisplay = investing.sections;
   const investmentEntries = newestCreatedFirst(investing.sections
@@ -26,7 +30,8 @@ export function ResearchHub() {
       createdAt: entry.createdAt,
       entry,
     }))));
-  const activeEntry = investmentEntries.find((item) => item.id === selectedId) ?? investmentEntries[0];
+  const paginated = paginateItems(investmentEntries, page, contentPageSizes.investing);
+  const activeEntry = paginated.items.find((item) => item.id === selectedId) ?? paginated.items[0];
 
   return (
     <div className="research-hub research-investing">
@@ -39,7 +44,7 @@ export function ResearchHub() {
               const Icon = investmentIcons[item.id] ?? BookOpen;
               const entryCount = item.entries.length;
               return (
-                <button className={`investment-topic investment-topic-${item.id}`} type="button" key={item.id} aria-pressed={category === item.id} onClick={() => { setCategory(category === item.id ? 'all' : item.id); setSelectedId(null); }}>
+                <button className={`investment-topic investment-topic-${item.id}`} type="button" key={item.id} aria-pressed={category === item.id} onClick={() => { setCategory(category === item.id ? 'all' : item.id); setSelectedId(null); setPage(1); }}>
                   <span className="investment-topic-index">{String(index + 1).padStart(2, '0')}</span>
                   <Icon className="investment-topic-icon" size={19} strokeWidth={1.6} aria-hidden="true" />
                   <span className="investment-topic-copy"><strong>{item.title}</strong><small>{entryCount ? `${entryCount} 篇笔记` : '持续整理中'}</small></span>
@@ -50,14 +55,17 @@ export function ResearchHub() {
 
       <section id="research-library" className="research-library investment-library" aria-label="研究目录">
           <div className="investment-reader">
+            <div className="investment-directory">
             <nav className="investment-article-list" aria-label="投资文章列表">
-              {investmentEntries.map(({ id, entry }) => (
+              {paginated.items.map(({ id, entry }) => (
                 <button type="button" key={id} aria-pressed={activeEntry?.id === id} aria-controls="investment-article" onClick={() => setSelectedId(id)}>
                   {entry.title}
                 </button>
               ))}
               {!investmentEntries.length && <p className="investment-empty">暂无文章</p>}
             </nav>
+            <ContentPagination ariaLabel="投资目录分页" itemCount={investmentEntries.length} itemLabel="篇笔记" page={paginated.currentPage} pageSize={contentPageSizes.investing} onPageChange={(nextPage) => { setPage(nextPage); setSelectedId(null); }} />
+            </div>
             <article id="investment-article" className="investment-article" aria-labelledby={activeEntry ? 'investment-article-title' : undefined}>
               {activeEntry ? (
                 <>

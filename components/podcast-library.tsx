@@ -123,7 +123,6 @@ export function PodcastLibrary() {
                 ) : (
                   <div className="podcast-cover-empty">
                     <Mic2 size={36} />
-                    <span>声音，等待被听见</span>
                   </div>
                 )}
               </div>
@@ -133,11 +132,16 @@ export function PodcastLibrary() {
                     (category) => category.id === item.categoryId,
                   )?.name ?? '未分类'}
                 </span>
-                <h3 title={item.title}>{item.title}</h3>
+                <h3>{item.title}</h3>
                 <p className="podcast-host">
                   <Mic2 size={14} />
                   <span title={item.host}>{item.host || '主播未填写'}</span>
                 </p>
+                <p className="podcast-summary">
+                  {item.description || '暂无节目简介。'}
+                </p>
+              </div>
+              <div className="podcast-card-footer">
                 <Dialog>
                   <DialogTrigger
                     className="podcast-description-button"

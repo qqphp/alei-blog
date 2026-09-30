@@ -64,6 +64,9 @@
 .investment-entry-overline { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font: .58rem ui-monospace, monospace; }
 .investment-entry-overline .research-entry-tag { color: var(--lime); font: .7rem Arial, 'Microsoft YaHei', sans-serif; }
 .investment-reader { display: grid; grid-template-columns: 260px minmax(0, 1fr); align-items: start; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.investment-directory { min-width: 0; padding-right: 20px; }
+.investment-directory .content-pagination { flex-direction: column; align-items: stretch; gap: 12px; }
+.investment-directory .content-pagination button { flex: 1; min-width: 0; }
 .investment-article-list { display: block; min-width: 0; padding: 14px 20px 14px 0; }
 .investment-article-list button { display: block; width: 100%; padding: 13px 15px; border: 0; border-left: 2px solid transparent; background: transparent; color: var(--muted); text-align: left; font: inherit; font-size: .8rem; line-height: 1.7; overflow-wrap: anywhere; cursor: pointer; }
 .investment-article-list button:hover { color: var(--ink); background: color-mix(in srgb, var(--lime) 3%, transparent); }

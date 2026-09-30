@@ -1,4 +1,7 @@
 'use client';
+import { contentPageSizes } from '@/lib/content-page-sizes';
+import { ContentPagination, paginateItems } from '@/components/content-pagination';
+
 import { useState } from 'react';
 import Image from 'next/image';
 import { ArrowUpRight, Search } from 'lucide-react';
@@ -35,12 +38,14 @@ function ListCover({ list }: { list: BookList }) {
 
 export function BooklistGallery({ lists }: { lists: BookList[] }) {
   const [query, setQuery] = useState('');
+  const [page, setPage] = useState(1);
   const [opened, setOpened] = useState<BookList | null>(null);
   const filtered = lists.filter((list) =>
     `${list.title} ${list.description} ${list.entries.map((entry) => `${entry.title} ${entry.author}`).join(' ')}`
       .toLowerCase()
       .includes(query.trim().toLowerCase()),
   );
+  const paginated = paginateItems(filtered, page, contentPageSizes.booklists);
   return (
     <section className="booklist-gallery" aria-label="主题书单">
       <div className="booklist-toolbar">
@@ -58,12 +63,12 @@ export function BooklistGallery({ lists }: { lists: BookList[] }) {
             aria-label="搜索主题书单"
             placeholder="书单、书名、作者"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => { setQuery(event.target.value); setPage(1); }}
           />
         </label>
       </div>
       <div className="booklist-card-grid">
-        {filtered.map((list, index) => (
+        {paginated.items.map((list, index) => (
           <button
             type="button"
             className="booklist-card"
@@ -74,7 +79,7 @@ export function BooklistGallery({ lists }: { lists: BookList[] }) {
             <ListCover list={list} />
             <div className="booklist-card-copy">
               <div className="booklist-card-meta">
-                <span>书单 / {String(index + 1).padStart(2, '0')}</span>
+                <span>书单 / {String((paginated.currentPage - 1) * contentPageSizes.booklists + index + 1).padStart(2, '0')}</span>
                 <span>{list.entries.length} 本书</span>
               </div>
               <h3>{list.title}</h3>
@@ -92,12 +97,13 @@ export function BooklistGallery({ lists }: { lists: BookList[] }) {
             {lists.length ? '没有找到匹配的书单。' : '暂无发布的主题书单。'}
           </p>
           {query && (
-            <button type="button" onClick={() => setQuery('')}>
+            <button type="button" onClick={() => { setQuery(''); setPage(1); }}>
               清空搜索
             </button>
           )}
         </div>
       )}
+      <ContentPagination ariaLabel="主题书单分页" itemCount={filtered.length} itemLabel="份书单" page={paginated.currentPage} pageSize={contentPageSizes.booklists} onPageChange={setPage} />
       <Dialog
         open={!!opened}
         onOpenChange={(open) => {

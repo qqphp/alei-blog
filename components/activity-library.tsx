@@ -34,7 +34,10 @@ export function ActivityLibrary({
   const pages = Math.max(1, Math.ceil(filtered.length / 12));
   const current = Math.min(page, pages);
   return (
-    <section className="activity-library" aria-label={`${label}内容`}>
+    <section
+      className={`activity-library activity-library-${section}`}
+      aria-label={`${label}内容`}
+    >
       <div className="activity-toolbar">
         <div className="activity-filters" aria-label={`${label}分类`}>
           {[{ id: '', name: '全部' }, ...doc.categories].map((item) => (
@@ -85,14 +88,14 @@ export function ActivityLibrary({
                   (category) => category.id === item.categoryId,
                 )?.name ?? '未分类'}
               </span>
-              <h2 title={item.title}>{item.title}</h2>
+              <h2>{item.title}</h2>
               <p>{item.description || '暂无简介'}</p>
               <Dialog>
                 <DialogTrigger
                   className="activity-open"
                   aria-label={`阅读${item.title}`}
                 >
-                  {section === 'travel' ? '阅读旅行记录' : '查看内容与步骤'} ↗
+                  {section === 'travel' ? '阅读旅行记录' : '查看详情'} ↗
                 </DialogTrigger>
                 <DialogContent
                   className="activity-dialog"

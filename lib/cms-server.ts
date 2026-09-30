@@ -1,3 +1,4 @@
+import { contentPageSizes } from './content-page-sizes';
 import { migrateActivities } from './activity-content';
 import { migrateBooks } from './book-content';
 import { booklists as defaultBooklists } from './books';
@@ -269,7 +270,7 @@ export async function getRecentProjects(limit: number) {
   return saved ?? newestProjectsFirst(defaults.projects.items.filter((item) => item._published)).slice(0, limit);
 }
 
-export async function getWritingArchive(query = '', group = '', page = 1, pageSize = 10): Promise<WritingArchive & { categories: typeof defaults.categories }> {
+export async function getWritingArchive(query = '', group = '', page = 1, pageSize: number = contentPageSizes.writing): Promise<WritingArchive & { categories: typeof defaults.categories }> {
   const requestedPage = Math.max(1, Math.trunc(page));
   const search = query.trim().toLowerCase();
   const saved = await withDatabase(async (db) => {
@@ -333,7 +334,7 @@ export async function getStoryArchive(page = 1, period?: number): Promise<StoryA
       await db.query<{ payload: typeof defaults.stories[number] }>(`SELECT payload FROM cms_entries
         WHERE section = 'stories' AND collection = 'root' AND published
         ORDER BY occurred_at DESC NULLS LAST, id LIMIT $1 OFFSET $2`,
-      [10, (requestedPage - 1) * 10]),
+      [contentPageSizes.stories, (requestedPage - 1) * contentPageSizes.stories]),
     ];
     const latestDate = latest.rows[0].date;
     const latestLocal = latestDate ? new Date(latestDate.getTime() + 8 * 3600000) : null;
@@ -373,7 +374,7 @@ export async function getStoryArchive(page = 1, period?: number): Promise<StoryA
   const year = Math.floor(current / 12);
   const month = current % 12 + 1;
   return {
-    items: stories.slice((requestedPage - 1) * 10, requestedPage * 10),
+    items: stories.slice((requestedPage - 1) * contentPageSizes.stories, requestedPage * contentPageSizes.stories),
     total: stories.length, yearlyCount: stories.filter((story) => story.date.startsWith(`${year}-`)).length,
     latestPeriod, calendar: monthSummary(stories.map((story) => story.date), year, month),
   };

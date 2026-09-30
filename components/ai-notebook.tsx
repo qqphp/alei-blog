@@ -1,4 +1,7 @@
 'use client';
+import { contentPageSizes } from '@/lib/content-page-sizes';
+import { ContentPagination, paginateItems } from '@/components/content-pagination';
+
 
 import { useRef, useState } from 'react';
 import { Tabs } from '@base-ui/react/tabs';
@@ -234,13 +237,15 @@ function PianoBoard() {
 
 function AgentSection() {
   const { ai: { agents, agentStatuses } } = useContent();
+  const [page, setPage] = useState(1);
+  const paginated = paginateItems(agents, page, contentPageSizes.agents);
   const statusNames = new Map(agentStatuses.map((item) => [item.id, item.name]));
   const [failedLogos, setFailedLogos] = useState<string[]>([]);
 
   return (
     <section id="ai-agents" className="ai-section" aria-label="智能体 AI Agent">
       <div className="ai-agent-grid">
-        {agents.map((agent) => (
+        {paginated.items.map((agent) => (
           <article className="ai-agent-card" key={agent.id}>
             <div className="ai-agent-top">
               <span className="ai-agent-logo" aria-hidden="true">
@@ -273,6 +278,7 @@ function AgentSection() {
           </article>
         ))}
       </div>
+      <ContentPagination ariaLabel="智能体分页" itemCount={agents.length} itemLabel="个智能体" page={paginated.currentPage} pageSize={contentPageSizes.agents} onPageChange={setPage} />
       {!agents.length && (
         <p className="ai-empty">暂无智能体内容。</p>
       )}
@@ -287,6 +293,8 @@ function AgentSection() {
 function SkillsSection() {
   const { ai: { skills: aiSkills, skillCategories } } = useContent();
   const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const changeCategory = (value: string | null) => { setCategoryFilter(value); setPage(1); };
   const categoryNames = new Map(skillCategories.map((item) => [item.id, item.name]));
   const category = skillCategories.find((item) => item.id === categoryFilter);
   const children = category && !category.parentId
@@ -294,6 +302,7 @@ function SkillsSection() {
   const skills = aiSkills.filter((skill) => categoryFilter === null ||
     (categoryFilter === '' ? !categoryNames.has(skill.categoryId) :
       skill.categoryId === categoryFilter || children.includes(skill.categoryId)));
+  const paginated = paginateItems(skills, page, contentPageSizes.skills);
   const count = (id: string) => aiSkills.filter((skill) => skill.categoryId === id ||
     skillCategories.some((item) => item.parentId === id && item.id === skill.categoryId)).length;
 
@@ -301,30 +310,30 @@ function SkillsSection() {
     <section id="ai-skills" className="ai-section" aria-label="技能 Skills">
       <div className="ai-skill-layout">
         <nav className="ai-skill-categories" aria-label="技能分类">
-          <button type="button" aria-pressed={categoryFilter === null} onClick={() => setCategoryFilter(null)}>
+          <button type="button" aria-pressed={categoryFilter === null} onClick={() => changeCategory(null)}>
             <span>全部</span><small>{aiSkills.length}</small>
           </button>
           {skillCategories.filter((item) => !item.parentId).map((parent) => (
             <div className="ai-cat-group" key={parent.id}>
-              <button type="button" aria-pressed={categoryFilter === parent.id} onClick={() => setCategoryFilter(parent.id)}>
+              <button type="button" aria-pressed={categoryFilter === parent.id} onClick={() => changeCategory(parent.id)}>
                 <span>{parent.name}</span><small>{count(parent.id)}</small>
               </button>
               {skillCategories.filter((item) => item.parentId === parent.id).map((child) => (
                 <button className="ai-cat-child" type="button" key={child.id}
-                  aria-pressed={categoryFilter === child.id} onClick={() => setCategoryFilter(child.id)}>
+                  aria-pressed={categoryFilter === child.id} onClick={() => changeCategory(child.id)}>
                   <span>{child.name}</span><small>{count(child.id)}</small>
                 </button>
               ))}
             </div>
           ))}
-          <button type="button" aria-pressed={categoryFilter === ''} onClick={() => setCategoryFilter('')}>
+          <button type="button" aria-pressed={categoryFilter === ''} onClick={() => changeCategory('')}>
             <span>未分类</span><small>{aiSkills.filter((skill) => !categoryNames.has(skill.categoryId)).length}</small>
           </button>
         </nav>
         <div className="ai-skill-results">
           <div className="ai-skill-heading"><h3>{categoryFilter === null ? '全部技能' : categoryFilter === '' ? '未分类' : category?.name ?? '技能'}</h3><span>{skills.length} 个 Skills</span></div>
           <div className="ai-skill-list">
-            {skills.map((skill) => (
+            {paginated.items.map((skill) => (
               <article className="ai-skill-row" key={skill.id}>
                 <div className="ai-skill-row-copy">
                   <span className="ai-skill-meta">{categoryNames.get(skill.categoryId) ?? '未分类'} · {skill.name}</span>
@@ -337,6 +346,7 @@ function SkillsSection() {
               </article>
             ))}
           </div>
+          <ContentPagination ariaLabel="技能分页" itemCount={skills.length} itemLabel="个 Skills" page={paginated.currentPage} pageSize={contentPageSizes.skills} onPageChange={setPage} />
           {!skills.length && <p className="ai-empty">当前分类下暂无技能。</p>}
         </div>
       </div>
@@ -350,12 +360,14 @@ function SkillsSection() {
 
 function RelaysSection() {
   const { ai: { relays } } = useContent();
+  const [page, setPage] = useState(1);
+  const paginated = paginateItems(relays, page, contentPageSizes.relays);
   const [failedLogos, setFailedLogos] = useState<string[]>([]);
 
   return (
     <section id="ai-relays" className="ai-section" aria-label="中转站 API">
       <div className="ai-relay-grid">
-        {relays.map((relay) => (
+        {paginated.items.map((relay) => (
           <article className="ai-relay-card" key={relay.id}>
             <div className="ai-relay-top">
               <span className="ai-relay-mark" aria-hidden="true">
@@ -373,6 +385,7 @@ function RelaysSection() {
           </article>
         ))}
       </div>
+      <ContentPagination ariaLabel="中转站分页" itemCount={relays.length} itemLabel="个中转站" page={paginated.currentPage} pageSize={contentPageSizes.relays} onPageChange={setPage} />
       {!relays.length && (
         <p className="ai-empty">暂无中转站推荐。</p>
       )}

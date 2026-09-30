@@ -1,4 +1,6 @@
 'use client';
+import { contentPageSizes } from '@/lib/content-page-sizes';
+
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import {
@@ -30,14 +32,14 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
     const initialIndex = projects.findIndex(
       (project) => project.id === initialId,
     );
-    return Math.floor(Math.max(initialIndex, 0) / 5) + 1;
+    return Math.floor(Math.max(initialIndex, 0) / contentPageSizes.projects) + 1;
   });
   const [imageIndex, setImageIndex] = useState(0);
   const [expanded, setExpanded] = useState(false);
   const visible = projects.filter(
     (project) => category === '全部' || project.category === category,
   );
-  const paginated = paginateItems(visible, page, 5);
+  const paginated = paginateItems(visible, page, contentPageSizes.projects);
   const active =
     visible.find((project) => project.id === selected) ?? visible[0];
   if (!active) return <main className="site-shell"><SiteHeader /><p className="page-intro">{"暂无已发布项目。"}</p><button type="button" onClick={() => setCategory('全部')}>{"查看全部项目"}</button><SiteFooter /></main>;
@@ -134,9 +136,9 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
             itemCount={visible.length}
             itemLabel="个项目"
             page={paginated.currentPage}
-            pageSize={5}
+            pageSize={contentPageSizes.projects}
             onPageChange={(nextPage) => {
-              const next = paginateItems(visible, nextPage, 5);
+              const next = paginateItems(visible, nextPage, contentPageSizes.projects);
               setPage(next.currentPage);
               setSelected(next.items[0]?.id ?? '');
               setImageIndex(0);

@@ -133,7 +133,7 @@ try {
       const filtered = byDate(articleStore.filter((item) => !query
         || `${item.title} ${item.excerpt} ${item.body ?? ''} ${item.category}`.includes(query)));
       return Response.json({
-        items: pageSlice(filtered, page, 10),
+        items: pageSlice(filtered, page, 8),
         total: filtered.length,
         allCount: articleStore.length,
         categoryCounts: {},
@@ -143,7 +143,7 @@ try {
       const page = Number(url.searchParams.get('page') ?? 1);
       const ordered = byDate(storyStore);
       return Response.json({
-        items: pageSlice(ordered, page, 10),
+        items: pageSlice(ordered, page, 8),
         total: ordered.length,
         yearlyCount: ordered.length,
         latestPeriod: 2026 * 12 + 8,
@@ -153,7 +153,7 @@ try {
     return realFetch(input, init);
   };
   const writingInitial = (items) => ({
-    items: pageSlice(byDate(items), 1, 10),
+    items: pageSlice(byDate(items), 1, 8),
     total: items.length,
     allCount: items.length,
     categoryCounts: {},
@@ -282,7 +282,7 @@ try {
       h(WritingArchivePage, { initial: writingInitial(pagedArticles) }),
     ),
   );
-  assert.equal(document.querySelectorAll('.writing-list-item').length, 10);
+  assert.equal(document.querySelectorAll('.writing-list-item').length, 8);
   const writingPagination = screen.getByRole('navigation', {
     name: '文章分页',
   });
@@ -290,19 +290,19 @@ try {
   await user.click(
     within(writingPagination).getByRole('button', { name: '下一页' }),
   );
-  await waitFor(() => assert.equal(document.querySelectorAll('.writing-list-item').length, 2));
+  await waitFor(() => assert.equal(document.querySelectorAll('.writing-list-item').length, 4));
   assert.match(writingPagination.textContent, /第 2 \/ 2 页/);
   await user.type(
     screen.getByRole('textbox', { name: '搜索文章' }),
     '分页文章',
   );
-  await waitFor(() => assert.equal(document.querySelectorAll('.writing-list-item').length, 10));
+  await waitFor(() => assert.equal(document.querySelectorAll('.writing-list-item').length, 8));
   assert.match(writingPagination.textContent, /第 1 \/ 2 页/);
   cleanup();
 
   const pagedProjects = {
     ...structuredClone(defaults.projects),
-    items: Array.from({ length: 6 }, (_, index) => ({
+    items: Array.from({ length: 7 }, (_, index) => ({
       ...structuredClone(defaults.projects.items[0]),
       id: `paged-project-${index}`,
       title: `分页项目 ${index}`,
@@ -317,7 +317,7 @@ try {
       h(ProjectShowcase, { initialId: pagedProjects.items[0].id }),
     ),
   );
-  assert.equal(document.querySelectorAll('.folio-project').length, 5);
+  assert.equal(document.querySelectorAll('.folio-project').length, 6);
   const projectPagination = screen.getByRole('navigation', {
     name: '项目分页',
   });
@@ -327,7 +327,7 @@ try {
   assert.equal(document.querySelectorAll('.folio-project').length, 1);
   assert.equal(
     document.querySelector('.folio-title h2').textContent,
-    '分页项目 5',
+    '分页项目 6',
   );
   cleanup();
 
@@ -345,7 +345,7 @@ try {
       { content: defaults },
       h(StoriesPage, {
         initial: {
-          items: pageSlice(pagedStories, 1, 10),
+          items: pageSlice(pagedStories, 1, 8),
           total: pagedStories.length,
           yearlyCount: pagedStories.length,
           latestPeriod: storyPeriod,
@@ -354,12 +354,12 @@ try {
       }),
     ),
   );
-  assert.equal(document.querySelectorAll('.story-post').length, 10);
+  assert.equal(document.querySelectorAll('.story-post').length, 8);
   const storyPagination = screen.getByRole('navigation', { name: '说说分页' });
   await user.click(
     within(storyPagination).getByRole('button', { name: '下一页' }),
   );
-  await waitFor(() => assert.equal(document.querySelectorAll('.story-post').length, 1));
+  await waitFor(() => assert.equal(document.querySelectorAll('.story-post').length, 3));
   assert.match(storyPagination.textContent, /第 2 \/ 2 页/);
   console.log(
     'PASS public writing, project and story pagination page sizes and navigation',
