@@ -301,9 +301,9 @@ try {
   await user.type(markdown, '\n\n## 按需编辑测试');
   await user.click(screen.getByRole('button', { name: '预览', exact: true }));
   assert.ok(screen.getByRole('heading', { name: '按需编辑测试', exact: true }));
-  await user.click(screen.getByRole('button', { name: '编辑', exact: true }));
+  await user.click(screen.getByRole('button', { name: '预览', exact: true }));
   assert.ok(screen.getByRole('textbox', { name: '文章正文 Markdown' }).value.includes('按需编辑测试'));
-  await user.click(screen.getByRole('button', { name: '分屏', exact: true }));
+  await user.click(screen.getByRole('button', { name: '编辑 & 预览', exact: true }));
   await user.type(screen.getByLabelText('文章标题'), '已修改');
   assert.equal(calls.filter((call) => call.method === 'PUT').length, 0,
     '输入字段时不能自动保存');
@@ -914,7 +914,7 @@ try {
     }
     if (['旅行', '爱好'].includes(sectionLabel) && tabLabel === '内容') {
       await screen.findByRole('textbox', { name: '正文 Markdown' });
-      for (const mode of ['编辑', '分屏', '预览'])
+      for (const mode of ['切换编辑模式', '编辑 & 预览', '预览'])
         assert.ok(screen.getByRole('button', { name: mode, exact: true }));
     }
     const section = { 音乐: 'tracks', 电影: 'films', 播客: 'podcasts', 旅行: 'travel', 爱好: 'hobbies', 书籍: 'books' }[sectionLabel];
@@ -935,8 +935,8 @@ try {
         await user.type(markdown, `\n\n## ${sectionLabel} Markdown 测试`);
         await user.click(screen.getByRole('button', { name: '预览', exact: true }));
         assert.ok(screen.getByRole('heading', { name: `${sectionLabel} Markdown 测试` }));
-        await user.click(screen.getByRole('button', { name: '编辑', exact: true }));
-        await user.click(screen.getByRole('button', { name: '分屏', exact: true }));
+        await user.click(screen.getByRole('button', { name: '预览', exact: true }));
+        await user.click(screen.getByRole('button', { name: '编辑 & 预览', exact: true }));
         await user.click(screen.getByRole('button', { name: '确认提交' }));
         await user.click(await screen.findByRole('button', { name: existing.title }));
         assert.ok((await screen.findByRole('textbox', { name: '正文 Markdown' })).value.includes(`${sectionLabel} Markdown 测试`));

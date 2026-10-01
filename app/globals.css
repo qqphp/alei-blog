@@ -2598,36 +2598,30 @@ nav a:hover {
   grid-template-columns: minmax(0, 760px) 220px;
   gap: 80px;
 }
-.article-layout h1 {
-  font-size: clamp(2.4rem, 5vw, 5rem);
-  line-height: 1.05;
-  letter-spacing: -0.07em;
-  font-weight: 500;
+.article-layout > section {
+  min-width: 0;
+}
+.article-layout > section > h1 {
+  margin: 0;
+  font-size: clamp(1.75rem, 3vw, 2.5rem);
+  line-height: 1.35;
+  letter-spacing: -0.025em;
+  font-weight: 600;
+  text-wrap: balance;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
 }
 .article-lead {
+  max-width: 42rem;
+  margin: 18px 0 0;
   color: var(--muted);
-  font-size: 1.1rem;
-  line-height: 1.8;
+  font-size: 1rem;
+  line-height: 1.85;
 }
 .article-meta {
-  margin: 30px 0 55px;
+  margin: 24px 0 40px;
   color: var(--muted);
   font-size: 0.8rem;
-}
-.markdown-body {
-  font-size: 1.05rem;
-  line-height: 1.9;
-}
-.markdown-body h2 {
-  margin-top: 55px;
-  font-size: 1.7rem;
-}
-.markdown-body blockquote {
-  margin: 35px 0;
-  padding: 20px;
-  border-left: 3px solid var(--lime);
-  background: #18303a;
-  color: var(--muted);
 }
 .article-layout aside {
   height: max-content;
@@ -2725,32 +2719,6 @@ nav a:hover {
 }
 .fresh-theme .article-toc {
   background: transparent !important;
-}
-.markdown-body ul {
-  padding-left: 1.3em;
-}
-.markdown-body li {
-  margin: 8px 0;
-}
-.markdown-body table {
-  width: 100%;
-  margin: 32px 0;
-  border-collapse: collapse;
-  font-size: 0.9rem;
-}
-.markdown-body th,
-.markdown-body td {
-  padding: 13px 14px;
-  border: 1px solid var(--line);
-  text-align: left;
-  vertical-align: top;
-}
-.markdown-body th {
-  color: var(--lime);
-  font-weight: 500;
-}
-.markdown-body h2 {
-  scroll-margin-top: 30px;
 }
 @media (max-width: 700px) {
   .article-layout {

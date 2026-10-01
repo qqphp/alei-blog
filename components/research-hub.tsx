@@ -8,8 +8,7 @@ import { useContent } from '@/components/content-provider';
 import { newestCreatedFirst } from '@/lib/content-times';
 import { Activity, BookOpen, ChartNoAxesCombined, FlaskConical, MessageCircle, type LucideIcon } from 'lucide-react';
 import { useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MarkdownContent } from './markdown-content';
 import './research-hub.css';
 
 const investmentIcons: Record<string, LucideIcon> = {
@@ -74,7 +73,7 @@ export function ResearchHub() {
                     <p>{activeEntry.entry.description}</p>
                   </header>
                   <div className="investment-markdown">
-                    <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{activeEntry.entry.paragraphs.join('\n\n')}</ReactMarkdown>
+                    <MarkdownContent source={activeEntry.entry.paragraphs.join('\n\n')} />
                   </div>
                 </>
               ) : <p className="investment-empty">暂无文章</p>}

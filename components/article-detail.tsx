@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import ReactMarkdown from 'react-markdown';
+import { MarkdownContent } from './markdown-content';
 import remarkGfm from 'remark-gfm';
 import remarkParse from 'remark-parse';
 import { toString } from 'mdast-util-to-string';
@@ -44,20 +44,7 @@ export default async function ArticlePage({
           <div className="article-meta">
             {site.name} · {article.date}
           </div>
-          <div className="markdown-body">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              components={{
-                h2: ({ node, children }) => (
-                  <h2 id={`heading-${node?.position?.start.line}`}>
-                    {children}
-                  </h2>
-                ),
-              }}
-            >
-              {article.body}
-            </ReactMarkdown>
-          </div>
+          <MarkdownContent source={article.body} />
         </section>
         <aside className="article-toc">
           <p>文章目录</p>

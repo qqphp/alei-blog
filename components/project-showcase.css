@@ -81,16 +81,3 @@
 @media(prefers-reduced-motion:reduce) { .folio-project,.folio-project-cover img { transition:none; } }
 .folio-markdown { padding: 30px 0; border-top: 1px solid var(--line, #d5dad1); line-height: 1.85; overflow-wrap: anywhere; }
 .folio-markdown > h3:first-child { font-size: 22px; margin: 0 0 24px; }
-.folio-markdown h1, .folio-markdown h2, .folio-markdown h3, .folio-markdown h4 { margin: 1.5em 0 .6em; line-height: 1.4; }
-.folio-markdown ul { list-style: disc; padding-left: 1.5em; }
-.folio-markdown ol { list-style: decimal; padding-left: 1.5em; }
-.folio-markdown pre { padding: 18px; background: color-mix(in srgb, var(--ink) 6%, var(--navy)); color: var(--ink); border-radius: 3px; overflow: auto; }
-.folio-markdown blockquote { margin-inline: 0; padding-left: 18px; border-left: 3px solid var(--line); color: var(--muted); }
-.folio-markdown img { max-width: 100%; height: auto; }
-.folio-markdown table { display: block; max-width: 100%; overflow-x: auto; border-collapse: collapse; }
-.folio-markdown td, .folio-markdown th { border: 1px solid var(--line); padding: 8px 12px; }
-
-.folio-markdown h1 { font-size: 30px; }
-.folio-markdown h2 { font-size: 25px; }
-.folio-markdown h3 { font-size: 21px; }
-.folio-markdown a { color: var(--lime); text-decoration: underline; }

@@ -416,7 +416,7 @@ export function AdminGranularPanel() {
             disabled={busy || working}
             aria-selected={tab === scope.id} onClick={() => changeTab(scope.id)}>{scope.label}</button>)}
         </div>
-        {activeCollection && (edit ? <section className="admin-form" aria-label="内容表单">
+        {activeCollection && (edit ? <section key={`${recordSection}.${activeCollection}.${edit.id ?? 'new'}`} className="admin-form" aria-label="内容表单">
           <div className="admin-section-heading"><button type="button" disabled={busy || working} onClick={() => {
             if (confirmDiscard()) { editRequest.current++; setEdit(null); setPendingTag(''); setMessage(''); }
           }}>← 返回列表</button><span>{edit.id ? '编辑内容' : '新增内容'}</span></div>
@@ -435,6 +435,7 @@ export function AdminGranularPanel() {
                 skillCategories={options.skillCategories ?? []}
                 onChange={(value) => setEdit({ ...edit, value })} /> :
               section === 'investing' && activeCollection === 'entries' ? <AdminInvestmentEditor value={edit.value} sample={recordSample!}
+                onWorking={setWorking}
                 columns={optionFields.sectionId} onChange={(value) => setEdit({ ...edit, value })} /> :
               <Field path={`${recordSection}.${activeCollection}`} label={collectionName(recordSection, activeCollection)}
                 value={edit.value} sample={recordSample ?? edit.value} options={optionFields}

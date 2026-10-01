@@ -191,19 +191,6 @@
   padding-top: 16px;
   border-top: 1px solid var(--line);
 }
-.activity-markdown p { margin: 0 0 1em; }
-.activity-markdown :is(h1, h2, h3, h4, h5, h6) { margin: 1.3em 0 .5em; line-height: 1.5; }
-.activity-markdown :is(ul, ol) { padding-left: 1.5em; margin: 0 0 1em; }
-.activity-markdown ul { list-style: disc; }
-.activity-markdown ol { list-style: decimal; }
-.activity-markdown blockquote { margin: 1em 0; padding-left: 16px; border-left: 3px solid var(--lime); color: var(--muted); }
-.activity-markdown a { color: var(--lime); text-decoration: underline; }
-.activity-markdown :is(pre, table) { max-width: 100%; overflow-x: auto; }
-.activity-markdown pre { padding: 16px; background: color-mix(in srgb, var(--lime) 5%, var(--navy)); }
-.activity-markdown pre code { white-space: pre; overflow-wrap: normal; }
-.activity-markdown table { display: block; border-collapse: collapse; margin-bottom: 1em; }
-.activity-markdown :is(th, td) { padding: 8px 12px; border: 1px solid var(--line); }
-.activity-markdown img { max-width: 100%; height: auto; }
 .activity-album { display: grid; gap: 16px; margin-top: 28px; white-space: normal; }
 .activity-album h3 { font-size: 16px; }
 .activity-album img { display: block; width: 100%; height: auto; }

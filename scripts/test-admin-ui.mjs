@@ -18,6 +18,9 @@ const lifeCss = readFileSync(
 const lifeStyle = window.document.createElement('style');
 lifeStyle.textContent = lifeCss;
 window.document.head.append(lifeStyle, style);
+const markdownStyle = window.document.createElement('style');
+markdownStyle.textContent = readFileSync(new URL('../components/markdown-content.css', import.meta.url), 'utf8').replace(/^@import.*$/gm, '');
+window.document.head.append(markdownStyle);
 for (const name of [
   'window',
   'document',
@@ -167,7 +170,7 @@ try {
     ),
   );
   await screen.findByRole('textbox', { name: '预览测试 Markdown' });
-  const preview = window.document.querySelector('.wmde-markdown');
+  const preview = window.document.querySelector('.vditor-preview .site-markdown');
   assert.equal(
     window.getComputedStyle(preview.querySelector('ol')).listStyleType,
     'decimal',

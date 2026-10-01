@@ -1,8 +1,7 @@
 'use client';
 import { contentPageSizes } from '@/lib/content-page-sizes';
 
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import { MarkdownContent } from './markdown-content';
 import {
   ContentPagination,
   paginateItems,
@@ -265,7 +264,7 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
               </dd>
             </div>
           </dl>
-          {active.body && <section className="folio-markdown"><h3>项目说明</h3><ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{active.body}</ReactMarkdown></section>}
+          {active.body && <section className="folio-markdown"><h3>项目说明</h3><MarkdownContent source={active.body} /></section>}
         </article>
       </section>
       <Dialog open={expanded} onOpenChange={setExpanded}>

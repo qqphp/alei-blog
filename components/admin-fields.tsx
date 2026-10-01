@@ -585,6 +585,7 @@ export function Field({
       <AdminMarkdownEditor
         label={path === 'projects.items.body' ? '项目正文' : '正文'}
         value={String(value ?? '')}
+        onWorking={onWorking}
         onChange={onChange}
       />
     );

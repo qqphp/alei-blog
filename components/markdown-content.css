@@ -1,0 +1,44 @@
+@import 'github-markdown-css/github-markdown-light.css';
+@import 'highlight.js/styles/github.css';
+@import 'katex/dist/katex.min.css';
+
+.site-markdown.markdown-body {
+  color: var(--ink);
+  background: transparent;
+  font-family: inherit;
+  font-size: 16px;
+  line-height: 1.9;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.site-markdown.markdown-body :is(h1, h2, h3, h4, h5, h6) {
+  color: inherit;
+  border-color: var(--line);
+  scroll-margin-top: 24px;
+}
+.site-markdown.markdown-body a { color: var(--lime); }
+.site-markdown.markdown-body :is(blockquote, hr) { border-color: var(--line); }
+.site-markdown.markdown-body blockquote { color: var(--muted); }
+.site-markdown.markdown-body hr { background: var(--line); }
+.site-markdown.markdown-body :is(pre, code, table tr, table tr:nth-child(2n)) {
+  background: color-mix(in srgb, var(--ink) 5%, var(--navy));
+}
+.site-markdown.markdown-body :is(pre code, .hljs) { background: transparent; color: var(--ink); }
+.site-markdown.markdown-body :is(table tr, table th, table td) { border-color: var(--line); }
+.site-markdown.markdown-body :is(pre, table) { max-width: 100%; overflow-x: auto; }
+.site-markdown.markdown-body pre code { white-space: pre; overflow-wrap: normal; }
+.site-markdown.markdown-body img { max-width: 100%; height: auto; background: transparent; }
+.site-markdown.markdown-body ul { list-style-type: disc; }
+.site-markdown.markdown-body ol { list-style-type: decimal; }
+.site-markdown.markdown-body ul ul { list-style-type: circle; }
+.site-markdown.markdown-body ul ul ul { list-style-type: square; }
+.site-markdown.markdown-body li { display: list-item; }
+.site-markdown.markdown-body .task-list-item { list-style-type: none; }
+.site-markdown.markdown-body input[type='checkbox'] { width: auto; }
+.site-markdown.markdown-body .katex-display { max-width: 100%; overflow-x: auto; overflow-y: hidden; padding: 4px 0; }
+.site-markdown.markdown-body .katex { color: inherit; overflow-wrap: normal; }
+html:not(.fresh-theme) .site-shell .site-markdown :is(.hljs-keyword, .hljs-selector-tag, .hljs-literal) { color: #ff9aa4; }
+html:not(.fresh-theme) .site-shell .site-markdown :is(.hljs-string, .hljs-regexp, .hljs-attr) { color: #a6d9ff; }
+html:not(.fresh-theme) .site-shell .site-markdown :is(.hljs-title, .hljs-built_in, .hljs-type) { color: #d7b7ff; }
+html:not(.fresh-theme) .site-shell .site-markdown :is(.hljs-number, .hljs-symbol) { color: #b7e79b; }
+html:not(.fresh-theme) .site-shell .site-markdown :is(.hljs-comment, .hljs-quote) { color: var(--muted); }

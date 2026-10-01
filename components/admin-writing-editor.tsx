@@ -222,6 +222,7 @@ export function AdminWritingEditor({
         <AdminMarkdownEditor
           label="文章正文"
           value={article.body}
+          onWorking={onWorking}
           onChange={(body) => set('body', body)}
         />
         <label className="admin-check">
