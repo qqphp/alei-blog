@@ -1372,8 +1372,45 @@ nav a:hover {
   font-size: 0.82rem;
   color: var(--lime);
 }
+.content-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 300px;
+  padding: 40px 24px;
+  border: 1px solid var(--line);
+  background: color-mix(in srgb, var(--navy) 90%, transparent);
+  text-align: center;
+}
+.content-empty-mark {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 20px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  color: var(--lime);
+  font-size: 32px;
+}
+.content-empty-state h2 {
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+.content-empty-state p {
+  max-width: 380px;
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.9;
+}
 .story-feed {
   border-left: 1px solid var(--line);
+}
+.story-feed .content-empty-state {
+  margin-left: 30px;
 }
 .story-post {
   display: grid;
@@ -1534,6 +1571,9 @@ nav a:hover {
   }
   .story-feed {
     border-left: 0;
+  }
+  .story-feed .content-empty-state {
+    margin-left: 0;
   }
   .story-post {
     padding-left: 0;

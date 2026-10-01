@@ -47,7 +47,7 @@ for (const name of [
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const { createElement: h } = await import('react');
-const { render, screen, cleanup, within } =
+const { render, screen, cleanup, within, waitFor } =
   await import('@testing-library/react');
 const { default: userEvent } = await import('@testing-library/user-event');
 
@@ -59,6 +59,8 @@ const { AiNotebook } = await import('../components/ai-notebook.tsx');
 const { ResearchHub } = await import('../components/research-hub.tsx');
 const { Bookshelf } = await import('../components/bookshelf.tsx');
 const { ProjectShowcase } = await import('../components/project-showcase.tsx');
+const { default: StoriesPage } = await import('../components/stories-page.tsx');
+const { monthSummary } = await import('../lib/story-calendar.ts');
 const user = userEvent.setup({ document: window.document });
 const realFetch = globalThis.fetch;
 globalThis.fetch = async () => Response.json({groups:[],modelCount:0,fetchedAt:'2026-09-30',stale:false,refreshFailed:false});
@@ -175,6 +177,33 @@ try {
   assert.equal(document.querySelector('.folio-title h2').textContent,'项目0');
   cleanup();
   console.log('PASS project initial page location and selection on page change');
+  mount(ProjectShowcase, { projects: { ...defaults.projects, items: [] } }, { initialId: '' });
+  assert.ok(screen.getByRole('heading', { name: '暂无已发布项目' }));
+  assert.ok(screen.getByRole('heading', { name: '从一个想法，到一件作品。' }));
+  assert.equal(screen.queryByRole('button', { name: '查看全部项目' }), null);
+  assert.equal(screen.queryByRole('navigation', { name: '项目分页' }), null);
+  cleanup();
+  const emptyArchive = {
+    items: [], total: 0, yearlyCount: 0, latestPeriod: 2026 * 12 + 8,
+    calendar: monthSummary([], 2026, 9),
+  };
+  const storyView = mount(StoriesPage, { slides: [] }, { initial: emptyArchive });
+  assert.ok(within(storyView.container.querySelector('.story-feed')).getByRole('heading', { name: '暂无说说' }));
+  assert.match(screen.getByText(/月还没有发布说说/).textContent, /2026 年 9 月/);
+  assert.equal(screen.queryByRole('navigation', { name: '说说分页' }), null);
+  globalThis.fetch = async () => Response.json({ ...emptyArchive, calendar: monthSummary([], 2026, 10) });
+  await user.click(screen.getByRole('button', { name: '下一个月' }));
+  await waitFor(() => assert.match(screen.getByText(/月还没有发布说说/).textContent, /2026 年 10 月/));
+  globalThis.fetch = async () => new Response('', { status: 500 });
+  await user.click(screen.getByRole('button', { name: '下一个月' }));
+  await waitFor(() => assert.match(screen.getByRole('alert').textContent, /读取说说失败/));
+  assert.equal(screen.queryByRole('heading', { name: '暂无说说' }), null);
+  cleanup();
+  mount(StoriesPage, { slides: [] }, { initial: { ...emptyArchive, items: defaults.stories.slice(0, 1), total: 1, yearlyCount: 1 } });
+  assert.equal(document.querySelectorAll('.story-post').length, 1);
+  assert.equal(screen.queryByRole('heading', { name: '暂无说说' }), null);
+  cleanup();
+  console.log('PASS project/story empty states, month navigation, error state and populated feed');
 } finally {
   cleanup(); globalThis.fetch=realFetch; await window.happyDOM.abort();
 }

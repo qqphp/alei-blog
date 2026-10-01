@@ -1,4 +1,8 @@
 .folio-toolbar, .folio-workspace { width:100%; max-width:1420px; margin-inline:auto; padding-inline:10.3%; }
+.folio-empty { max-width:1420px; margin:0 auto 80px; padding-inline:10.3%; }
+.folio-empty .content-empty-state { min-height:320px; }
+.folio-empty button { margin-top:20px; padding:10px 18px; border:1px solid var(--line); color:var(--lime); cursor:pointer; }
+.folio-empty button:focus-visible { outline:2px solid var(--lime); outline-offset:4px; }
 .folio-toolbar { display:flex; align-items:center; justify-content:space-between; gap:20px; padding-block:18px; border-block:1px solid var(--line); margin-bottom:28px; }
 .folio-eyebrow { font-size:12px; letter-spacing:.12em; color:var(--muted); }
 .folio-toolbar > div { display:flex; flex-wrap:wrap; gap:6px; }
@@ -73,7 +77,7 @@
 .folio-gallery-bar button:hover { background:color-mix(in srgb,var(--lime) 12%,transparent); }
 @media(max-width:1000px) { .folio-workspace { grid-template-columns:220px minmax(0,1fr); gap:24px; } .folio-decision-grid { grid-template-columns:1fr; } .folio-decision-grid > div + div { border-left:0; border-top:1px solid var(--line); } .folio-decision-grid > div { padding:18px; } .folio-decision-grid h4 { margin-top:8px; } .folio-thumbnails img { width:56px; } }
 @media(max-width:720px) { .folio-toolbar { align-items:flex-start; flex-direction:column; gap:12px; } .folio-toolbar button { padding:8px 9px; } .folio-workspace { grid-template-columns:1fr; gap:28px; } .folio-project-list { grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; } .folio-project-cover { height:86px; } .folio-project-cover > span { left:5px; bottom:5px; font-size:12px; padding:3px; } .folio-project-copy { padding:10px 8px; } .folio-project-copy h2 { font-size:14px; line-height:1.6; } .folio-project-copy h2 span,.folio-project-copy p,.folio-note { display:none; } .folio-project-copy small { margin-top:8px; } .folio-title { align-items:flex-start; } .folio-title h2 { font-size:27px; } .folio-process ol { grid-template-columns:1fr; gap:15px; } .folio-facts { grid-template-columns:1fr; gap:15px; } .folio-question { padding:20px; } .folio-question h3 { max-width:95%; } .folio-next { gap:15px; } }
-@media(max-width:700px) { .folio-toolbar, .folio-workspace { padding-inline:25px; } }
+@media(max-width:700px) { .folio-toolbar, .folio-workspace, .folio-empty { padding-inline:25px; } }
 @media(prefers-reduced-motion:reduce) { .folio-project,.folio-project-cover img { transition:none; } }
 .folio-markdown { padding: 30px 0; border-top: 1px solid var(--line, #d5dad1); line-height: 1.85; overflow-wrap: anywhere; }
 .folio-markdown > h3:first-child { font-size: 22px; margin: 0 0 24px; }

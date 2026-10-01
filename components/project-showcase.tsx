@@ -42,7 +42,26 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
   const paginated = paginateItems(visible, page, contentPageSizes.projects);
   const active =
     visible.find((project) => project.id === selected) ?? visible[0];
-  if (!active) return <main className="site-shell"><SiteHeader /><p className="page-intro">{"暂无已发布项目。"}</p><button type="button" onClick={() => setCategory('全部')}>{"查看全部项目"}</button><SiteFooter /></main>;
+  if (!active) return (
+    <main className="site-shell">
+      <SiteHeader />
+      <PageIntro
+        title="从一个想法，到一件作品。"
+        text="收录产品原型、设计探索与个人工具，记录每个项目的构思、实现与迭代。"
+      />
+      <section className="folio-empty" aria-labelledby="project-empty-title">
+        <div className="content-empty-state">
+          <span className="content-empty-mark" aria-hidden="true">↗</span>
+          <h2 id="project-empty-title">暂无已发布项目</h2>
+          <p>作品还在酝酿中，之后会在这里记录构思、实现与迭代。</p>
+          {projects.length > 0 && (
+            <button type="button" onClick={() => setCategory('全部')}>查看全部项目</button>
+          )}
+        </div>
+      </section>
+      <SiteFooter />
+    </main>
+  );
   const currentImage = active.images[imageIndex] ?? active.images[0];
   const previousImage = () =>
     setImageIndex(

@@ -117,6 +117,13 @@ export default function StoriesPage({ initial }: { initial: StoryArchive }) {
         </aside>
         <div className="story-feed">
           {error && <p role="alert">{error}</p>}
+          {!error && archive.items.length === 0 && (
+            <section className="content-empty-state" aria-labelledby="story-empty-title">
+              <span className="content-empty-mark" aria-hidden="true">“</span>
+              <h2 id="story-empty-title">暂无说说</h2>
+              <p>{year} 年 {month} 月还没有发布说说。</p>
+            </section>
+          )}
           {archive.items.map((story) => (
             <article className="story-post" key={story.id}>
               <div className="post-avatar">A</div>
