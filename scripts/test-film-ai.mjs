@@ -152,7 +152,10 @@ try {
   await assert.rejects(() => generateCover({ action: 'film-cover', description }), /转为 WebP 失败/);
   assert.equal(stored.length, savedCount, '转换失败不得写入素材');
   invalidImage = false;
-  await generateCover({ action: 'cover', title: '文章标题', excerpt: '文章摘要' });
+  const articleCover = await generateCover({ action: 'cover', description });
+  assert.equal(articleCover.generatedFor, JSON.stringify([description]));
+  assert.ok(requests.at(-1).prompt.includes(description));
+  assert.ok(requests.at(-1).prompt.includes(settings.coverStyle));
   assert.equal(requests.at(-1).size, settings.coverSize);
   await generateCover({ action: 'story-image', description: '湖边清晨的雾与树林' });
   assert.equal(requests.at(-1).size, settings.storyImageSize);
@@ -168,11 +171,11 @@ try {
     body: JSON.stringify({ action, description, title: '不能传给模型的标题', excerpt: '不能传给模型的正文', director: '不能传给模型的导演' }),
   }));
   const beforeInvalid = requests.length;
-  for (const action of ['story-image', 'project-cover', 'film-cover', ...Object.keys(describedActions).filter((kind) => kind !== 'project-cover')])
+  for (const action of ['cover', 'story-image', 'project-cover', 'film-cover', ...Object.keys(describedActions).filter((kind) => kind !== 'project-cover')])
     for (const invalid of [undefined, '', '   ', '图'.repeat(5001)])
       assert.equal((await requestImage(action, invalid)).status, 400);
   assert.equal(requests.length, beforeInvalid, '无效描述不能产生模型请求');
-  for (const action of ['story-image', 'project-cover', 'film-cover', ...Object.keys(describedActions).filter((kind) => kind !== 'project-cover')]) {
+  for (const action of ['cover', 'story-image', 'project-cover', 'film-cover', ...Object.keys(describedActions).filter((kind) => kind !== 'project-cover')]) {
     const response = await requestImage(action, description);
     assert.equal(response.status, 200);
     const prompt = requests.at(-1).prompt;

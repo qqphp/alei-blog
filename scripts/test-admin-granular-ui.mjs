@@ -20,7 +20,6 @@ const { render, screen, waitFor, cleanup, within, fireEvent } = await import('@t
 const { default: userEvent } = await import('@testing-library/user-event');
 const { AdminGranularPanel } = await import('../components/admin-granular-panel.tsx');
 const { defaults } = await import('../lib/cms-defaults.ts');
-const { coverInput } = await import('../lib/article-categories.ts');
 const { musicSample } = await import('../lib/music-content.ts');
 const { Field } = await import('../components/admin-fields.tsx');
 const { AiNotebook } = await import('../components/ai-notebook.tsx');
@@ -291,8 +290,9 @@ try {
   globalThis.fetch = immediateFetch;
   await screen.findByLabelText('文章标题');
   assert.equal(screen.queryByLabelText('或使用已有素材地址'), null);
-  assert.ok(screen.getByLabelText('选择封面文件'));
-  assert.ok(screen.getByRole('img', { name: '当前文章封面' }));
+  assert.ok(screen.getByLabelText('上传替换'));
+  assert.equal(screen.getByLabelText('素材地址').value, article.cover);
+  assert.equal(screen.queryByRole('img', { name: '当前文章封面' }), null);
   for (const label of ['创建时间', '最后更新时间', '发布日期', '文章路径标识'])
     assert.equal(screen.queryByText(label), null, `文章表单隐藏 ${label}`);
   assert.equal(screen.getAllByRole('checkbox').at(-1), screen.getByRole('checkbox', { name: /发布到前台/ }));
@@ -687,6 +687,7 @@ try {
     .filter((node) => !node.closest('details,.admin-story-image'))
     .map((node) => node.firstChild.textContent.trim());
   const projectLabels = labels();
+  assert.equal(screen.queryByLabelText('年份'), null);
   assert.equal(screen.getByLabelText('标题').value, '');
   assert.equal(within(screen.getByRole('group', { name: /^图片/ })).queryByLabelText('素材地址'), null);
   assert.match(screen.getByRole('group', { name: /^图片/ }).textContent, /0 项/);
@@ -722,6 +723,7 @@ try {
   await user.selectOptions(screen.getByRole('combobox', { name: '按项目状态筛选' }), '');
   await user.click(await screen.findByRole('button', { name: '原项目' }));
   await screen.findByLabelText('标题');
+  assert.equal(screen.queryByLabelText('年份'), null);
   assert.deepEqual(labels(), projectLabels, '项目编辑字段顺序与新增一致，即使接口顺序相反');
   assert.ok(screen.getAllByLabelText('图片标题').every((field) => field.closest('.admin-project-image-label')));
   assert.equal(window.document.querySelector('.admin-record-times'), null);
@@ -820,31 +822,96 @@ try {
   assert.equal(imageRows().length, 0);
   await user.click(within(nav).getByRole('button', { name: '写作', exact: true }));
   await user.click(screen.getByRole('button', { name: '＋ 新增文章管理' }));
-  assert.equal(screen.queryByLabelText('或使用已有素材地址'), null);
+  const checkWritingLayout = () => {
+    assert.deepEqual([...document.querySelectorAll('.admin-writing-title-row label')]
+      .map((node) => node.textContent), ['文章标题', '文章分类']);
+    assert.deepEqual([...document.querySelectorAll('.admin-cover .admin-field label')]
+      .map((node) => node.textContent), ['素材地址', '图片描述']);
+    assert.equal(screen.queryByRole('radio'), null);
+    assert.equal(screen.queryByRole('img', { name: '当前文章封面' }), null);
+    assert.equal(screen.getByLabelText('图片描述').maxLength, 5000);
+    assert.ok(screen.getByText('AI 生成配图依据当前图片描述生成'));
+  };
+  checkWritingLayout();
+  assert.equal(screen.getByLabelText('素材地址').value, '');
+  assert.equal(screen.getByLabelText('图片描述').value, '');
+  assert.equal(screen.getByRole('button', { name: 'AI 生成配图' }).disabled, true);
   await user.type(screen.getByLabelText('文章标题'), '封面上传验收');
   await user.type(screen.getByLabelText('文章摘要'), '封面摘要');
+  let finishWritingUpload;
   globalThis.fetch = async (input, init) => input === '/api/admin/media'
-    ? Response.json({ url: '/api/media/writing-uploaded.png' }) : immediateFetch(input, init);
-  await user.upload(screen.getByLabelText('选择封面文件'), new window.File(['image'], 'cover.png', { type: 'image/png' }));
-  await waitFor(() => assert.equal(screen.getByRole('img', { name: '当前文章封面' }).getAttribute('src'), '/api/media/writing-uploaded.png'));
+    ? new Promise((resolve) => { finishWritingUpload = resolve; }) : immediateFetch(input, init);
+  await user.upload(screen.getByLabelText('上传替换'), new window.File(['image'], 'cover.png', { type: 'image/png' }));
+  assert.equal(screen.getByRole('button', { name: '确认提交' }).disabled, true);
+  assert.equal(screen.getByLabelText('上传替换').disabled, true);
+  assert.equal(screen.getByLabelText('图片描述').closest('fieldset').disabled, true);
+  finishWritingUpload(Response.json({ url: '/api/media/writing-uploaded.png' }));
+  await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/writing-uploaded.png'));
+  assert.equal(screen.getByRole('link', { name: '查看素材 ↗' }).getAttribute('href'), '/api/media/writing-uploaded.png');
   globalThis.fetch = immediateFetch;
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   await screen.findByRole('button', { name: '原文章已修改' });
-  assert.equal(calls.filter((call) => call.method === 'POST' && call.path === '/api/admin/records/writing/articles').at(-1).body.value.cover,
-    '/api/media/writing-uploaded.png');
+  const createdWriting = calls.filter((call) => call.method === 'POST' && call.path === '/api/admin/records/writing/articles').at(-1).body.value;
+  assert.equal(createdWriting.cover, '/api/media/writing-uploaded.png');
+  assert.equal(createdWriting.coverDescription, '');
+  assert.equal(createdWriting.coverMode, 'upload');
   await user.click(screen.getByRole('button', { name: '原文章已修改' }));
   await screen.findByLabelText('文章标题');
-  await user.click(screen.getByRole('radio', { name: 'AI 生成', exact: true }));
+  checkWritingLayout();
+  const originalCover = screen.getByLabelText('素材地址').value;
+  await user.type(screen.getByLabelText('图片描述'), '薄雾中的白色灯塔');
+  let finishWritingGeneration;
+  let writingAiBody;
   globalThis.fetch = async (input, init) => input === '/api/admin/ai'
-    ? Response.json({ url: '/api/media/writing-generated.png', generatedFor: coverInput(article.title, article.excerpt) })
+    ? new Promise((resolve) => { writingAiBody = JSON.parse(init.body); finishWritingGeneration = resolve; })
     : immediateFetch(input, init);
-  await user.click(screen.getByRole('button', { name: '生成文章封面' }));
-  await waitFor(() => assert.equal(screen.getByRole('img', { name: '当前文章封面' }).getAttribute('src'), '/api/media/writing-generated.png'));
+  await user.click(screen.getByRole('button', { name: 'AI 生成配图' }));
+  assert.equal(screen.getByRole('button', { name: '确认提交' }).disabled, true);
+  assert.equal(screen.getByLabelText('上传替换').disabled, true);
+  assert.deepEqual(writingAiBody, { action: 'cover', description: '薄雾中的白色灯塔' });
+  finishWritingGeneration(Response.json({ error: '模拟写作生图失败' }, { status: 502 }));
+  await screen.findByText('模拟写作生图失败');
+  assert.equal(screen.getByLabelText('素材地址').value, originalCover);
+  assert.equal(screen.getByLabelText('图片描述').value, '薄雾中的白色灯塔');
+  await user.click(screen.getByRole('button', { name: 'AI 生成配图' }));
+  const generatedFor = JSON.stringify(['薄雾中的白色灯塔']);
+  finishWritingGeneration(Response.json({ url: '/api/media/writing-generated.png', generatedFor }));
+  await waitFor(() => assert.equal(screen.getByLabelText('素材地址').value, '/api/media/writing-generated.png'));
+  globalThis.fetch = immediateFetch;
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   await screen.findByRole('button', { name: '原文章已修改' });
   assert.equal(article.cover, '/api/media/writing-generated.png');
-  assert.equal(article.coverGeneratedFor, coverInput(article.title, article.excerpt));
+  assert.equal(article.coverDescription, '薄雾中的白色灯塔');
+  assert.equal(article.coverMode, 'ai');
+  assert.equal(article.coverGeneratedFor, generatedFor);
+  await user.click(screen.getByRole('button', { name: '原文章已修改' }));
+  await screen.findByLabelText('文章标题');
+  assert.equal(screen.getByLabelText('素材地址').value, article.cover);
+  assert.equal(screen.getByLabelText('图片描述').value, article.coverDescription);
+  const beforeWritingSaveAi = calls.filter((call) => call.path === '/api/admin/ai').length;
+  await user.type(screen.getByLabelText('文章摘要'), '新摘要');
+  await user.type(screen.getByLabelText('图片描述'), '新的描述');
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await screen.findByRole('button', { name: '原文章已修改' });
+  assert.equal(article.cover, '/api/media/writing-generated.png');
+  assert.equal(article.coverGeneratedFor, generatedFor);
+  assert.equal(calls.filter((call) => call.path === '/api/admin/ai').length, beforeWritingSaveAi, '写作提交不得自动生图');
+  await user.click(screen.getByRole('button', { name: '原文章已修改' }));
+  await screen.findByLabelText('文章标题');
+  globalThis.fetch = async (input, init) => input === '/api/admin/media'
+    ? Response.json({ error: '模拟写作上传失败' }, { status: 500 }) : immediateFetch(input, init);
+  await user.upload(screen.getByLabelText('上传替换'), new window.File(['image'], 'failed.png', { type: 'image/png' }));
+  await screen.findByText('模拟写作上传失败');
+  assert.equal(screen.getByLabelText('素材地址').value, article.cover);
+  await user.clear(screen.getByLabelText('素材地址'));
+  await user.type(screen.getByLabelText('素材地址'), '/covers/writing-notes.png');
   globalThis.fetch = immediateFetch;
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await screen.findByRole('button', { name: '原文章已修改' });
+  assert.equal(article.coverMode, 'upload');
+  assert.equal(article.coverGeneratedFor, '');
+  assert.equal(article.coverDescription, '薄雾中的白色灯塔新的描述');
+  console.log('PASS writing field layout, upload/generate busy states, failures, persistence and manual generation only');
   for (const [sectionLabel, tabLabel, inputLabel] of [
     ['书签', '内容', '名称'], ['书签', '分类', '名称'],
     ['友链', '内容', '名称'], ['友链', '分类', '名称'],

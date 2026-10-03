@@ -16,8 +16,6 @@ export async function POST(request: Request) {
   if (!(await authenticated(request))) return json({ error: '请先登录' }, 401);
   let body: {
     action?: string;
-    title?: string;
-    excerpt?: string;
     description?: string;
   };
   try {
@@ -32,24 +30,8 @@ export async function POST(request: Request) {
     !['models', 'test', ...Object.keys(imageActions)].includes(body.action || '')
   )
     return json({ error: '操作无效' }, 400);
-  const described = body.action !== 'cover';
   const isImage = Object.hasOwn(imageActions, body.action || '');
-  if (
-    isImage && !described &&
-    (typeof body.title !== 'string' ||
-      !body.title.trim() ||
-      body.title.length > 500)
-  )
-    return json({ error: '请填写标题（最多 500 字）' }, 400);
-  if (
-    isImage &&
-    !described &&
-    (typeof body.excerpt !== 'string' ||
-      !body.excerpt.trim() ||
-      body.excerpt.length > 5000)
-  )
-    return json({ error: '请填写简介或摘要（最多 5000 字）' }, 400);
-  if (isImage && described &&
+  if (isImage &&
     (typeof body.description !== 'string' || !body.description.trim() || body.description.length > 5000))
     return json({ error: '请填写图片描述（最多 5000 字）' }, 400);
   try {
@@ -75,7 +57,7 @@ export async function POST(request: Request) {
     }
     return json(await generateCover({
       action: body.action as ImageAction,
-      ...(described ? { description: body.description } : { title: body.title, excerpt: body.excerpt }),
+      description: body.description!,
     }));
   } catch (error) {
     return json(

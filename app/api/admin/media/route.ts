@@ -20,9 +20,9 @@ export async function POST(request: Request) {
     return json({ error: '文件大小须为 1 字节到 20 MB' }, 413);
   const ascii = (start: number, end: number) =>
     String.fromCharCode(...data.slice(start, end));
-  // Determine allowed passive media formats from bytes, never from the file extension alone.
-  let type = '';
-  let ext = '';
+  // Recognize inline media from bytes; serve other files only as download attachments.
+  let type = 'application/octet-stream';
+  let ext = 'file';
   if (
     data[0] === 137 &&
     ascii(1, 4) === 'PNG' &&
@@ -50,8 +50,6 @@ export async function POST(request: Request) {
     type = 'audio/mpeg';
     ext = 'mp3';
   }
-  if (!type)
-    return json({ error: '支持 PNG、JPG、GIF、WebP、MP3 和 WAV 文件' }, 400);
   let name = '上传素材';
   try {
     name = decodeURIComponent(request.headers.get('x-file-name') || name).slice(

@@ -87,6 +87,7 @@ const article = {
   date: '2026.09.08',
   cover: '',
   coverMode: 'upload',
+  coverDescription: '',
   coverGeneratedFor: '',
   _published: false,
   label: '',
@@ -237,6 +238,7 @@ try {
   const migratedProjects = migrateProjects([legacyProject]);
   assert.equal(migratedProjects.items[0].url, '');
   assert.ok(!('role' in migratedProjects.items[0]));
+  assert.ok(!('year' in migratedProjects.items[0]));
   for (const key of ['number', 'question', 'decisions', 'steps', 'next'])
     assert.ok(!(key in migratedProjects.items[0]));
   function Models() {
@@ -297,7 +299,7 @@ try {
       storyImageStyle: '说说纪实',
       storyImagePrompt: '{{description}} {{style}}',
       coverStyle: '纸艺',
-      coverPrompt: '{{title}} {{excerpt}}',
+      coverPrompt: '{{description}} {{style}}',
     });
     return h(AdminAiSettings, { value, onChange: set, dirty: false });
   }

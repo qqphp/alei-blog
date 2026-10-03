@@ -16,7 +16,6 @@ export type Project = {
   statusId: string;
   category: string;
   categoryId: string;
-  year: string;
   createdAt: string;
   url: string;
   description: string;
@@ -54,7 +53,6 @@ export function migrateProjects(items: LegacyProject[]): ProjectDocument {
       statusId: categoryId(item.status),
       category: item.category,
       categoryId: categoryId(item.category),
-      year: item.year,
       createdAt: item.createdAt ?? '',
       url: item.url ?? '',
       description: item.description,
@@ -73,8 +71,9 @@ export function resolveProjects(document: ProjectDocument): ProjectDocument {
   return {
     ...document,
     items: document.items.map((item) => {
-      const normalized = { ...item } as Project & { role?: string };
+      const normalized = { ...item } as Project & { role?: string; year?: string };
       delete normalized.role;
+      delete normalized.year;
       return {
         ...normalized,
         createdAt: normalized.createdAt ?? '',

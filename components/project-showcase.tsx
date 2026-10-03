@@ -171,7 +171,6 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
           <header className="folio-detail-header">
             <div className="folio-section-label">
               <span>项目档案</span>
-              <span>{active.year}</span>
             </div>
             <div className="folio-title">
               <h2>{active.title}</h2>

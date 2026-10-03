@@ -55,9 +55,31 @@ try {
   await act(async () => instance.options.upload.handler([new window.File(['image'], '中文图片.png', { type: 'image/png' })]));
   assert.match(changes.at(-1), /!\[中文图片.png\]\(\/api\/media\/image.webp\)/);
   assert.deepEqual(working.slice(-2), [true, false]);
+  globalThis.fetch = async () => Response.json({ url: '/api/media/document.pdf', name: 'document.pdf' });
+  await act(async () => instance.options.upload.handler([new window.File(['%PDF-1.7'], '中文文档.pdf', { type: 'application/pdf' })]));
+  assert.match(changes.at(-1), /\n\[中文文档.pdf\]\(\/api\/media\/document.pdf\)/);
+  assert.equal(editorView.container.querySelector('a[href="/api/media/document.pdf"]').textContent, '中文文档.pdf');
+  assert.ok(!instance.options.upload.accept || instance.options.upload.accept === '*');
+  const fileRequests = [];
+  globalThis.fetch = async (url, init) => {
+    fileRequests.push({ url, name: decodeURIComponent(init.headers['X-File-Name']), body: init.body });
+    return Response.json({ url: `/api/media/${init.body.type.startsWith('image/') ? 'mixed.webp' : 'attachment.file'}` });
+  };
+  const files = [
+    new window.File(['notes'], '说明.txt'),
+    new window.File(['zip'], '资料 [最终版].zip', { type: 'application/zip' }),
+    new window.File(['image'], '混合图片.png', { type: 'image/png' }),
+  ];
+  await act(async () => instance.options.upload.handler(files));
+  assert.deepEqual(fileRequests.map(request => request.name), files.map(file => file.name));
+  assert.ok(fileRequests.every((request, index) => request.url === '/api/admin/media' && request.body === files[index]));
+  assert.match(changes.at(-1), /\n\[说明.txt\]\(\/api\/media\/attachment.file\)/);
+  assert.match(changes.at(-1), /\n\[资料 最终版.zip\]\(\/api\/media\/attachment.file\)/);
+  assert.match(changes.at(-1), /!\[混合图片.png\]\(\/api\/media\/mixed.webp\)/);
+  assert.deepEqual(working.slice(-2), [true, false]);
   const uploaded = changes.at(-1);
   globalThis.fetch = async () => Response.json({ error: '上传失败' }, { status: 500 });
-  await act(async () => instance.options.upload.handler([new window.File(['image'], 'fail.png', { type: 'image/png' })]));
+  await act(async () => instance.options.upload.handler([new window.File(['document'], 'fail.pdf', { type: 'application/pdf' })]));
   assert.equal(instance.getValue(), uploaded);
   assert.ok(screen.getByText('上传失败'));
   let requests = 0;
@@ -65,12 +87,15 @@ try {
   await act(async () => instance.options.upload.handler([new window.File([new Uint8Array(20 * 1024 * 1024 + 1)], 'large.png', { type: 'image/png' })]));
   assert.equal(requests, 0);
   assert.ok(screen.getByText('文件不能超过 20 MB'));
+  await act(async () => instance.options.upload.handler([new window.File([new Uint8Array(20 * 1024 * 1024 + 1)], 'large.zip', { type: 'application/zip' })]));
+  assert.equal(requests, 0);
+  assert.equal(instance.getValue(), uploaded);
   let finish;
   globalThis.fetch = () => new Promise(resolve => { finish = resolve; });
   let pending;
-  await act(async () => { pending = instance.options.upload.handler([new window.File(['image'], 'late.png', { type: 'image/png' })]); });
+  await act(async () => { pending = instance.options.upload.handler([new window.File(['document'], 'late.pdf', { type: 'application/pdf' })]); });
   editorView.rerender(h(Editor, { ...props, value: '另一条正文' }));
-  await act(async () => { finish(Response.json({ url: '/api/media/late.webp' })); await pending; });
+  await act(async () => { finish(Response.json({ url: '/api/media/late.file' })); await pending; });
   assert.equal(instance.getValue(), '另一条正文');
   assert.equal(instance.clearedStack, true);
   await act(async () => { pending = instance.options.upload.handler([new window.File(['image'], 'unmounted.png', { type: 'image/png' })]); });

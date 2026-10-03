@@ -48,6 +48,11 @@ try {
   run(['scripts/import-d1.mjs']);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM articles WHERE created_at IS NULL')).rows[0].n, 0);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM cms_entries WHERE created_at IS NULL')).rows[0].n, 0);
+  assert.equal((await db.query("SELECT count(*)::int AS n FROM cms_entries WHERE section='projects' AND collection='items' AND payload ? 'year'")).rows[0].n, 0, '旧数据导入不能恢复项目年份');
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM articles WHERE cover_description IS NULL')).rows[0].n, 0);
+  const writingPrompt = (await db.query("SELECT value->>'coverPrompt' AS prompt FROM cms_sections WHERE section='aiSettings'")).rows[0]?.prompt;
+  assert.ok(writingPrompt?.includes('{{description}}'));
+  assert.doesNotMatch(writingPrompt, /\{\{(?:title|excerpt)\}\}/);
   const imported = (await db.query("SELECT section,collection,id,payload,revision,updated_at FROM cms_entries ORDER BY section,collection,id")).rows;
   assert.ok(imported.length > 0, '使用真实旧 D1 数据验证导入');
   assert.equal((await db.query("SELECT count(*)::int AS n FROM cms_entries WHERE btrim(search_text)='' AND (payload ? 'title' OR payload ? 'name' OR payload ? 'text')")).rows[0].n, 0);
@@ -126,13 +131,17 @@ try {
   const key = `${crypto.randomUUID()}.png`;
   const url = `/api/media/${key}`;
   await saveLocalMedia(key, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB', 'base64'), { contentType: 'image/png', name: '回归测试图片' });
-  const article = { ...defaults.writing[0], cover: '', _published: false, body: `正文图片 ![图](${url})` };
+  const attachmentKey = `${crypto.randomUUID()}.file`;
+  await saveLocalMedia(attachmentKey, Buffer.from('附件正文'), { contentType: 'application/octet-stream', name: '回归测试附件.txt' });
+  const article = { ...defaults.writing[0], cover: '', _published: false, body: `正文图片 ![图](${url})\n\n[附件](/api/media/${attachmentKey})` };
   for (const slug of ['audit-media-one', 'audit-media-two'])
     await createAdminRecord('writing', 'articles', { ...article, slug });
   await deleteAdminRecord({ section: 'writing', collection: 'articles', id: 'audit-media-one' }, 1);
   assert.equal((await readLocalMedia(key, new Headers())).status, 200, '仍被另一正文引用时不能删除');
+  assert.equal((await readLocalMedia(attachmentKey, new Headers())).status, 200, '仍被另一正文引用时不能删除附件');
   await deleteAdminRecord({ section: 'writing', collection: 'articles', id: 'audit-media-two' }, 1);
   assert.equal((await readLocalMedia(key, new Headers())).status, 404, '最后一篇正文删除后清理素材');
+  assert.equal((await readLocalMedia(attachmentKey, new Headers())).status, 404, '最后一篇正文删除后清理附件');
   console.log('PASS Markdown media cleanup and shared-reference retention');
 } finally {
   releaseWrite?.();

@@ -222,7 +222,7 @@ export function AdminAiSettings({
             />
             <small>
               {
-                '{{title}} = 文章标题；{{excerpt}} = 文章摘要；{{style}} = 上方封面风格。标题和摘要占位符必须保留。'
+                '{{description}} = 当前封面的图片描述；{{style}} = 上方封面风格。图片描述占位符必须保留。'
               }
             </small>
           </div>

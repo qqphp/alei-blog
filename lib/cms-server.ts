@@ -71,7 +71,7 @@ export async function getDocuments(sections?: Section[]) {
       const [sectionResult, categories, articles, entries] = [
         await db.query<{ section: Section; value: unknown; revision: number }>('SELECT section, value, revision FROM cms_sections WHERE $1::text[] IS NULL OR section = ANY($1::text[])', [selected]),
         await db.query<{ id: string; name: string; description: string; parent_id: string | null }>('SELECT id, name, description, parent_id FROM article_categories WHERE $1::boolean ORDER BY position', [has('categories') || has('writing')]),
-        await db.query<{ slug: string; title: string; excerpt: string; body: string; category_id: string; date: string; published: boolean; cover_url: string; cover_mode: string; cover_generated_for: string }>(`SELECT slug, title, excerpt, body, category_id, to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, published, cover_url, cover_mode, cover_generated_for FROM articles WHERE $1::boolean ORDER BY created_at DESC, slug`, [has('writing')]),
+        await db.query<{ slug: string; title: string; excerpt: string; body: string; category_id: string; date: string; published: boolean; cover_url: string; cover_mode: string; cover_generated_for: string; cover_description: string }>(`SELECT slug, title, excerpt, body, category_id, to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, published, cover_url, cover_mode, cover_generated_for, cover_description FROM articles WHERE $1::boolean ORDER BY created_at DESC, slug`, [has('writing')]),
         await db.query<{ section: Section; collection: string; category_id: string | null; payload: unknown; createdAt: Date | null; updatedAt: Date }>('SELECT section, collection, category_id, payload, created_at AS "createdAt", updated_at AS "updatedAt" FROM cms_entries WHERE $1::text[] IS NULL OR section = ANY($1::text[]) ORDER BY section, collection, position, id', [selected]),
       ];
       await db.query('COMMIT');
@@ -103,7 +103,7 @@ export async function getDocuments(sections?: Section[]) {
     content.writing = articles.map((row) => ({
       slug: row.slug, title: row.title, excerpt: row.excerpt, body: row.body,
       categoryId: row.category_id, category: '', date: row.date, _published: row.published,
-      cover: row.cover_url, coverMode: row.cover_mode as 'upload' | 'ai', coverGeneratedFor: row.cover_generated_for,
+      coverDescription: row.cover_description, cover: row.cover_url, coverMode: row.cover_mode as 'upload' | 'ai', coverGeneratedFor: row.cover_generated_for,
     }));
   for (const key of Object.keys(adminCollections) as Section[]) {
     if (!has(key) || key === 'writing' || revisions[key] === undefined) continue;
@@ -170,6 +170,7 @@ export async function getDocuments(sections?: Section[]) {
         categoryId: id,
         category: categoryList.find((item) => item.id === id)?.name ?? article.category,
         coverMode: article.coverMode ?? 'upload',
+        coverDescription: article.coverDescription ?? '',
         coverGeneratedFor: article.coverGeneratedFor ?? '',
       };
     });
@@ -214,11 +215,11 @@ export function getPublicContent<T extends keyof PublicContent>(sections: readon
 
 export async function getPublicArticle(slug: string) {
   const row = await withDatabase(async (db) => {
-    const result = await db.query<{ slug: string; title: string; excerpt: string; body: string; categoryId: string; category: string; date: string; cover: string; coverMode: 'upload' | 'ai'; coverGeneratedFor: string }>(
+    const result = await db.query<{ slug: string; title: string; excerpt: string; body: string; categoryId: string; category: string; date: string; cover: string; coverMode: 'upload' | 'ai'; coverGeneratedFor: string; coverDescription: string }>(
       `SELECT a.slug, a.title, a.excerpt, a.body, a.category_id AS "categoryId",
         c.name AS category, to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date,
         a.cover_url AS cover, a.cover_mode AS "coverMode",
-        a.cover_generated_for AS "coverGeneratedFor"
+        a.cover_generated_for AS "coverGeneratedFor", a.cover_description AS "coverDescription"
        FROM articles a JOIN article_categories c ON c.id = a.category_id
        WHERE a.slug = $1 AND a.published`,
       [slug],

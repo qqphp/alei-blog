@@ -1,7 +1,6 @@
 import { bindings, getDocuments } from './cms-server';
 import { readLimitedBody } from './admin-auth';
 import { validateProviderUrl } from './cms-validation';
-import { coverInput } from './article-categories';
 import { convertGeneratedImage, saveLocalMedia } from './local-media';
 import type { Content } from './cms-defaults';
 
@@ -86,13 +85,12 @@ export const imageActions = {
 export type ImageAction = keyof typeof imageActions;
 
 export async function generateCover(input: {
-  action: ImageAction; title?: string; excerpt?: string; description?: string;
+  action: ImageAction; description: string;
 }) {
   const { content } = await getDocuments(['aiSettings']);
   const settings = content.aiSettings;
   const [promptField, styleField, sizeField] = imageActions[input.action];
   const prompt = buildCoverPrompt(settings[promptField], {
-    title: input.title, excerpt: input.excerpt,
     style: settings[styleField], description: input.description,
   });
   const size = settings[sizeField];
@@ -147,13 +145,11 @@ export async function generateCover(input: {
   const key = `${crypto.randomUUID()}.webp`;
   await saveLocalMedia(key, webp, {
     contentType: 'image/webp',
-    name: `${(input.description ?? input.title ?? '').slice(0, 80)} · AI${input.action === 'story-image' || input.action === 'project-cover' ? '配图' : '封面'}`,
+    name: `${input.description.slice(0, 80)} · AI${input.action === 'story-image' || input.action === 'project-cover' ? '配图' : '封面'}`,
     source: 'ai',
   });
   return {
     url: `/api/media/${key}`,
-    generatedFor: input.description !== undefined
-      ? JSON.stringify([input.description.trim()])
-      : coverInput(input.title ?? '', input.excerpt ?? ''),
+    generatedFor: JSON.stringify([input.description.trim()]),
   };
 }

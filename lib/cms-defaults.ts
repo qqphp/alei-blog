@@ -64,7 +64,7 @@ export const defaults = {
     coverStyle:
       '现代编辑插画，简洁构图，温暖纸张质感，墨绿与米白为主色，少量暖金色点缀',
     coverPrompt:
-      '为一篇中文博客文章创作横向封面插画。\n文章标题：{{title}}\n文章摘要：{{excerpt}}\n视觉风格：{{style}}\n请提炼文章的核心概念，用具象物件与空间关系表达，避免通用机器人、发光大脑和杂乱科技符号。画面有一个明确视觉焦点，边缘保留裁切余量。不要出现文字、字母、数字、标志、水印。横向 3:2 构图，适合博客文章列表与分享封面。',
+      '为一篇中文博客文章创作横向封面插画。\n图片描述：{{description}}\n视觉风格：{{style}}\n根据图片描述中的物件、场景与空间关系构图，避免通用机器人、发光大脑和杂乱科技符号。画面有一个明确视觉焦点，边缘保留裁切余量。不要出现文字、字母、数字、标志、水印。横向 3:2 构图，适合博客文章列表与分享封面。',
   },
   categories: [...new Set(writing.map((item) => item.category))].map(
     (name) => ({ id: categoryId(name), name, description: '', parentId: '' }),
@@ -114,6 +114,7 @@ export const defaults = {
       body: articleSeed,
       categoryId: categoryId(item.category),
       coverMode: 'upload',
+      coverDescription: '',
       coverGeneratedFor: '',
     })),
   ),

@@ -5,7 +5,7 @@ export async function GET(
   { params }: { params: Promise<{ key: string }> },
 ) {
   const { key } = await params;
-  if (!/^[a-f0-9-]+\.(png|jpg|gif|webp|mp3|wav)$/.test(key))
+  if (!/^[a-f0-9-]+\.(png|jpg|gif|webp|mp3|wav|file)$/.test(key))
     return new Response('Not found', { status: 404 });
   try {
     const file = await readLocalMedia(key, request.headers);

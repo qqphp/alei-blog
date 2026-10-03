@@ -103,14 +103,17 @@ try {
     ['最新文章', '较新文章', '旧文章'],
   );
   const homeProjects = newestProjectsFirst([
-    { title: '旧项目', createdAt: '2024-01-01T00:00:00.000Z', year: '2024' },
-    { title: '最新项目', createdAt: '2026-09-12T00:00:00.000Z', year: '2026' },
-    { title: '旧数据项目', createdAt: '', year: '2025 — 2026' },
+    { title: '旧项目', createdAt: '2024-01-01T00:00:00.000Z' },
+    { title: '最新项目', createdAt: '2026-09-12T00:00:00.000Z' },
+    { title: '旧数据项目', createdAt: '' },
   ]);
   assert.deepEqual(
     homeProjects.map((item) => item.title),
-    ['最新项目', '旧数据项目', '旧项目'],
+    ['最新项目', '旧项目', '旧数据项目'],
   );
+  assert.deepEqual(newestProjectsFirst([
+    { id: 'missing', createdAt: '' }, { id: 'invalid', createdAt: 'invalid' },
+  ]).map((item) => item.id), ['missing', 'invalid']);
   const { default: WritingArchivePage } =
     await import('../components/writing-archive-page.tsx');
   const { ProjectShowcase } =

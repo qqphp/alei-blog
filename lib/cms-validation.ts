@@ -93,6 +93,8 @@ export function validateContent(key: Section, value: unknown) {
         fail('请上传音频或填写时长');
       if (typeof input !== typeof sample) fail(`需要 ${typeof sample}`);
       if (typeof input === 'string') {
+        if (key === 'writing' && field === 'coverDescription' && input.length > 5000)
+          fail('图片描述最多 5000 字');
         if (input.length > (field === 'body' || (key === 'investing' && path.includes('.paragraphs[')) ? 200000 : 30000))
           fail('文字过长');
         if (['id', 'slug', 'title', 'name'].includes(field) && !input.trim())
@@ -292,15 +294,10 @@ export function validateContent(key: Section, value: unknown) {
     validateProviderUrl(settings.baseUrl);
     if (!settings.textModel.trim() || !settings.imageModel.trim())
       throw new Error('请填写模型名称');
-    if (
-      !settings.coverPrompt.includes('{{title}}') ||
-      !settings.coverPrompt.includes('{{excerpt}}')
-    )
-      throw new Error('封面提示词必须包含 {{title}} 和 {{excerpt}}');
   }
   if (key === 'aiSettings') {
     const settings = value as typeof defaults.aiSettings;
-    for (const field of ['projectImagePrompt', 'playlistCoverPrompt', 'filmCoverPrompt',
+    for (const field of ['coverPrompt', 'projectImagePrompt', 'playlistCoverPrompt', 'filmCoverPrompt',
       'podcastCoverPrompt', 'travelCoverPrompt', 'hobbyCoverPrompt', 'bookCoverPrompt',
       'booklistCoverPrompt'] as const) {
       const prompt = settings[field];

@@ -4,10 +4,6 @@ export function categoryId(name: string) {
     .join('-')}`;
 }
 
-export function coverInput(title: string, excerpt: string) {
-  return JSON.stringify([title.trim(), excerpt.trim()]);
-}
-
 export function stripArticleExtras<T extends object>(
   article: T,
 ): Omit<T, 'label' | 'tag' | 'meta'> {

@@ -32,6 +32,14 @@ try {
       const metadata = names.length
         ? Array.isArray(value) ? {} : Object.fromEntries(Object.entries(value).filter(([name]) => !names.includes(name)))
         : key === 'writing' || key === 'categories' ? {} : value;
+      if (key === 'aiSettings' && typeof metadata.coverPrompt === 'string') {
+        const oldDefault = '为一篇中文博客文章创作横向封面插画。\n文章标题：{{title}}\n文章摘要：{{excerpt}}\n视觉风格：{{style}}\n请提炼文章的核心概念，用具象物件与空间关系表达，避免通用机器人、发光大脑和杂乱科技符号。画面有一个明确视觉焦点，边缘保留裁切余量。不要出现文字、字母、数字、标志、水印。横向 3:2 构图，适合博客文章列表与分享封面。';
+        metadata.coverPrompt = metadata.coverPrompt === oldDefault
+          ? '为一篇中文博客文章创作横向封面插画。\n图片描述：{{description}}\n视觉风格：{{style}}\n根据图片描述中的物件、场景与空间关系构图，避免通用机器人、发光大脑和杂乱科技符号。画面有一个明确视觉焦点，边缘保留裁切余量。不要出现文字、字母、数字、标志、水印。横向 3:2 构图，适合博客文章列表与分享封面。'
+          : metadata.coverPrompt.replaceAll('{{title}}', '{{description}}').replaceAll('{{excerpt}}', '{{description}}');
+        if (!metadata.coverPrompt.includes('{{description}}'))
+          metadata.coverPrompt += '\n图片描述：{{description}}';
+      }
       await client.query('INSERT INTO cms_sections (section, value, revision) VALUES ($1, $2::jsonb, $3)', [key, JSON.stringify(metadata), revision]);
     }
     const categories = source.documents.find((row) => row.key === 'categories')?.value ?? [];
@@ -40,11 +48,11 @@ try {
         [category.id, category.name, category.description, category.parentId || null, position]);
     const articles = source.documents.find((row) => row.key === 'writing')?.value ?? [];
     for (const [position, article] of articles.entries())
-      await client.query(`INSERT INTO articles (slug, title, excerpt, body, category_id, published, cover_url, cover_mode, cover_generated_for, position, created_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+      await client.query(`INSERT INTO articles (slug, title, excerpt, body, category_id, published, cover_url, cover_mode, cover_generated_for, cover_description, position, created_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
       [article.slug, article.title, article.excerpt, article.body, article.categoryId,
         article._published === true, article.cover,
-        article.coverMode ?? 'upload', article.coverGeneratedFor ?? '', position, historicalCreatedAt]);
+        article.coverMode ?? 'upload', article.coverGeneratedFor ?? '', article.coverDescription ?? '', position, historicalCreatedAt]);
     let entries = 0;
     for (const { key, value } of source.documents) {
       for (const collection of collections[key] ?? []) {
@@ -56,6 +64,7 @@ try {
             delete item.subcategory;
             item.categoryId = '';
           }
+          if (key === 'projects' && collection === 'items') delete item.year;
           if (key === 'tracks' && collection === 'playlists') delete item.color;
           const fields = recordFields(item);
           await client.query(`INSERT INTO cms_entries (section, collection, id, position, published, title, category_id, occurred_at, payload, created_at, status_id, search_text)

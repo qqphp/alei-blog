@@ -57,7 +57,7 @@ try {
   const replay = new pg.Client({ connectionString: testUrl.toString() });
   await replay.connect();
   try {
-    for (const file of ['0016_ai_skill_categories.sql', '0017_remove_playlist_color.sql', '0018_ai_agent_statuses.sql'])
+    for (const file of ['0016_ai_skill_categories.sql', '0017_remove_playlist_color.sql', '0018_ai_agent_statuses.sql', '0021_writing_cover_description.sql', '0022_remove_project_year.sql'])
       await replay.query(await readFile(resolve('db/migrations', file), 'utf8'));
   }
   finally { await replay.end(); }
@@ -92,6 +92,7 @@ try {
         expected.categoryId = '';
       }
       if (entry.section === 'tracks' && entry.collection === 'playlists') delete expected.color;
+      if (entry.section === 'projects' && entry.collection === 'items') delete expected.year;
       assert.deepEqual(after.payload, coverDescriptionRecord && !('coverDescription' in expected)
         ? { ...expected, coverDescription: '' } : expected);
     }
@@ -103,7 +104,7 @@ try {
   for (const section of expectedSections.filter((item) => item.section !== 'investing')) {
     const actual = migrated.sections.find((item) => item.section === section.section)?.value;
     if (section.section === 'aiSettings') {
-      const fields = ['projectImagePrompt', 'playlistCoverPrompt', 'filmCoverPrompt',
+      const fields = ['coverPrompt', 'projectImagePrompt', 'playlistCoverPrompt', 'filmCoverPrompt',
         'podcastCoverPrompt', 'travelCoverPrompt', 'hobbyCoverPrompt', 'bookCoverPrompt',
         'booklistCoverPrompt'];
       for (const field of fields) {
@@ -126,6 +127,40 @@ try {
   const testDb = new pg.Client({ connectionString: testUrl.toString() });
   await testDb.connect();
   try {
+    assert.equal((await testDb.query("SELECT count(*)::int AS n FROM articles WHERE cover_description <> ''")).rows[0].n, 0, '旧文章图片描述初始化为空');
+    assert.equal((await testDb.query("SELECT count(*)::int AS n FROM cms_entries WHERE section='projects' AND collection='items' AND payload ? 'year'")).rows[0].n, 0);
+    await testDb.query('BEGIN');
+    try {
+      const migration = await readFile('db/migrations/0021_writing_cover_description.sql', 'utf8');
+      for (const [prompt, expected] of [
+        ['自定义 {{title}} / {{excerpt}} / {{style}}', '自定义 {{description}} / {{description}} / {{style}}'],
+        ['只有风格 {{style}}', '只有风格 {{style}}\n图片描述：{{description}}'],
+        [defaults.aiSettings.coverPrompt, defaults.aiSettings.coverPrompt],
+      ]) {
+        await testDb.query("UPDATE cms_sections SET value=jsonb_set(value,'{coverPrompt}',to_jsonb($1::text)) WHERE section='aiSettings'", [prompt]);
+        const before = (await testDb.query("SELECT revision FROM cms_sections WHERE section='aiSettings'")).rows[0].revision;
+        await testDb.query(migration);
+        const after = (await testDb.query("SELECT value,revision FROM cms_sections WHERE section='aiSettings'")).rows[0];
+        assert.equal(after.value.coverPrompt, expected);
+        assert.equal(after.revision, before + (prompt === expected ? 0 : 1));
+        await testDb.query(migration);
+        assert.equal((await testDb.query("SELECT revision FROM cms_sections WHERE section='aiSettings'")).rows[0].revision, after.revision);
+      }
+      const existing = (await testDb.query("SELECT id,payload,revision,created_at,updated_at FROM cms_entries WHERE section='projects' AND collection='items' LIMIT 1")).rows[0];
+      await testDb.query("UPDATE cms_entries SET payload=payload || '{\"year\":\"1999\"}',search_text='stale 1999' WHERE section='projects' AND collection='items' AND id=$1", [existing.id]);
+      const removeYear = await readFile('db/migrations/0022_remove_project_year.sql', 'utf8');
+      await testDb.query(removeYear);
+      const cleaned = (await testDb.query("SELECT payload,revision,search_text,created_at,updated_at FROM cms_entries WHERE section='projects' AND collection='items' AND id=$1", [existing.id])).rows[0];
+      assert.deepEqual(cleaned.payload, existing.payload);
+      assert.equal(cleaned.revision, existing.revision + 1);
+      assert.deepEqual(cleaned.created_at, existing.created_at);
+      assert.deepEqual(cleaned.updated_at, existing.updated_at);
+      const { recordFields } = await import('../lib/content-record-fields.mjs');
+      assert.equal(cleaned.search_text, recordFields(cleaned.payload).search);
+      await testDb.query(removeYear);
+      assert.equal((await testDb.query("SELECT revision FROM cms_entries WHERE section='projects' AND collection='items' AND id=$1", [existing.id])).rows[0].revision, cleaned.revision);
+    } finally { await testDb.query('ROLLBACK'); }
+    console.log('PASS writing description migration, custom prompt conversion, project year removal and migration replay');
     assert.equal((await testDb.query("SELECT count(*)::int AS n FROM cms_sections WHERE section IN ('pageSettings','copy')")).rows[0].n, 0, '迁移和初始化不能恢复已删除配置');
     assert.equal((await testDb.query("SELECT to_regclass('public.cms_section_parts')")).rows[0].to_regclass, null);
     const backfill = '2026-01-01T00:00:00.000Z';
@@ -401,19 +436,23 @@ try {
   assert.equal(categoryChanged.status, 200);
   const article = { ...defaults.writing[0], slug: `granular-${crypto.randomUUID().slice(0, 8)}`,
     title: '逐条测试文章', body: '', excerpt: '', cover: '', coverMode: 'upload',
-    coverGeneratedFor: '', categoryId: newCategory.id, category: newCategory.name,
+    coverDescription: '测试文章封面描述', coverGeneratedFor: '', categoryId: newCategory.id, category: newCategory.name,
     _published: false };
   const created = await request('/api/admin/records/writing/articles', 'POST', { value: article });
   assert.equal(created.status, 200, JSON.stringify(created.data));
   assert.equal((await request('/api/admin/records/writing/articles')).data.items[0].id, article.slug,
     '文章管理继续按创建时间倒序');
   const articlePath = `/api/admin/records/writing/articles/${article.slug}`;
+  assert.equal((await request(articlePath)).data.value.coverDescription, article.coverDescription);
+  const invalidDescription = await request(articlePath, 'PUT', { value: { ...article, coverDescription: '图'.repeat(5001) }, revision: 1 });
+  assert.equal(invalidDescription.status, 400);
   const categoryInUse = await request(newCategoryPath, 'DELETE', { revision: 2 });
   assert.equal(categoryInUse.status, 400);
   const noCover = await request(articlePath, 'PATCH', { published: true, revision: 1 });
   assert.equal(noCover.status, 400);
-  const updated = await request(articlePath, 'PUT', { value: { ...article, title: '逐条测试文章已编辑' }, revision: 1 });
+  const updated = await request(articlePath, 'PUT', { value: { ...article, title: '逐条测试文章已编辑', coverDescription: '已编辑的图片描述' }, revision: 1 });
   assert.equal(updated.status, 200, JSON.stringify(updated.data));
+  assert.equal((await request(articlePath)).data.value.coverDescription, '已编辑的图片描述');
   const published = await request(articlePath, 'PUT', { value: { ...article,
     title: '逐条测试文章已编辑', cover: '/notes/paper-v2.png', _published: true }, revision: 2 });
   assert.equal(published.status, 200, JSON.stringify(published.data));

@@ -122,7 +122,7 @@ async function readRecord(db: Client, key: RecordKey) {
     const row = await db.query(`SELECT a.slug, a.title, a.excerpt, a.body,
       a.category_id AS "categoryId", c.name AS category,
       to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, a.published AS "_published",
-      a.cover_url AS cover, a.cover_mode AS "coverMode",
+      a.cover_url AS cover, a.cover_mode AS "coverMode", a.cover_description AS "coverDescription",
       a.cover_generated_for AS "coverGeneratedFor", a.revision,
       a.created_at AS "createdAt", a.updated_at AS "updatedAt"
       FROM articles a JOIN article_categories c ON c.id = a.category_id WHERE a.slug = $1`, [id]);
@@ -320,7 +320,7 @@ function mediaKeys(value: unknown) {
   const keys = new Set<string>();
   const visit = (item: unknown) => {
     if (typeof item === 'string') {
-      for (const match of item.matchAll(/(?:^|[^A-Za-z0-9/._-])\/api\/media\/([a-f0-9-]+\.(?:png|jpg|gif|webp|mp3|wav))(?=$|[^A-Za-z0-9/._-])/g))
+      for (const match of item.matchAll(/(?:^|[^A-Za-z0-9/._-])\/api\/media\/([a-f0-9-]+\.(?:png|jpg|gif|webp|mp3|wav|file))(?=$|[^A-Za-z0-9/._-])/g))
         keys.add(match[1]);
     } else if (Array.isArray(item)) item.forEach(visit);
     else if (item && typeof item === 'object') Object.values(item).forEach(visit);
@@ -353,7 +353,7 @@ async function cleanupUnreferencedMedia(before: unknown, after: unknown) {
 
 function articleParams(value: Item) {
   return [value.slug, value.title, value.excerpt, value.body, value.categoryId,
-    value._published, value.cover, value.coverMode, value.coverGeneratedFor];
+    value._published, value.cover, value.coverMode, value.coverGeneratedFor, value.coverDescription];
 }
 
 export async function createAdminRecord(section: Section, collection: string, value: Item) {
@@ -368,8 +368,8 @@ export async function createAdminRecord(section: Section, collection: string, va
       await validateRecord(db, { section, collection }, value);
       if (section === 'writing' && collection === 'articles') {
         await db.query(`INSERT INTO articles (slug, title, excerpt, body, category_id,
-          published, cover_url, cover_mode, cover_generated_for, position)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,
+          published, cover_url, cover_mode, cover_generated_for, cover_description, position)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
             (SELECT coalesce(max(position) + 1, 0) FROM articles))`, articleParams(value));
       } else if (section === 'writing' && collection === 'categories') {
         await db.query('UPDATE article_categories SET position = position + 1');
@@ -424,8 +424,8 @@ export async function updateAdminRecord(key: RecordKey, value: Item, revision: n
       if (key.section === 'writing' && key.collection === 'articles') {
         updated = await db.query(`UPDATE articles SET slug=$1,title=$2,excerpt=$3,body=$4,
           category_id=$5,published=$6,cover_url=$7,
-          cover_mode=$8,cover_generated_for=$9,revision=revision+1,updated_at=now()
-          WHERE slug=$10 AND revision=$11`, [...articleParams(value), key.id, revision]);
+          cover_mode=$8,cover_generated_for=$9,cover_description=$10,revision=revision+1,updated_at=now()
+          WHERE slug=$11 AND revision=$12`, [...articleParams(value), key.id, revision]);
       } else if (key.section === 'writing' && key.collection === 'categories') {
         updated = await db.query(`UPDATE article_categories SET name=$1,description=$2,
           parent_id=nullif($3,''),revision=revision+1 WHERE id=$4 AND revision=$5`,

@@ -50,7 +50,6 @@ const names: Record<string, string> = {
   status: '内容状态',
   subtitle: '副标题',
   number: '编号',
-  year: '年份',
   role: '项目网址',
   tags: '标签',
   question: '起点问题',

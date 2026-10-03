@@ -11,7 +11,7 @@ import {
 import { resolve } from 'node:path';
 import sharp from 'sharp';
 
-const keyPattern = /^[a-f0-9-]+\.(png|jpg|gif|webp|mp3|wav)$/;
+const keyPattern = /^[a-f0-9-]+\.(png|jpg|gif|webp|mp3|wav|file)$/;
 const contentTypes = {
   png: 'image/png',
   jpg: 'image/jpeg',
@@ -19,6 +19,7 @@ const contentTypes = {
   webp: 'image/webp',
   mp3: 'audio/mpeg',
   wav: 'audio/wav',
+  file: 'application/octet-stream',
 };
 
 async function readBody(request, maximum) {
@@ -185,6 +186,12 @@ export async function startLocalMediaStorage() {
           'Accept-Ranges': 'bytes',
           ETag: etag,
         };
+        if (extension === 'file') {
+          const metadata = JSON.parse(await readFile(resolve(metadataDirectory, `${key}.json`), 'utf8'));
+          const filename = encodeURIComponent(metadata.name).replace(/[!'()*]/g,
+            (character) => `%${character.charCodeAt(0).toString(16).toUpperCase()}`);
+          headers['Content-Disposition'] = `attachment; filename="attachment"; filename*=UTF-8''${filename}`;
+        }
         if (request.headers['if-none-match'] === etag) {
           response.writeHead(304, headers).end();
           return;

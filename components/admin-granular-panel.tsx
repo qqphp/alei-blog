@@ -5,11 +5,10 @@ import Link from 'next/link';
 import { format } from 'date-fns';
 import { defaults, sectionLabels, type Content, type Section } from '@/lib/cms-defaults';
 import { adminCollections, collectionLabels, configScopes } from '@/lib/admin-sections';
-import { coverInput } from '@/lib/article-categories';
 import { musicSample } from '@/lib/music-content';
 import { storyDate, type Story } from '@/lib/story-content';
 import type { Json } from '@/lib/cms-validation';
-import { AdminWritingEditor, createArticleCover, type Article } from './admin-writing-editor';
+import { AdminWritingEditor, type Article } from './admin-writing-editor';
 import { AdminStoryEditor } from './admin-story-editor';
 import { AdminAiSettings } from './admin-ai-settings';
 import { AdminAiResources } from './admin-ai-resources';
@@ -76,7 +75,7 @@ function sampleRecord(section: Section, collection: string, options: Record<stri
       slug: `article-${crypto.randomUUID().slice(0, 8)}`, title: '', excerpt: '', body: '',
       categoryId: options.categories?.[0]?.id ?? '', category: options.categories?.[0]?.name ?? '',
       date: format(new Date(), 'yyyy.MM.dd'), cover: '', coverMode: 'upload',
-      coverGeneratedFor: '', _published: false,
+      coverDescription: '', coverGeneratedFor: '', _published: false,
     };
   if (section === 'writing' && collection === 'categories')
     return { id: `category-${crypto.randomUUID()}`, name: '', description: '', parentId: '' };
@@ -127,19 +126,6 @@ function sampleConfig(section: Section): Json {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
   const collections = adminCollections[section] ?? EMPTY_COLLECTIONS;
   return Object.fromEntries(Object.entries(source).filter(([key]) => !collections.includes(key))) as Json;
-}
-
-async function prepareMedia(section: Section, collection: string, value: Json, setMessage: (message: string) => void) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
-  const item = value as Item;
-  if (section === 'writing' && collection === 'articles') {
-    const article = item as unknown as Article;
-    if (article.coverMode === 'ai' && (!article.cover || article.coverGeneratedFor !== coverInput(article.title, article.excerpt))) {
-      setMessage('正在生成文章封面…');
-      return asJson(await createArticleCover(article));
-    }
-  }
-  return value;
 }
 
 export function AdminGranularPanel() {
@@ -299,8 +285,7 @@ export function AdminGranularPanel() {
     setBusy(true); setMessage('');
     try {
       if (activeCollection && edit) {
-        const prepared = await prepareMedia(recordSection, activeCollection, edit.value, setMessage);
-        setEdit((current) => current ? { ...current, value: prepared } : current);
+        const prepared = edit.value;
         const url = recordUrl(recordSection, activeCollection, edit.id ?? undefined);
         const result = await api<{ revision: number; failedMedia?: string[] }>(url, {
           method: edit.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' },

@@ -123,26 +123,25 @@ export default function AdminMarkdownEditorContent({
         }
       },
       upload: {
-        accept: 'image/*', multiple: true,
+        accept: '', multiple: true,
         handler: async (files) => {
           const uploadGeneration = generation.current;
           uploads++;
           callbacks.current.onWorking?.(true);
-          setMessage('正在上传正文图片…');
+          setMessage('正在上传正文图片或文件…');
           try {
             for (const file of files) {
-              if (!file.type.startsWith('image/')) throw new Error('正文仅支持上传图片');
               const result = await upload(file);
               if (disposed || uploadGeneration !== generation.current) return null;
               const alt = file.name.replace(/[[\]\\\r\n]/g, '');
               const url = result.url.replace(/ /g, '%20').replace(/\(/g, '%28').replace(/\)/g, '%29');
-              instance.insertMD(`\n![${alt}](${url})\n\n`);
+              instance.insertMD(`\n${file.type.startsWith('image/') ? '!' : ''}[${alt}](${url})\n\n`);
               currentValue.current = instance.getValue();
               callbacks.current.onChange(currentValue.current);
             }
-            setMessage('正文图片已上传，确认提交后保存。');
+            setMessage('正文图片或文件已上传，确认提交后保存。');
           } catch (error) {
-            if (!disposed && uploadGeneration === generation.current) setMessage(error instanceof Error ? error.message : '图片上传失败，请重试');
+            if (!disposed && uploadGeneration === generation.current) setMessage(error instanceof Error ? error.message : '文件上传失败，请重试');
           } finally {
             uploads--;
             if (!disposed && uploads === 0) callbacks.current.onWorking?.(false);
