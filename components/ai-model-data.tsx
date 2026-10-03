@@ -30,6 +30,10 @@ function numberText(value: number | null, suffix = '') {
     : `${new Intl.NumberFormat('en-US', { maximumSignificantDigits: 5 }).format(value)}${suffix}`;
 }
 
+function priceText(value: number | null) {
+  return value === null ? '—' : `$${numberText(value)}`;
+}
+
 function dateText(value: string | null) {
   return value ? value.replaceAll('-', '.') : '日期未知';
 }
@@ -47,8 +51,8 @@ function ModelMetrics({ model }: { model: Model }) {
       <div><dt>Intelligence</dt><dd>{numberText(model.intelligence)}</dd></div>
       <div><dt>Coding</dt><dd>{numberText(model.coding)}</dd></div>
       <div><dt>Agentic</dt><dd>{numberText(model.agentic)}</dd></div>
-      <div><dt>输入 / 1M</dt><dd>{numberText(model.inputPrice)}</dd></div>
-      <div><dt>输出 / 1M</dt><dd>{numberText(model.outputPrice)}</dd></div>
+      <div><dt>输入 / 1M (USD)</dt><dd>{priceText(model.inputPrice)}</dd></div>
+      <div><dt>输出 / 1M (USD)</dt><dd>{priceText(model.outputPrice)}</dd></div>
       <div><dt>输出速度</dt><dd>{numberText(model.outputSpeed, ' tok/s')}</dd></div>
     </dl>
   );
@@ -129,38 +133,54 @@ export function AiModelDataSection({
       </div>
 
       <div className="ai-model-layout">
-        <aside className="ai-model-vendors" aria-label="模型厂商">
-          <h3>厂商索引</h3>
-          {groups.length > 8 ? (
-            <label className="ai-model-vendor-picker">
-              <span>选择厂商</span>
-              <select
-                aria-label="选择模型厂商"
-                value={selectedProviderName}
-                onChange={(event) => setSelectedProvider(event.target.value)}
-              >
-                {groups.map((group, index) => (
-                  <option key={group.provider} value={group.provider}>
-                    {String(index + 1).padStart(2, '0')} · {group.provider} · {group.models.length}
-                  </option>
-                ))}
-              </select>
-            </label>
-          ) : (
-            <nav className="ai-model-vendor-list" aria-label="厂商列表">
-              {groups.map((group, index) => (
-                <button
-                  key={group.provider}
-                  type="button"
-                  aria-pressed={group.provider === selectedProviderName}
-                  onClick={() => setSelectedProvider(group.provider)}
+        <aside className="ai-model-sidebar" aria-label="模型厂商与指标说明">
+          <div className="ai-model-vendors">
+            <h3>厂商索引</h3>
+            {groups.length > 8 ? (
+              <label className="ai-model-vendor-picker">
+                <span>选择厂商</span>
+                <select
+                  aria-label="选择模型厂商"
+                  value={selectedProviderName}
+                  onChange={(event) => setSelectedProvider(event.target.value)}
                 >
-                  <span>{group.provider}</span>
-                  <small>{String(index + 1).padStart(2, '0')} · {group.models.length}</small>
-                </button>
-              ))}
-            </nav>
-          )}
+                  {groups.map((group, index) => (
+                    <option key={group.provider} value={group.provider}>
+                      {String(index + 1).padStart(2, '0')} · {group.provider} · {group.models.length}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <nav className="ai-model-vendor-list" aria-label="厂商列表">
+                {groups.map((group, index) => (
+                  <button
+                    key={group.provider}
+                    type="button"
+                    aria-pressed={group.provider === selectedProviderName}
+                    onClick={() => setSelectedProvider(group.provider)}
+                  >
+                    <span>{group.provider}</span>
+                    <small>{String(index + 1).padStart(2, '0')} · {group.models.length}</small>
+                  </button>
+                ))}
+              </nav>
+            )}
+          </div>
+          <section className="ai-model-guide" aria-labelledby="ai-model-guide-title">
+            <h3 id="ai-model-guide-title">指标说明</h3>
+            <dl>
+              <div><dt>Intelligence</dt><dd>综合能力评分</dd></div>
+              <div><dt>Coding</dt><dd>编程能力评分</dd></div>
+              <div><dt>Agentic</dt><dd>智能体任务能力评分</dd></div>
+              <div><dt>输入 / 输出价格</dt><dd>美元 / 每百万 tokens（1M）</dd></div>
+              <div><dt>输出速度</dt><dd>每秒生成的 tokens 数（tok/s）</dd></div>
+            </dl>
+            <p>— 表示暂无数据</p>
+            <a href="https://artificialanalysis.ai/" target="_blank" rel="noopener noreferrer">
+              数据来源 · Artificial Analysis <ArrowUpRight size={13} aria-hidden="true" />
+            </a>
+          </section>
         </aside>
 
         <div className="ai-model-results">
@@ -180,8 +200,8 @@ export function AiModelDataSection({
                       <th>Intelligence</th>
                       <th>Coding</th>
                       <th>Agentic</th>
-                      <th>输入 / 1M</th>
-                      <th>输出 / 1M</th>
+                      <th>输入 / 1M (USD)</th>
+                      <th>输出 / 1M (USD)</th>
                       <th>输出速度</th>
                     </tr>
                   </thead>
@@ -193,8 +213,8 @@ export function AiModelDataSection({
                         <td>{numberText(model.intelligence)}</td>
                         <td>{numberText(model.coding)}</td>
                         <td>{numberText(model.agentic)}</td>
-                        <td>{numberText(model.inputPrice)}</td>
-                        <td>{numberText(model.outputPrice)}</td>
+                        <td>{priceText(model.inputPrice)}</td>
+                        <td>{priceText(model.outputPrice)}</td>
                         <td>{numberText(model.outputSpeed, ' tok/s')}</td>
                       </tr>
                     ))}
