@@ -36,6 +36,13 @@ let article = { ...defaults.writing[0], slug: 'ui-granular', title: '原文章',
 let articleRevision = 1;
 let home = { ...defaults.home };
 let homeRevision = 1;
+function reorderConfigFields(value, saved) {
+  if (Array.isArray(value)) return value.map((item) => reorderConfigFields(item, saved));
+  if (!value || typeof value !== 'object') return value;
+  const keys = Object.keys(value);
+  return Object.fromEntries((saved ? keys.sort() : keys.reverse())
+    .map((key) => [key, reorderConfigFields(value[key], saved)]));
+}
 let site = { ...structuredClone(defaults.site), name: ' 自定义站点 ', description: '自定义说明\n第二行', footer: '自定义页脚' };
 let siteRevision = 1;
 let failNextConfigWrite = '';
@@ -255,7 +262,8 @@ globalThis.fetch = async (input, init = {}) => {
       if (isSite) { site = body.value; siteRevision++; }
       else { home = body.value; homeRevision++; }
     }
-    return Response.json({ value: isSite ? site : home, revision: isSite ? siteRevision : homeRevision });
+    return Response.json({ value: reorderConfigFields(isSite ? site : home, init.method === 'PUT'),
+      revision: isSite ? siteRevision : homeRevision });
   }
   return Response.json({ items: [], total: 0, page: 1, size: 20 });
 };
@@ -384,8 +392,16 @@ try {
   assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['站点', '导航', '首页']);
   assert.equal(screen.getByRole('tab', { name: '站点' }).getAttribute('aria-selected'), 'true');
   assert.equal(screen.getByRole('link', { name: '查看前台 ↗' }).getAttribute('href'), '/');
-  assert.deepEqual([...window.document.querySelectorAll('.admin-form label')].map((node) => node.textContent),
-    ['名称', '站点标记', '标题', '说明', '页脚文字', '版权文字', '页脚链接文字', '页脚链接地址']);
+  const settingsLabels = () => [...window.document.querySelectorAll('.admin-form label')].map((node) => node.textContent);
+  const siteLabels = ['名称', '站点标记', '标题', '说明', '页脚文字', '版权文字', '页脚链接文字', '页脚链接地址'];
+  const homeLabels = ['眉题', '标题', '说明', '说说区标题', '说说区说明'];
+  const assertNavigationOrder = () => {
+    assert.deepEqual([...window.document.querySelectorAll('.admin-form .admin-array > legend')]
+      .map((node) => node.childNodes[0].textContent.trim()), ['主导航', '网站导航', '生活导航']);
+    for (const item of window.document.querySelectorAll('.admin-form .admin-nested'))
+      assert.deepEqual([...item.querySelectorAll('label')].map((node) => node.textContent), ['名称', '链接地址']);
+  };
+  assert.deepEqual(settingsLabels(), siteLabels);
   assert.equal(screen.getByLabelText('名称').value, ' 自定义站点 ');
   assert.equal(screen.getByLabelText('说明').value, '自定义说明\n第二行');
   const originalSite = structuredClone(site);
@@ -401,14 +417,19 @@ try {
   failNextConfigWrite = 'failure';
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   await screen.findByText(/保存失败/);
+  assert.deepEqual(settingsLabels(), siteLabels);
   assert.deepEqual(site, originalSite);
   assert.ok(screen.getByLabelText('名称').value.endsWith('已修改'));
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   await waitFor(() => assert.equal(site.name, ' 自定义站点 已修改'));
+  await waitFor(() => assert.equal(screen.getByRole('button', { name: '确认提交' }).disabled, true));
+  assert.deepEqual(settingsLabels(), siteLabels);
+  assert.equal(screen.getByLabelText('名称').value, site.name);
   for (const key of ['links', 'sites', 'life']) assert.deepEqual(site[key], originalSite[key]);
   const savedSite = structuredClone(site);
   await user.click(screen.getByRole('tab', { name: '导航' }));
   const mainNav = await screen.findByRole('group', { name: /^主导航/ });
+  assertNavigationOrder();
   assert.deepEqual(screen.getAllByRole('group').filter((node) => node.tagName === 'FIELDSET').map((node) => node.querySelector('legend').childNodes[0].textContent.trim()),
     ['主导航', '网站导航', '生活导航']);
   assert.equal(screen.queryByLabelText('站点标记'), null);
@@ -427,6 +448,8 @@ try {
   assert.deepEqual(site, savedSite, '导航操作需确认提交后生效');
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   await waitFor(() => assert.equal(site.links.at(-1).name, '新增导航'));
+  await waitFor(() => assert.equal(screen.getByRole('button', { name: '确认提交' }).disabled, true));
+  assertNavigationOrder();
   assert.equal(site.links[0].name, `${originalSite.links[0].name}修改`);
   assert.equal(site.links[0].href, `${originalSite.links[0].href}?from=settings`);
   assert.equal(site.links.length, originalSite.links.length);
@@ -437,28 +460,34 @@ try {
   siteRevision++;
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   await screen.findByText(/此设置已在另一窗口修改/);
+  assertNavigationOrder();
   assert.deepEqual(site, beforeConflict);
   assert.ok(within(mainNav).getAllByLabelText('名称')[0].value.endsWith('冲突输入'));
   await user.click(screen.getByRole('tab', { name: '站点' }));
   await screen.findByLabelText('站点标记');
   assert.equal(screen.getByLabelText('名称').value, savedSite.name);
+  assert.deepEqual(settingsLabels(), siteLabels);
   const homeTab = screen.getByRole('tab', { name: '首页' });
   homeTab.focus();
   await user.keyboard('[Enter]');
   await screen.findByLabelText('标题');
-  assert.deepEqual([...window.document.querySelectorAll('.admin-form label')].map((node) => node.textContent),
-    ['眉题', '标题', '说明', '说说区标题', '说说区说明']);
+  assert.deepEqual(settingsLabels(), homeLabels);
   await user.type(screen.getByLabelText('标题'), ' 测试');
   assert.equal(home.title, defaults.home.title);
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   await waitFor(() => assert.ok(home.title.endsWith(' 测试')));
+  await waitFor(() => assert.equal(screen.getByRole('button', { name: '确认提交' }).disabled, true));
+  assert.deepEqual(settingsLabels(), homeLabels);
+  assert.equal(screen.getByLabelText('标题').value, home.title);
   assert.deepEqual(site, beforeConflict, '首页保存不能改变站点或导航');
   await user.click(screen.getByRole('tab', { name: '导航' }));
   await screen.findByRole('group', { name: /^主导航/ });
+  assertNavigationOrder();
   assert.ok(screen.getByText('新增导航'));
   await user.click(screen.getByRole('tab', { name: '首页' }));
   await screen.findByLabelText('标题');
   assert.equal(screen.getByLabelText('标题').value, home.title);
+  assert.deepEqual(settingsLabels(), homeLabels);
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: '写作' }));
   await screen.findByRole('button', { name: '原文章已修改' });
   await user.click(within(nav).getByRole('button', { name: '网站设置' }));

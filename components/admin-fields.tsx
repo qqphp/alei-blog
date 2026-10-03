@@ -522,7 +522,8 @@ export function Field({
       sample && typeof sample === 'object' && !Array.isArray(sample)
         ? sample
         : {};
-    const keys = path === 'slides.root' ? ['title', 'src', 'alt', ...Object.keys(value)]
+    const keys = /^site\.navigation\.(links|sites|life)\.\d+$/.test(path) ? ['name', 'href', ...Object.keys(value)]
+      : path === 'slides.root' ? ['title', 'src', 'alt', ...Object.keys(value)]
       : path === 'writing.categories' ? ['name', 'parentId', 'description']
         : path === 'bookmarks.items' || path === 'friends.items'
           ? ['name', 'url', 'description', 'initials', 'categoryId', 'tags', '_published', ...Object.keys(value)]

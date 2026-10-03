@@ -357,7 +357,8 @@ export function AdminGranularPanel() {
   const configSample = activeScope ? sampleConfig(configSection) : null;
   const websiteTab = section === 'site' ? websiteTabs.find((item) => item.id === tab) : undefined;
   const configValue = websiteTab && config
-    ? asJson(Object.fromEntries(Object.entries(config.value as Item).filter(([key]) => websiteTab.keys.includes(key))))
+    ? asJson(Object.fromEntries(websiteTab.keys.filter((key) => Object.hasOwn(config.value as Item, key))
+      .map((key) => [key, (config.value as Item)[key]])))
     : config?.value;
   const recordSample = activeCollection ? sampleRecord(recordSection, activeCollection, options) : null;
   const canPublish = activeCollection && !['categories', 'statuses', 'scenes', 'sections', 'agentStatuses', 'skillCategories'].includes(activeCollection)
