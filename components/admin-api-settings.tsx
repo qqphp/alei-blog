@@ -104,7 +104,7 @@ export function AdminApiSettings() {
             onChange={(event) => setApiKey(event.target.value)}
           />
           <small>
-            请求由服务端发送，密钥不会写入公开页面、内容备份或状态读取响应。
+            请求由服务端发送，密钥不会写入公开页面或状态读取响应；完整数据库备份包含密钥，请妥善保管。
           </small>
         </div>
         <div className="admin-ai-checks admin-wide">

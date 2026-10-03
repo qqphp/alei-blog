@@ -211,7 +211,7 @@ export function AdminGranularPanel() {
     setLoading(true);
     try {
       const result = await api<Page>(`${recordUrl(recordSection, activeCollection)}?${params}`);
-      if (request === listRequest.current) setList(result);
+      if (request === listRequest.current) { setList(result); setPage(result.page); }
     } catch (error) { if (request === listRequest.current) setMessage(String(error)); }
     finally { if (request === listRequest.current) setLoading(false); }
   }, [recordSection, activeCollection, page, query, status, categoryId, statusId, section]);

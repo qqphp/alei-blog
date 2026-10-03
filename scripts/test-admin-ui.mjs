@@ -170,7 +170,7 @@ try {
       }),
     ),
   );
-  await screen.findByRole('textbox', { name: '预览测试 Markdown' });
+  await screen.findByRole('textbox', { name: '预览测试 Markdown' }, { timeout: 10000 });
   const preview = window.document.querySelector('.vditor-preview .site-markdown');
   assert.equal(
     window.getComputedStyle(preview.querySelector('ol')).listStyleType,

@@ -1,6 +1,8 @@
 'use client';
 import Image from 'next/image';
 import { useState } from 'react';
+import { usePublicCollection } from './use-public-collection';
+import { PublicListError } from './public-list-error';
 import { Tabs } from '@base-ui/react/tabs';
 import {
   ArrowUpRight,
@@ -21,6 +23,7 @@ export function MusicLibrary() {
   const { tracks: music } = useContent();
   const {
     index,
+    tracks: playbackTracks,
     playing,
     toggle,
     playQueue,
@@ -30,12 +33,11 @@ export function MusicLibrary() {
     queueTitle,
   } = useMusic();
   const [tab, setTab] = useState('tracks');
-  const [selected, setSelected] = useState('');
+  const [selectedPlaylist, setSelectedPlaylist] = useState<typeof music.playlists[number] | null>(null);
   const [query, setQuery] = useState('');
   const [mood, setMood] = useState('');
   const [page, setPage] = useState(1);
-  const selectedPlaylist = music.playlists.find((item) => item.id === selected);
-  const current = music.items[index];
+  const current = playbackTracks[index];
   const playlistSongs = selectedPlaylist?.songs ?? [];
   const filteredSongs = playlistSongs
     .map((song, index) => ({ ...song, position: index + 1 }))
@@ -44,7 +46,7 @@ export function MusicLibrary() {
         .toLowerCase()
         .includes(query.trim().toLowerCase()),
     );
-  const tracks = music.items;
+  const tracks = playbackTracks;
   const filteredTracks = tracks.filter(
     (item) =>
       (!mood || item.mood === mood) &&
@@ -58,14 +60,16 @@ export function MusicLibrary() {
       .includes(query.trim().toLowerCase()),
   );
   const showPlaylists = tab === 'playlists' && !selectedPlaylist;
+  const trackArchive = usePublicCollection('tracks.items',filteredTracks,page,{q:query,category:music.scenes.find((item)=>item.name===mood)?.id,enabled:tab==='tracks',onPageChange:setPage});
+  const playlistArchive = usePublicCollection('tracks.playlists',filteredPlaylists,page,{q:query,enabled:showPlaylists,onPageChange:setPage});
   const count = showPlaylists
-    ? filteredPlaylists.length
+    ? playlistArchive.total
     : selectedPlaylist
       ? filteredSongs.length
-      : filteredTracks.length;
+      : trackArchive.total;
   const size = showPlaylists ? 12 : 25;
   const pages = Math.max(1, Math.ceil(count / size));
-  const currentPage = Math.min(page, pages);
+  const currentPage = selectedPlaylist ? Math.min(page,pages) : showPlaylists ? playlistArchive.currentPage : trackArchive.currentPage;
   const reset = () => {
     setQuery('');
     setMood('');
@@ -89,11 +93,11 @@ export function MusicLibrary() {
         </div>
         <div className="music-archive-count">
           <span>
-            <b>{String(music.items.length).padStart(2, '0')}</b>首音乐
+            <b>{String(trackArchive.remote ? trackArchive.allCount : music.items.length).padStart(2, '0')}</b>首音乐
           </span>
           <i>/</i>
           <span>
-            <b>{String(music.playlists.length).padStart(2, '0')}</b>张歌单
+            <b>{String(playlistArchive.remote ? playlistArchive.allCount : music.playlists.length).padStart(2, '0')}</b>张歌单
           </span>
         </div>
       </section>
@@ -162,26 +166,27 @@ export function MusicLibrary() {
           value={tab}
           onValueChange={(next) => {
             setTab(String(next));
-            setSelected('');
+            setSelectedPlaylist(null);
             reset();
           }}
         >
           <Tabs.List className="music-catalog-tabs" aria-label="我的音乐与歌单">
             <Tabs.Tab value="tracks">
-              我的音乐 <small>{music.items.length}</small>
+              我的音乐 <small>{trackArchive.remote ? trackArchive.allCount : music.items.length}</small>
             </Tabs.Tab>
             <Tabs.Tab value="playlists">
-              我的歌单 <small>{music.playlists.length}</small>
+              我的歌单 <small>{playlistArchive.remote ? playlistArchive.allCount : music.playlists.length}</small>
             </Tabs.Tab>
           </Tabs.List>
           <Tabs.Panel value={tab}>
+            <PublicListError error={showPlaylists ? playlistArchive.error : trackArchive.error} />
             {selectedPlaylist && (
               <section className="music-playlist-detail" aria-label="歌单详情">
                 <button
                   type="button"
                   className="music-back"
                   onClick={() => {
-                    setSelected('');
+                    setSelectedPlaylist(null);
                     reset();
                   }}
                 >
@@ -265,16 +270,15 @@ export function MusicLibrary() {
                   <span>{count} 张歌单</span>
                 </div>
                 <div className="music-playlist-grid">
-                  {filteredPlaylists
-                    .slice((currentPage - 1) * size, currentPage * size)
-                    .map((list) => (
+                  {playlistArchive.items
+                    .map((list, index) => (
                       <article className="music-playlist-card" key={list.id}>
                         <button
                           type="button"
                           className="music-playlist-open"
                           aria-label={`打开歌单 ${list.title}`}
                           onClick={() => {
-                            setSelected(list.id);
+                            setSelectedPlaylist(list);
                             reset();
                           }}
                         >
@@ -291,7 +295,9 @@ export function MusicLibrary() {
                                 <span className="music-playlist-serial">
                                   MIX /{' '}
                                   {String(
-                                    music.playlists.indexOf(list) + 1,
+                                    playlistArchive.remote
+                                      ? (playlistArchive.currentPage - 1) * 12 + index + 1
+                                      : music.playlists.indexOf(list) + 1,
                                   ).padStart(2, '0')}
                                 </span>
                                 <strong>{list.title}</strong>
@@ -359,8 +365,7 @@ export function MusicLibrary() {
                     <span>场景</span>
                     <span>时长</span>
                   </div>
-                  {filteredTracks
-                    .slice((currentPage - 1) * size, currentPage * size)
+                  {trackArchive.items
                     .map((track, position) => (
                       <article
                         className={`music-track-row${current?.id === track.id ? ' is-current' : ''}`}

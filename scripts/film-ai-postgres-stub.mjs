@@ -21,3 +21,5 @@ export async function withDatabase(run) {
 export async function queryOne() {
   return null;
 }
+
+export const withReadDatabase = withDatabase;

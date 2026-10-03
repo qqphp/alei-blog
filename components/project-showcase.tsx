@@ -7,7 +7,9 @@ import {
   paginateItems,
 } from '@/components/content-pagination';
 
-import { useContent } from '@/components/content-provider';
+import { useContent, usePublicArchives } from '@/components/content-provider';
+import { usePublicCollection } from './use-public-collection';
+import { PublicListError } from './public-list-error';
 import { newestProjectsFirst } from '@/lib/content-order';
 
 import Image from 'next/image';
@@ -21,13 +23,16 @@ import '@/components/project-showcase.css';
 export function ProjectShowcase({ initialId }: { initialId: string }) {
   const { projects: projectDocument } = useContent();
   const projects = newestProjectsFirst(projectDocument.items);
+  const initialArchive = usePublicArchives()['projects.items'];
   const categories = [
     '全部',
-    ...new Set(projects.map((project) => project.category)),
+    ...(initialArchive ? projectDocument.categories.filter((item)=>(initialArchive.categoryCounts[item.id]??0)>0).map((item)=>item.name)
+      : [...new Set(projects.map((project) => project.category))]),
   ];
   const [category, setCategory] = useState('全部');
   const [selected, setSelected] = useState(initialId);
   const [page, setPage] = useState(() => {
+    if (initialArchive) return initialArchive.page;
     const initialIndex = projects.findIndex(
       (project) => project.id === initialId,
     );
@@ -38,9 +43,9 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
   const visible = projects.filter(
     (project) => category === '全部' || project.category === category,
   );
-  const paginated = paginateItems(visible, page, contentPageSizes.projects);
+  const paginated = usePublicCollection('projects.items',visible,page,{category:projectDocument.categories.find((item)=>item.name===category)?.id,onPageChange:setPage});
   const active =
-    visible.find((project) => project.id === selected) ?? visible[0];
+    (paginated.remote ? paginated.items : visible).find((project) => project.id === selected) ?? paginated.items[0];
   if (!active) return (
     <main className="site-shell">
       <SiteHeader />
@@ -50,10 +55,11 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
       />
       <section className="folio-empty" aria-labelledby="project-empty-title">
         <div className="content-empty-state">
+          <PublicListError error={paginated.error} />
           <span className="content-empty-mark" aria-hidden="true">↗</span>
           <h2 id="project-empty-title">暂无已发布项目</h2>
           <p>作品还在酝酿中，之后会在这里记录构思、实现与迭代。</p>
-          {projects.length > 0 && (
+          {(paginated.remote ? paginated.allCount : projects.length) > 0 && (
             <button type="button" onClick={() => setCategory('全部')}>查看全部项目</button>
           )}
         </div>
@@ -77,7 +83,7 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
         text="收录产品原型、设计探索与个人工具，记录每个项目的构思、实现与迭代。"
       />
       <section className="folio-toolbar" aria-label="项目分类筛选">
-        <span className="folio-eyebrow">{"PROJECT INDEX /"}{String(projects.length).padStart(2, '0')}
+        <span className="folio-eyebrow">{"PROJECT INDEX /"}{String(paginated.remote ? paginated.allCount : projects.length).padStart(2, '0')}
         </span>
         <div>
           {categories.map((item) => (
@@ -98,19 +104,20 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
               {item}
               <small>
                 {item === '全部'
-                  ? projects.length
-                  : projects.filter((project) => project.category === item)
-                      .length}
+                  ? paginated.remote ? paginated.allCount : projects.length
+                  : paginated.remote ? paginated.categoryCounts[projectDocument.categories.find((option)=>option.name===item)?.id ?? ''] ?? 0
+                    : projects.filter((project) => project.category === item).length}
               </small>
             </button>
           ))}
         </div>
       </section>
       <section className="folio-workspace">
+        <PublicListError error={paginated.error} />
         <aside className="folio-sidebar">
           <div className="folio-section-label">
             <span>{"浏览项目"}</span>
-            <span>{String(visible.length).padStart(2, '0')}{"ENTRIES"}</span>
+            <span>{String(paginated.total).padStart(2, '0')}{"ENTRIES"}</span>
           </div>
           <div className="folio-project-list">
             {paginated.items.map((project) => (
@@ -151,11 +158,12 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
           </div>
           <ContentPagination
             ariaLabel="项目分页"
-            itemCount={visible.length}
+            itemCount={paginated.total}
             itemLabel="个项目"
             page={paginated.currentPage}
             pageSize={contentPageSizes.projects}
             onPageChange={(nextPage) => {
+              if (paginated.remote) { setPage(nextPage); setSelected(''); setImageIndex(0); return; }
               const next = paginateItems(visible, nextPage, contentPageSizes.projects);
               setPage(next.currentPage);
               setSelected(next.items[0]?.id ?? '');

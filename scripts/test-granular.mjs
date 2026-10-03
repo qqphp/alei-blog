@@ -70,7 +70,8 @@ try {
     assert.ok(after, `迁移后缺少 ${entry.section}/${entry.collection}/${entry.id}`);
     assert.equal(after.position, entry.position);
     assert.equal(after.published, entry.published);
-    assert.deepEqual(after.occurred_at, entry.occurred_at, '迁移不能改变说说日期或其他内容日期');
+    assert.deepEqual(after.occurred_at, entry.section === 'projects' && entry.collection === 'items'
+      ? null : entry.occurred_at, '项目采用创建时间，其他内容日期保持不变');
     if (entry.section === 'slides' && !Object.hasOwn(entry.payload, 'id')) {
       const { id: _id, ...payload } = after.payload;
       assert.deepEqual(payload, entry.payload);
@@ -92,7 +93,11 @@ try {
         expected.categoryId = '';
       }
       if (entry.section === 'tracks' && entry.collection === 'playlists') delete expected.color;
-      if (entry.section === 'projects' && entry.collection === 'items') delete expected.year;
+      if (entry.section === 'projects' && entry.collection === 'items') {
+        delete expected.year;
+        delete expected.createdAt;
+        delete expected.updatedAt;
+      }
       assert.deepEqual(after.payload, coverDescriptionRecord && !('coverDescription' in expected)
         ? { ...expected, coverDescription: '' } : expected);
     }

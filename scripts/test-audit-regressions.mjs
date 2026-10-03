@@ -143,6 +143,148 @@ try {
   assert.equal((await readLocalMedia(key, new Headers())).status, 404, '最后一篇正文删除后清理素材');
   assert.equal((await readLocalMedia(attachmentKey, new Headers())).status, 404, '最后一篇正文删除后清理附件');
   console.log('PASS Markdown media cleanup and shared-reference retention');
+
+  const waitForBlockedWriter = async () => {
+    for (let i = 0; i < 100; i++) {
+      const count = (await db.query("SELECT count(*)::int AS n FROM pg_locks l JOIN pg_stat_activity a ON a.pid=l.pid WHERE a.datname=$1 AND l.locktype='advisory' AND NOT l.granted", [dbName])).rows[0].n;
+      if (count) return;
+      await new Promise((done) => setTimeout(done,20));
+    }
+    throw new Error('Expected a writer waiting for the media lock');
+  };
+  const raceKey = `${crypto.randomUUID()}.png`;
+  const raceUrl = `/api/media/${raceKey}`;
+  await saveLocalMedia(raceKey, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB','base64'), {contentType:'image/png',name:'并发测试'});
+  await createAdminRecord('writing','articles',{...article,slug:'audit-race-source',body:raceUrl});
+  let mediaChecked;
+  const checked = new Promise((done)=>{mediaChecked=done;});
+  const cleanupGate = new Promise((done)=>{releaseWrite=done;});
+  let heldCleanup = false;
+  pg.Client.prototype.query = function (sql,values,...rest) {
+    const result = originalQuery.call(this,sql,values,...rest);
+    if (!heldCleanup && String(sql).includes('AS used') && values?.[0]===raceUrl) {
+      heldCleanup=true;
+      return result.then(async (rows)=>{mediaChecked();await cleanupGate;return rows;});
+    }
+    return result;
+  };
+  deleting=deleteAdminRecord({section:'writing',collection:'articles',id:'audit-race-source'},1);
+  await checked;
+  creating=createAdminRecord('slides','root',{...defaults.slides[0],id:'audit-race-slide',src:raceUrl}).catch((error)=>error);
+  await waitForBlockedWriter();
+  releaseWrite();
+  await deleting;
+  assert.match(String(await creating),/素材已不存在/,'new references cannot be committed after collection');
+  assert.equal(await getAdminRecord({section:'slides',collection:'root',id:'audit-race-slide'}),null);
+  pg.Client.prototype.query=originalQuery;
+
+  await saveLocalMedia(raceKey, Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB','base64'), {contentType:'image/png',name:'并发测试'});
+  await createAdminRecord('writing','articles',{...article,slug:'audit-race-source',body:raceUrl});
+  let inserted;
+  const written=new Promise((done)=>{inserted=done;});
+  const writeGate=new Promise((done)=>{releaseWrite=done;});
+  let heldInsert=false;
+  pg.Client.prototype.query=function(sql,values,...rest) {
+    const result=originalQuery.call(this,sql,values,...rest);
+    if(!heldInsert && String(sql).startsWith('INSERT INTO cms_entries') && values?.[2]==='audit-race-slide') {
+      heldInsert=true;
+      return result.then(async(rows)=>{inserted();await writeGate;return rows;});
+    }
+    return result;
+  };
+  creating=createAdminRecord('slides','root',{...defaults.slides[0],id:'audit-race-slide',src:raceUrl});
+  await written;
+  // A different section must be able to commit while this writer is paused.
+  await createAdminRecord('ai','agentStatuses',{id:'audit-parallel-status',name:'跨栏目并发测试'});
+  deleting=deleteAdminRecord({section:'writing',collection:'articles',id:'audit-race-source'},1);
+  await waitForBlockedWriter();
+  releaseWrite();
+  await creating; await deleting;
+  pg.Client.prototype.query=originalQuery;
+  assert.equal((await readLocalMedia(raceKey,new Headers())).status,200,'cleanup must see the concurrently committed reference');
+  await deleteAdminRecord({section:'slides',collection:'root',id:'audit-race-slide'},1);
+  assert.equal((await readLocalMedia(raceKey,new Headers())).status,404);
+  console.log('PASS both media race orders, rejected dangling references and parallel writes across sections');
+
+  const backupClient=new pg.Client({connectionString:testUrl.toString()});
+  await backupClient.connect();
+  try {
+    await backupClient.query("SELECT pg_advisory_lock(hashtext('cms-backup'))");
+    creating=createAdminRecord('ai','agentStatuses',{id:'audit-backup-status',name:'备份锁测试'});
+    await waitForBlockedWriter();
+    await backupClient.query("SELECT pg_advisory_unlock(hashtext('cms-backup'))");
+    await creating;
+  } finally { await backupClient.end(); }
+  console.log('PASS backup exclusive lock still blocks content writers');
+
+  const { publicCollectionSizes }=await import('../lib/public-collections.ts');
+  const { getPublicPage,getPublicSection }=await import('../lib/public-records.ts');
+  const { recordFields,recordPayload }=await import('../lib/content-record-fields.mjs');
+  const { musicSample }=await import('../lib/music-content.ts');
+  const { bookSample }=await import('../lib/book-content.ts');
+  const { filmSample }=await import('../lib/film-content.ts');
+  const { podcastSample }=await import('../lib/podcast-content.ts');
+  const { activitySample }=await import('../lib/activity-content.ts');
+  const { getPublicPlaybackContent,getWritingArchive,getStoryArchive }=await import('../lib/cms-server.ts');
+  for(const [name,size] of Object.entries(publicCollectionSizes)) {
+    const [section,collection]=name.split('.');
+    const document=defaults[section];
+    const templates={tracks:musicSample,books:bookSample,films:filmSample,podcasts:podcastSample,travel:activitySample,hobbies:activitySample};
+    const sample=section==='investing' ? document.sections.flatMap((group)=>group.entries)[0] : document[collection][0] ?? templates[section]?.[collection]?.[0];
+    const optionCollection=section==='investing'?'sections':name==='ai.skills'?'skillCategories':section==='tracks'?'scenes':'categories';
+    const optionId=(await db.query('SELECT id FROM cms_entries WHERE section=$1 AND collection=$2 ORDER BY position LIMIT 1',[section,optionCollection])).rows[0]?.id ?? '';
+    await db.query('DELETE FROM cms_entries WHERE section=$1 AND collection=$2',[section,collection]);
+    for(let i=0;i<31;i++) {
+      const value={...structuredClone(sample),id:`audit-public-${i}`,_published:i<30};
+      for(const field of ['name','title','artist','author','director','host']) if(field in value) value[field]=i===29?'needle':`item-${i}`;
+      if('categoryId' in value)value.categoryId=optionId;
+      if('moodId' in value)value.moodId=optionId;
+      if(section==='investing')value.sectionId=optionId;
+      const fields=recordFields(value,section);
+      await db.query(`INSERT INTO cms_entries(section,collection,id,position,published,title,category_id,status_id,occurred_at,payload,search_text,created_at)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12)`,[section,collection,value.id,i,fields.published,fields.title,fields.categoryId,fields.statusId,
+          fields.occurredAt,JSON.stringify(recordPayload(value,section,collection)),fields.search,new Date(Date.UTC(2026,0,1,0,0,i))]);
+    }
+    const first=await getPublicPage(name);
+    assert.equal(first.items.length,Math.min(size,30),`${name} initial page is bounded`);
+    assert.equal(first.total,30);
+    assert.equal(first.allCount,30);
+    assert.ok(first.items.every((item)=>item.id!=='audit-public-30' && !Object.hasOwn(item,'_published')));
+    const second=await getPublicPage(name,{page:2});
+    assert.ok(second.items.every((item)=>!first.items.some((old)=>old.id===item.id)),`${name} pages do not overlap`);
+    const last=await getPublicPage(name,{page:10000});
+    assert.equal(last.page,Math.ceil(30/size));
+    assert.ok(last.items.length>0,`${name} shrunk/out-of-range pages remain usable`);
+    if(!['ai','investing','projects'].includes(section)) {
+      const search=await getPublicPage(name,{q:'needle'});
+      assert.equal(search.total,1,`${name} searches the entire collection`);
+      assert.equal(search.items[0].id,'audit-public-29');
+    }
+    if(optionId && (collection==='items'||name==='ai.skills'||section==='investing'))
+      assert.equal((await getPublicPage(name,{category:optionId})).total,30);
+  }
+  const selectedProject=await getPublicPage('projects.items',{id:'audit-public-0'});
+  assert.equal(selectedProject.page,5);
+  assert.ok(selectedProject.items.some((item)=>item.id==='audit-public-0'));
+  const publicSection=await getPublicSection(['ai','projects','investing','tracks','books','films','podcasts','travel','hobbies','bookmarks','friends']);
+  for(const [name,size] of Object.entries(publicCollectionSizes)) {
+    const [section,collection]=name.split('.');
+    const items=name==='investing.entries' ? publicSection.content.investing.sections.flatMap((group)=>group.entries)
+      : publicSection.content[section][collection];
+    assert.ok(items.length<=size,`${name} RSC payload is bounded`);
+  }
+  const recentProjects=await getRecentProjects(2);
+  assert.deepEqual(recentProjects.map((item)=>item.id),['audit-public-29','audit-public-28']);
+  assert.equal(recentProjects[0].createdAt,'2026-01-01T00:00:29.000Z');
+  assert.equal((await getPublicPlaybackContent()).items.length,30,'complete published playback queue remains available');
+  const adminPage=await listAdminRecords('projects','items',{...listInput,page:10000});
+  assert.equal(adminPage.page,2); assert.equal(adminPage.items.length,11);
+  assert.equal((await getWritingArchive('','',10000)).page,Math.max(1,Math.ceil((await getWritingArchive()).total/8)));
+  assert.ok((await getStoryArchive(10000)).page>=1);
+  const redundant=(await db.query("SELECT indexname FROM pg_indexes WHERE indexname IN ('articles_position_idx','cms_entries_order_idx','cms_entries_admin_order_idx')")).rows;
+  assert.equal(redundant.length,0);
+  assert.equal((await db.query("SELECT count(*)::int AS n FROM cms_entries WHERE section='projects' AND collection='items' AND (occurred_at IS NOT NULL OR payload ? 'createdAt' OR payload ? 'updatedAt')")).rows[0].n,0);
+  console.log('PASS all 15 public collections: database pagination/search/counts/draft filtering, deep links, bounded page payloads, playback queue, canonical project timestamps and reduced indexes');
 } finally {
   releaseWrite?.();
   await Promise.allSettled([Promise.resolve(creating), Promise.resolve(deleting)]);

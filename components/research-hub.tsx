@@ -1,6 +1,8 @@
 'use client';
 import { contentPageSizes } from '@/lib/content-page-sizes';
-import { ContentPagination, paginateItems } from '@/components/content-pagination';
+import { ContentPagination } from '@/components/content-pagination';
+import { usePublicCollection } from './use-public-collection';
+import { PublicListError } from './public-list-error';
 
 
 import { InvestmentPond } from '@/components/investment-pond';
@@ -29,7 +31,9 @@ export function ResearchHub() {
       createdAt: entry.createdAt,
       entry,
     }))));
-  const paginated = paginateItems(investmentEntries, page, contentPageSizes.investing);
+  const archive = usePublicCollection('investing.entries',investmentEntries.map((item)=>({ ...item.entry, sectionId:item.id.slice(0,item.id.indexOf(':')) })),page,
+    {category:category==='all'?undefined:category,onPageChange:setPage});
+  const paginated = { ...archive, items:archive.items.map((entry)=>({id:`${entry.sectionId}:${entry.id}`,entry})) };
   const activeEntry = paginated.items.find((item) => item.id === selectedId) ?? paginated.items[0];
 
   return (
@@ -41,7 +45,7 @@ export function ResearchHub() {
           <nav className="research-topic-grid investment-topic-grid" aria-label="投资研究栏目">
             {sectionsForDisplay.map((item, index) => {
               const Icon = investmentIcons[item.id] ?? BookOpen;
-              const entryCount = item.entries.length;
+              const entryCount = archive.remote ? archive.categoryCounts[item.id] ?? 0 : item.entries.length;
               return (
                 <button className={`investment-topic investment-topic-${item.id}`} type="button" key={item.id} aria-pressed={category === item.id} onClick={() => { setCategory(category === item.id ? 'all' : item.id); setSelectedId(null); setPage(1); }}>
                   <span className="investment-topic-index">{String(index + 1).padStart(2, '0')}</span>
@@ -53,6 +57,7 @@ export function ResearchHub() {
           </nav>
 
       <section id="research-library" className="research-library investment-library" aria-label="研究目录">
+          <PublicListError error={archive.error} />
           <div className="investment-reader">
             <div className="investment-directory">
             <nav className="investment-article-list" aria-label="投资文章列表">
@@ -61,9 +66,9 @@ export function ResearchHub() {
                   {entry.title}
                 </button>
               ))}
-              {!investmentEntries.length && <p className="investment-empty">暂无文章</p>}
+              {!archive.total && <p className="investment-empty">暂无文章</p>}
             </nav>
-            <ContentPagination ariaLabel="投资目录分页" itemCount={investmentEntries.length} itemLabel="篇笔记" page={paginated.currentPage} pageSize={contentPageSizes.investing} onPageChange={(nextPage) => { setPage(nextPage); setSelectedId(null); }} />
+            <ContentPagination ariaLabel="投资目录分页" itemCount={archive.total} itemLabel="篇笔记" page={paginated.currentPage} pageSize={contentPageSizes.investing} onPageChange={(nextPage) => { setPage(nextPage); setSelectedId(null); }} />
             </div>
             <article id="investment-article" className="investment-article" aria-labelledby={activeEntry ? 'investment-article-title' : undefined}>
               {activeEntry ? (

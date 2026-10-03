@@ -30,7 +30,9 @@
     "test:admin-granular-ui": "node --import tsx scripts/test-admin-granular-ui.mjs",
     "test:pond-motion": "node --import tsx scripts/test-pond-motion.mjs",
     "test:pond-lifecycle": "node --import tsx scripts/test-pond-lifecycle.mjs",
-    "test:film-ai": "node --import tsx scripts/test-film-ai.mjs"
+    "test:film-ai": "node --import tsx scripts/test-film-ai.mjs",
+    "test:aa-cache": "node --import tsx scripts/test-aa-cache.mjs",
+    "test:public-remote-ui": "node --import tsx scripts/test-public-remote-ui.mjs"
   },
   "dependencies": {
     "@base-ui/react": "1.7.0",

@@ -32,7 +32,10 @@ export default function StoriesPage({ initial }: { initial: StoryArchive }) {
         const params = new URLSearchParams({ page: String(page), period: String(period) });
         const response = await fetch(`/api/stories?${params}`, { signal: controller.signal });
         if (!response.ok) throw new Error('读取说说失败，请稍后重试。');
-        setArchive(await response.json() as StoryArchive);
+        const result = await response.json() as StoryArchive;
+        const currentPage = result.page ?? Math.min(page, Math.max(1, Math.ceil(result.total / contentPageSizes.stories)));
+        setArchive(result);
+        if (currentPage !== page) setPage(currentPage);
         setError('');
       } catch (reason) {
         if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '读取说说失败');

@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import pg from 'pg';
 import { ensureManagedPostgres } from './managed-postgres.mjs';
-import { recordFields } from '../lib/content-record-fields.mjs';
+import { recordFields, recordPayload } from '../lib/content-record-fields.mjs';
 
 if (!process.env.DATABASE_URL) throw new Error('请先配置 DATABASE_URL');
 await ensureManagedPostgres();
@@ -66,12 +66,12 @@ try {
           }
           if (key === 'projects' && collection === 'items') delete item.year;
           if (key === 'tracks' && collection === 'playlists') delete item.color;
-          const fields = recordFields(item);
+          const fields = recordFields(item,key);
           await client.query(`INSERT INTO cms_entries (section, collection, id, position, published, title, category_id, occurred_at, payload, created_at, status_id, search_text)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11, $12)`,
           [key, collection, item.id ?? `slide-${position}`, position, fields.published,
             fields.title, fields.categoryId, fields.occurredAt,
-            JSON.stringify(item), key === 'projects' && item.createdAt && Number.isFinite(Date.parse(item.createdAt)) ? new Date(item.createdAt) : historicalCreatedAt,
+            JSON.stringify(recordPayload(item,key,collection)), key === 'projects' && item.createdAt && Number.isFinite(Date.parse(item.createdAt)) ? new Date(item.createdAt) : historicalCreatedAt,
             fields.statusId, fields.search]);
           entries++;
         }

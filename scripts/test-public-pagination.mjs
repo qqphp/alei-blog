@@ -222,6 +222,7 @@ process.env.DATABASE_URL = 'postgres://isolated-pagination-test';
 pg.Client.prototype.connect = async () => {};
 pg.Client.prototype.end = async () => {};
 pg.Client.prototype.query = async function(sql,params=[]) {
+  if (/^(BEGIN|COMMIT|ROLLBACK)/.test(sql)) return { rows: [] };
   if(sql.includes('SELECT 1 FROM cms_sections')) return {rowCount:fallback?0:1,rows:[]};
   if(sql.includes('FROM article_categories')) return {rows:defaults.categories.map(c=>({...c,parent_id:c.parentId || null}))};
   if(sql.includes('LIMIT $5 OFFSET $6')) {

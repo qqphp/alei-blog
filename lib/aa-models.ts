@@ -4,6 +4,8 @@ import { queryOne, withDatabase } from './postgres';
 const cacheKey = 'language-models-free';
 const endpoint = 'https://artificialanalysis.ai/api/v2/language/models/free';
 const cacheLifetime = 24 * 60 * 60 * 1000;
+let pendingRefresh: Promise<ModelDataResult> | null = null;
+let retryAfter = 0;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -200,7 +202,7 @@ async function saveSnapshot(pages: UnknownRecord[]) {
   return storedAt;
 }
 
-export async function getLanguageModels(): Promise<ModelDataResult> {
+async function loadLanguageModels(): Promise<ModelDataResult> {
   const snapshot = await readSnapshot();
   const pages = snapshot ? parsePages(snapshot.payload) : null;
   const storedTime = snapshot ? Date.parse(snapshot.storedAt) : NaN;
@@ -221,6 +223,12 @@ export async function getLanguageModels(): Promise<ModelDataResult> {
     };
   }
 
+  if (Date.now() < retryAfter) {
+    if (!pages || !validStoredAt) throw new Error('大模型数据暂不可用，请稍后重试。');
+    const groups = groupsFromPages(pages);
+    return { groups, fetchedAt: snapshot!.storedAt, stale: true, refreshFailed: true,
+      modelCount: groups.reduce((sum, group) => sum + group.models.length, 0) };
+  }
   try {
     const apiKey = await configuredKey();
     if (!apiKey) throw new Error('尚未配置 Artificial Analysis API 密钥。');
@@ -235,6 +243,7 @@ export async function getLanguageModels(): Promise<ModelDataResult> {
       modelCount: groups.reduce((sum, group) => sum + group.models.length, 0),
     };
   } catch {
+    retryAfter = Date.now() + 60000;
     if (!pages || !validStoredAt) throw new Error('大模型数据暂不可用，请稍后重试。');
     const groups = groupsFromPages(pages);
     return {
@@ -245,4 +254,9 @@ export async function getLanguageModels(): Promise<ModelDataResult> {
       modelCount: groups.reduce((sum, group) => sum + group.models.length, 0),
     };
   }
+}
+
+export function getLanguageModels(): Promise<ModelDataResult> {
+  pendingRefresh ??= loadLanguageModels().finally(() => { pendingRefresh = null; });
+  return pendingRefresh;
 }

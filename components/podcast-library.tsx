@@ -1,5 +1,7 @@
 'use client';
 import { useState } from 'react';
+import { usePublicCollection } from './use-public-collection';
+import { PublicListError } from './public-list-error';
 import Image from 'next/image';
 import { Headphones, Mic2, Search, X } from 'lucide-react';
 import {
@@ -55,8 +57,9 @@ export function PodcastLibrary() {
         .toLowerCase()
         .includes(query.trim().toLowerCase()),
   );
-  const pages = Math.max(1, Math.ceil(filtered.length / 12));
-  const currentPage = Math.min(page, pages);
+  const archive = usePublicCollection('podcasts.items',filtered,page,{q:query,category,onPageChange:setPage});
+  const pages = Math.max(1, Math.ceil(archive.total / 12));
+  const currentPage = archive.currentPage;
   return (
     <section
       className="podcast-library"
@@ -108,8 +111,7 @@ export function PodcastLibrary() {
         </label>
       </div>
       <div className="podcast-grid">
-        {filtered
-          .slice((currentPage - 1) * 12, currentPage * 12)
+        {archive.items
           .map((item) => (
             <article className="podcast-card" key={item.id}>
               <div className="podcast-cover">
@@ -173,7 +175,8 @@ export function PodcastLibrary() {
             </article>
           ))}
       </div>
-      {!filtered.length && (
+      <PublicListError error={archive.error} />
+      {!archive.total && (
         <div className="podcast-empty">
           <Headphones size={28} />
           <p>
@@ -197,7 +200,7 @@ export function PodcastLibrary() {
       )}
       <nav className="podcast-pagination" aria-label="播客分页">
         <span>
-          {filtered.length} 档节目 · 第 {currentPage} / {pages} 页
+          {archive.total} 档节目 · 第 {currentPage} / {pages} 页
         </span>
         <div>
           <button

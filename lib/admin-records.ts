@@ -1,11 +1,11 @@
 import type { Client } from 'pg';
-import { withDatabase } from './postgres';
+import { withDatabase, withReadDatabase } from './postgres';
 import { defaults, type Section } from './cms-defaults';
 import { validateContent } from './cms-validation';
 import { adminCollections, configKeys, sectionMetadata, validCollection } from './admin-sections';
-import { deleteLocalMedia } from './local-media';
+import { deleteLocalMedia, readLocalMedia } from './local-media';
 import { articleCreationDate, recordTimes } from './content-times';
-import { recordFields } from './content-record-fields.mjs';
+import { recordFields, recordPayload } from './content-record-fields.mjs';
 
 type Item = Record<string, unknown>;
 type RecordKey = { section: Section; collection: string; id: string };
@@ -44,7 +44,8 @@ function itemId(section: Section, collection: string, value: Item) {
 }
 // Related records and their options must be checked and written in the same order.
 async function lockSection(db: Client, section: Section) {
-  await db.query("SELECT pg_advisory_xact_lock(hashtext('cms-backup'))");
+  await db.query("SELECT pg_advisory_xact_lock_shared(hashtext('cms-backup'))");
+  await db.query("SELECT pg_advisory_xact_lock_shared(hashtext('cms-media'))");
   await db.query("SELECT pg_advisory_xact_lock(hashtext('cms-records'), hashtext($1))", [section]);
 }
 function payloadValue(section: Section, collection: string, value: Item) {
@@ -56,7 +57,7 @@ function payloadValue(section: Section, collection: string, value: Item) {
     const { entries: _entries, ...sectionValue } = value;
     return sectionValue;
   }
-  return value;
+  return recordPayload(value,section,collection);
 }
 
 export async function listAdminRecords(section: Section, collection: string, input: ListOptions) {
@@ -65,33 +66,36 @@ export async function listAdminRecords(section: Section, collection: string, inp
   const size = Math.min(50, Math.max(1, Math.trunc(input.size) || 20));
   const q = input.q.trim();
   const pattern = `%${q.replace(/[\\%_]/g, '\\$&')}%`;
-  return withDatabase(async (db) => {
+  return withReadDatabase(async (db) => {
     if (section === 'writing' && collection === 'articles') {
       const where = `($1 = '' OR (a.title || ' ' || a.excerpt || ' ' || a.body) ILIKE $2 ESCAPE '\\')
         AND ($3 = 'all' OR a.published = ($3 = 'published'))
         AND ($4 = '' OR a.category_id = $4)`;
       const params = [q, pattern, input.status, input.categoryId];
       const total = await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM articles a WHERE ${where}`, params);
+      const currentPage = Math.min(page, Math.max(1, Math.ceil(total.rows[0].count / size)));
       const rows = await db.query(`SELECT a.slug AS id, a.title, a.excerpt, a.category_id AS "categoryId",
         c.name AS category, a.published, to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date,
         a.position, a.revision, a.created_at AS "createdAt", a.updated_at AS "updatedAt" FROM articles a JOIN article_categories c ON c.id = a.category_id
         WHERE ${where} ORDER BY a.created_at DESC, a.slug LIMIT $5 OFFSET $6`,
-      [...params, size, (page - 1) * size]);
-      return { items: rows.rows.map((row) => ({ ...row, ...recordTimes(row) })), total: total.rows[0].count, page, size };
+      [...params, size, (currentPage - 1) * size]);
+      return { items: rows.rows.map((row) => ({ ...row, ...recordTimes(row) })), total: total.rows[0].count, page: currentPage, size };
     }
     if (section === 'writing' && collection === 'categories') {
       const where = `($1 = '' OR name ILIKE $2 ESCAPE '\\')`;
       const total = await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM article_categories WHERE ${where}`, [q, pattern]);
+      const currentPage = Math.min(page, Math.max(1, Math.ceil(total.rows[0].count / size)));
       const rows = await db.query(`SELECT id, name AS title, parent_id AS "parentId", position, revision
         FROM article_categories WHERE ${where} ORDER BY position, id LIMIT $3 OFFSET $4`,
-      [q, pattern, size, (page - 1) * size]);
-      return { items: rows.rows, total: total.rows[0].count, page, size };
+      [q, pattern, size, (currentPage - 1) * size]);
+      return { items: rows.rows, total: total.rows[0].count, page: currentPage, size };
     }
     const where = `section = $1 AND collection = $2 AND ($3 = '' OR search_text ILIKE $4 ESCAPE '\\')
       AND ($5 = 'all' OR published = ($5 = 'published')) AND ($6 = '' OR category_id = $6)
       AND ($7 = '' OR status_id = $7)`;
     const params = [section, collection, q, pattern, input.status, input.categoryId, input.statusId];
     const total = await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM cms_entries WHERE ${where}`, params);
+    const currentPage = Math.min(page, Math.max(1, Math.ceil(total.rows[0].count / size)));
     const order = section === 'investing' && collection === 'entries'
       ? 'created_at DESC NULLS LAST, position, id'
       : section === 'stories' ? 'occurred_at DESC NULLS LAST, position, id' : 'position, id';
@@ -111,8 +115,8 @@ export async function listAdminRecords(section: Section, collection: string, inp
       category_id AS "categoryId", published, occurred_at AS date, position, revision,
       created_at AS "createdAt", updated_at AS "updatedAt"
       FROM cms_entries WHERE ${where} ORDER BY ${order} LIMIT $8 OFFSET $9`,
-    [...params, size, (page - 1) * size]);
-    return { items: rows.rows.map((row) => ({ ...row, ...recordTimes(row) })), total: total.rows[0].count, page, size };
+    [...params, size, (currentPage - 1) * size]);
+    return { items: rows.rows.map((row) => ({ ...row, ...recordTimes(row) })), total: total.rows[0].count, page: currentPage, size };
   });
 }
 
@@ -205,7 +209,7 @@ export async function saveAdminConfig(section: Section, scope: string, value: It
   const saved = await withDatabase(async (db) => {
     await db.query('BEGIN');
     try {
-      await db.query("SELECT pg_advisory_xact_lock(hashtext('cms-backup'))");
+      await lockSection(db, section);
       const row = await db.query<{ value: Item; revision: number }>(
         'SELECT value, revision FROM cms_sections WHERE section = $1 FOR UPDATE', [section]);
       const previous = savedConfig(section, row.rows[0]?.value);
@@ -218,6 +222,7 @@ export async function saveAdminConfig(section: Section, scope: string, value: It
       const full = sample && typeof sample === 'object' && !Array.isArray(sample)
         ? { ...sample, ...next } : next;
       validateContent(section, full);
+      await validateMediaReferences(next, previous);
       if ((row.rows[0]?.revision ?? 0) !== revision) throw new AdminConflict('此设置已在另一窗口修改');
       const updated = await db.query<{ revision: number }>(`INSERT INTO cms_sections (section, value, revision)
         VALUES ($1, $2::jsonb, 1) ON CONFLICT (section) DO UPDATE SET
@@ -329,6 +334,17 @@ function mediaKeys(value: unknown) {
   return keys;
 }
 
+async function validateMediaReferences(value: unknown, previous?: unknown) {
+  const existing = mediaKeys(previous);
+  for (const key of mediaKeys(value)) {
+    if (existing.has(key)) continue;
+    const response = await readLocalMedia(key, new Headers({ Range: 'bytes=0-0' }));
+    await response.body?.cancel();
+    if (response.status !== 200 && response.status !== 206)
+      throw new Error('引用的本地素材已不存在，请重新上传后提交。');
+  }
+}
+
 async function cleanupUnreferencedMedia(before: unknown, after: unknown) {
   const remaining = mediaKeys(after);
   const failedMedia: string[] = [];
@@ -336,16 +352,24 @@ async function cleanupUnreferencedMedia(before: unknown, after: unknown) {
     if (remaining.has(key)) continue;
     const url = `/api/media/${key}`;
     try {
-      const referenced = await withDatabase(async (db) => {
-        const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-        const pattern = `(^|[^A-Za-z0-9/._-])${escaped}($|[^A-Za-z0-9/._-])`;
-        const rows = await db.query<{ used: boolean }>(`SELECT
-          EXISTS (SELECT 1 FROM articles WHERE cover_url = $1 OR body ~ $2) OR
-          EXISTS (SELECT 1 FROM cms_entries WHERE payload::text ~ $2) OR
-          EXISTS (SELECT 1 FROM cms_sections WHERE value::text ~ $2) AS used`, [url, pattern]);
-        return rows.rows[0].used;
+      await withDatabase(async (db) => {
+        await db.query('BEGIN');
+        try {
+          await db.query("SELECT pg_advisory_xact_lock_shared(hashtext('cms-backup'))");
+          await db.query("SELECT pg_advisory_xact_lock(hashtext('cms-media'))");
+          const escaped = url.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          const pattern = `(^|[^A-Za-z0-9/._-])${escaped}($|[^A-Za-z0-9/._-])`;
+          const rows = await db.query<{ used: boolean }>(`SELECT
+            EXISTS (SELECT 1 FROM articles WHERE cover_url = $1 OR body ~ $2) OR
+            EXISTS (SELECT 1 FROM cms_entries WHERE payload::text ~ $2) OR
+            EXISTS (SELECT 1 FROM cms_sections WHERE value::text ~ $2) AS used`, [url, pattern]);
+          if (!rows.rows[0].used) await deleteLocalMedia(key);
+          await db.query('COMMIT');
+        } catch (error) {
+          await db.query('ROLLBACK');
+          throw error;
+        }
       });
-      if (!referenced) await deleteLocalMedia(key);
     } catch { failedMedia.push(key); }
   }
   return failedMedia;
@@ -366,6 +390,7 @@ export async function createAdminRecord(section: Section, collection: string, va
       const clock = await db.query<{ now: Date }>('SELECT now()');
       value = recordInput(section, collection, value, clock.rows[0].now.toISOString());
       await validateRecord(db, { section, collection }, value);
+      await validateMediaReferences(value);
       if (section === 'writing' && collection === 'articles') {
         await db.query(`INSERT INTO articles (slug, title, excerpt, body, category_id,
           published, cover_url, cover_mode, cover_generated_for, cover_description, position)
@@ -382,7 +407,7 @@ export async function createAdminRecord(section: Section, collection: string, va
         if (!dateOrdered)
           await db.query('UPDATE cms_entries SET position = position + 1 WHERE section = $1 AND collection = $2',
             [section, collection]);
-        const fields = recordFields(value);
+        const fields = recordFields(value,section);
         const position = dateOrdered
           ? '(SELECT coalesce(max(position) + 1, 0) FROM cms_entries WHERE section = $1 AND collection = $2)'
           : '0';
@@ -420,6 +445,7 @@ export async function updateAdminRecord(key: RecordKey, value: Item, revision: n
       if (previous.revision !== revision) throw new AdminConflict('此记录已在另一窗口修改');
       value = recordInput(key.section, key.collection, value, previous.value.createdAt as string | null);
       await validateRecord(db, key, value, key.id);
+      await validateMediaReferences(value, previous.value);
       let updated;
       if (key.section === 'writing' && key.collection === 'articles') {
         updated = await db.query(`UPDATE articles SET slug=$1,title=$2,excerpt=$3,body=$4,
@@ -431,7 +457,7 @@ export async function updateAdminRecord(key: RecordKey, value: Item, revision: n
           parent_id=nullif($3,''),revision=revision+1 WHERE id=$4 AND revision=$5`,
         [value.name, value.description, value.parentId, key.id, revision]);
       } else {
-        const fields = recordFields(value);
+        const fields = recordFields(value,key.section);
         updated = await db.query(`UPDATE cms_entries SET published=$1,title=$2,category_id=$3,
           status_id=$4,occurred_at=$5,payload=$6::jsonb,search_text=$7,revision=revision+1,
           updated_at=now() WHERE section=$8 AND collection=$9 AND id=$10 AND revision=$11`,

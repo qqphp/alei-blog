@@ -1,5 +1,7 @@
 'use client';
 import { useState } from 'react';
+import { usePublicCollection } from './use-public-collection';
+import { PublicListError } from './public-list-error';
 import Image from 'next/image';
 import { Film as FilmIcon, Search } from 'lucide-react';
 import { useContent } from './content-provider';
@@ -18,8 +20,9 @@ export function FilmLibrary() {
   const filtered = matches.filter(
     (film) => !category || film.categoryId === category,
   );
-  const pages = Math.max(1, Math.ceil(filtered.length / 20));
-  const currentPage = Math.min(page, pages);
+  const archive = usePublicCollection('films.items',filtered,page,{q:query,category,onPageChange:setPage});
+  const pages = Math.max(1, Math.ceil(archive.total / 20));
+  const currentPage = archive.currentPage;
   return (
     <div className="cinema-program">
       <div className="cinema-program-heading">
@@ -30,7 +33,7 @@ export function FilmLibrary() {
           </h2>
         </div>
         <p>
-          <strong>{String(films.items.length).padStart(2, '0')}</strong>
+          <strong>{String(archive.remote ? archive.allCount : films.items.length).padStart(2, '0')}</strong>
           <span>部电影 · 留给散场之后</span>
         </p>
       </div>
@@ -44,7 +47,7 @@ export function FilmLibrary() {
               setPage(1);
             }}
           >
-            全部 <small>{matches.length}</small>
+            全部 <small>{archive.remote ? archive.searchTotal : matches.length}</small>
           </button>
           {films.categories.map((item) => (
             <button
@@ -58,7 +61,7 @@ export function FilmLibrary() {
             >
               {item.name}
               <small>
-                {matches.filter((film) => film.categoryId === item.id).length}
+                {archive.remote ? archive.categoryCounts[item.id] ?? 0 : matches.filter((film) => film.categoryId === item.id).length}
               </small>
             </button>
           ))}
@@ -78,8 +81,7 @@ export function FilmLibrary() {
         </label>
       </div>
       <ol className="cinema-program-list" aria-label="电影节目单">
-        {filtered
-          .slice((currentPage - 1) * 20, currentPage * 20)
+        {archive.items
           .map((film, index) => (
             <li key={film.id}>
               <div className="cinema-program-image">
@@ -128,7 +130,8 @@ export function FilmLibrary() {
             </li>
           ))}
       </ol>
-      {!filtered.length && (
+      <PublicListError error={archive.error} />
+      {!archive.total && (
         <div className="cinema-empty">
           <FilmIcon size={28} />
           <h3>
@@ -152,7 +155,7 @@ export function FilmLibrary() {
       )}
       <nav className="cinema-pagination" aria-label="电影分页">
         <span>
-          {filtered.length} 部电影 · 第 {currentPage} / {pages} 页
+          {archive.total} 部电影 · 第 {currentPage} / {pages} 页
         </span>
         <div>
           <button

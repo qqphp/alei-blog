@@ -1,6 +1,8 @@
 'use client';
 import { contentPageSizes } from '@/lib/content-page-sizes';
-import { ContentPagination, paginateItems } from '@/components/content-pagination';
+import { ContentPagination } from '@/components/content-pagination';
+import { usePublicCollection } from './use-public-collection';
+import { PublicListError } from './public-list-error';
 
 
 import { useRef, useState } from 'react';
@@ -13,7 +15,7 @@ import {
   Network,
   Puzzle,
 } from 'lucide-react';
-import { useContent } from '@/components/content-provider';
+import { useContent, usePublicArchives } from '@/components/content-provider';
 import { AiModelDataSection } from '@/components/ai-model-data';
 import './ai-notebook.css';
 
@@ -238,7 +240,7 @@ function PianoBoard() {
 function AgentSection() {
   const { ai: { agents, agentStatuses } } = useContent();
   const [page, setPage] = useState(1);
-  const paginated = paginateItems(agents, page, contentPageSizes.agents);
+  const paginated = usePublicCollection('ai.agents',agents,page,{onPageChange:setPage});
   const statusNames = new Map(agentStatuses.map((item) => [item.id, item.name]));
   const [failedLogos, setFailedLogos] = useState<string[]>([]);
 
@@ -278,8 +280,9 @@ function AgentSection() {
           </article>
         ))}
       </div>
-      <ContentPagination ariaLabel="智能体分页" itemCount={agents.length} itemLabel="个智能体" page={paginated.currentPage} pageSize={contentPageSizes.agents} onPageChange={setPage} />
-      {!agents.length && (
+      <ContentPagination ariaLabel="智能体分页" itemCount={paginated.total} itemLabel="个智能体" page={paginated.currentPage} pageSize={contentPageSizes.agents} onPageChange={setPage} />
+      <PublicListError error={paginated.error} />
+      {!paginated.total && (
         <p className="ai-empty">暂无智能体内容。</p>
       )}
     </section>
@@ -302,8 +305,8 @@ function SkillsSection() {
   const skills = aiSkills.filter((skill) => categoryFilter === null ||
     (categoryFilter === '' ? !categoryNames.has(skill.categoryId) :
       skill.categoryId === categoryFilter || children.includes(skill.categoryId)));
-  const paginated = paginateItems(skills, page, contentPageSizes.skills);
-  const count = (id: string) => aiSkills.filter((skill) => skill.categoryId === id ||
+  const paginated = usePublicCollection('ai.skills',skills,page,{category:categoryFilter === '' ? '__uncategorized__' : categoryFilter ?? undefined,onPageChange:setPage});
+  const count = (id: string) => paginated.remote ? (paginated.categoryCounts[id] ?? 0) + skillCategories.filter((item)=>item.parentId===id).reduce((sum,item)=>sum+(paginated.categoryCounts[item.id]??0),0) : aiSkills.filter((skill) => skill.categoryId === id ||
     skillCategories.some((item) => item.parentId === id && item.id === skill.categoryId)).length;
 
   return (
@@ -311,7 +314,7 @@ function SkillsSection() {
       <div className="ai-skill-layout">
         <nav className="ai-skill-categories" aria-label="技能分类">
           <button type="button" aria-pressed={categoryFilter === null} onClick={() => changeCategory(null)}>
-            <span>全部</span><small>{aiSkills.length}</small>
+            <span>全部</span><small>{paginated.remote ? paginated.allCount : aiSkills.length}</small>
           </button>
           {skillCategories.filter((item) => !item.parentId).map((parent) => (
             <div className="ai-cat-group" key={parent.id}>
@@ -327,11 +330,11 @@ function SkillsSection() {
             </div>
           ))}
           <button type="button" aria-pressed={categoryFilter === ''} onClick={() => changeCategory('')}>
-            <span>未分类</span><small>{aiSkills.filter((skill) => !categoryNames.has(skill.categoryId)).length}</small>
+            <span>未分类</span><small>{paginated.remote ? Object.entries(paginated.categoryCounts).filter(([id])=>!categoryNames.has(id)).reduce((sum,[,count])=>sum+count,0) : aiSkills.filter((skill) => !categoryNames.has(skill.categoryId)).length}</small>
           </button>
         </nav>
         <div className="ai-skill-results">
-          <div className="ai-skill-heading"><h3>{categoryFilter === null ? '全部技能' : categoryFilter === '' ? '未分类' : category?.name ?? '技能'}</h3><span>{skills.length} 个 Skills</span></div>
+          <div className="ai-skill-heading"><h3>{categoryFilter === null ? '全部技能' : categoryFilter === '' ? '未分类' : category?.name ?? '技能'}</h3><span>{paginated.total} 个 Skills</span></div>
           <div className="ai-skill-list">
             {paginated.items.map((skill) => (
               <article className="ai-skill-row" key={skill.id}>
@@ -346,8 +349,9 @@ function SkillsSection() {
               </article>
             ))}
           </div>
-          <ContentPagination ariaLabel="技能分页" itemCount={skills.length} itemLabel="个 Skills" page={paginated.currentPage} pageSize={contentPageSizes.skills} onPageChange={setPage} />
-          {!skills.length && <p className="ai-empty">当前分类下暂无技能。</p>}
+          <ContentPagination ariaLabel="技能分页" itemCount={paginated.total} itemLabel="个 Skills" page={paginated.currentPage} pageSize={contentPageSizes.skills} onPageChange={setPage} />
+          <PublicListError error={paginated.error} />
+          {!paginated.total && <p className="ai-empty">当前分类下暂无技能。</p>}
         </div>
       </div>
     </section>
@@ -361,7 +365,7 @@ function SkillsSection() {
 function RelaysSection() {
   const { ai: { relays } } = useContent();
   const [page, setPage] = useState(1);
-  const paginated = paginateItems(relays, page, contentPageSizes.relays);
+  const paginated = usePublicCollection('ai.relays',relays,page,{onPageChange:setPage});
   const [failedLogos, setFailedLogos] = useState<string[]>([]);
 
   return (
@@ -385,8 +389,9 @@ function RelaysSection() {
           </article>
         ))}
       </div>
-      <ContentPagination ariaLabel="中转站分页" itemCount={relays.length} itemLabel="个中转站" page={paginated.currentPage} pageSize={contentPageSizes.relays} onPageChange={setPage} />
-      {!relays.length && (
+      <ContentPagination ariaLabel="中转站分页" itemCount={paginated.total} itemLabel="个中转站" page={paginated.currentPage} pageSize={contentPageSizes.relays} onPageChange={setPage} />
+      <PublicListError error={paginated.error} />
+      {!paginated.total && (
         <p className="ai-empty">暂无中转站推荐。</p>
       )}
     </section>
@@ -399,6 +404,7 @@ function RelaysSection() {
 
 export function AiNotebook() {
   const { ai: { agents: aiAgents, skills: aiSkills, relays: aiRelays } } = useContent();
+  const archives = usePublicArchives();
   const [active, setActive] = useState('ai-models');
   const [modelCount, setModelCount] = useState(0);
 
@@ -412,19 +418,19 @@ export function AiNotebook() {
     {
       id: 'ai-agents',
       name: '智能体',
-      count: aiAgents.length,
+      count: archives['ai.agents']?.allCount ?? aiAgents.length,
       icon: Bot,
     },
     {
       id: 'ai-skills',
       name: '技能 Skills',
-      count: aiSkills.length,
+      count: archives['ai.skills']?.allCount ?? aiSkills.length,
       icon: Puzzle,
     },
     {
       id: 'ai-relays',
       name: '中转站 API',
-      count: aiRelays.length,
+      count: archives['ai.relays']?.allCount ?? aiRelays.length,
       icon: Network,
     },
   ];

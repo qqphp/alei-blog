@@ -2,7 +2,7 @@ import pg from 'pg';
 import { defaults } from '../lib/cms-defaults.ts';
 import { adminCollections, sectionMetadata } from '../lib/admin-sections.ts';
 import { ensureManagedPostgres } from './managed-postgres.mjs';
-import { recordFields } from '../lib/content-record-fields.mjs';
+import { recordFields, recordPayload } from '../lib/content-record-fields.mjs';
 
 if (!process.env.DATABASE_URL) throw new Error('未配置 DATABASE_URL');
 const historicalCreatedAt = '2026-01-01T00:00:00.000Z';
@@ -42,13 +42,13 @@ try {
       const items = collection === 'root' ? value : value[collection];
       if (!Array.isArray(items)) continue;
       for (const [position, item] of items.entries()) {
-        const fields = recordFields(item);
+        const fields = recordFields(item,section);
         await db.query(`INSERT INTO cms_entries (section,collection,id,position,published,title,
           category_id,status_id,occurred_at,payload,search_text,created_at)
           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12) ON CONFLICT (section,collection,id) DO NOTHING`,
         [section, collection, item.id ?? `slide-${position}`, position,
           fields.published, fields.title, fields.categoryId, fields.statusId,
-          fields.occurredAt, JSON.stringify(item), fields.search,
+          fields.occurredAt, JSON.stringify(recordPayload(item,section,collection)), fields.search,
           section === 'ai' ? new Date() : section === 'projects' && item.createdAt && Number.isFinite(Date.parse(item.createdAt)) ? new Date(item.createdAt) : historicalCreatedAt]);
       }
     }

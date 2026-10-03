@@ -8,7 +8,7 @@ import { migrateMusic, publicMusic } from './music-content';
 import { migrateDirectory, resolveDirectory } from './directory-content';
 import { env } from 'cloudflare:workers';
 import { cacheForRequest } from 'vinext/cache';
-import { withDatabase } from './postgres';
+import { withDatabase, withReadDatabase } from './postgres';
 import { adminCollections } from './admin-sections';
 import { defaults, type PublicContent, type Section } from './cms-defaults';
 import { publishedOnly } from './cms-validation';
@@ -22,12 +22,14 @@ import { newestProjectsFirst } from './content-order';
 
 export type ArchiveArticle = Pick<typeof defaults.writing[number], 'slug' | 'title' | 'excerpt' | 'categoryId' | 'category' | 'date' | 'cover'>;
 export type WritingArchive = {
+  page?: number;
   items: ArchiveArticle[];
   total: number;
   allCount: number;
   categoryCounts: Record<string, number>;
 };
 export type StoryArchive = {
+  page?: number;
   items: typeof defaults.stories;
   total: number;
   yearlyCount: number;
@@ -61,7 +63,7 @@ function wantedSections(sections?: readonly Section[]) {
   return { wanted, stored: [...stored] };
 }
 
-export async function getDocuments(sections?: Section[]) {
+export async function getDocuments(sections?: Section[], options: { publicOnly?: boolean; metadataOnly?: boolean } = {}) {
   const { wanted, stored } = wantedSections(sections);
   const has = (key: Section) => wanted.has(key);
   const selected = sections ? stored : null;
@@ -71,8 +73,12 @@ export async function getDocuments(sections?: Section[]) {
       const [sectionResult, categories, articles, entries] = [
         await db.query<{ section: Section; value: unknown; revision: number }>('SELECT section, value, revision FROM cms_sections WHERE $1::text[] IS NULL OR section = ANY($1::text[])', [selected]),
         await db.query<{ id: string; name: string; description: string; parent_id: string | null }>('SELECT id, name, description, parent_id FROM article_categories WHERE $1::boolean ORDER BY position', [has('categories') || has('writing')]),
-        await db.query<{ slug: string; title: string; excerpt: string; body: string; category_id: string; date: string; published: boolean; cover_url: string; cover_mode: string; cover_generated_for: string; cover_description: string }>(`SELECT slug, title, excerpt, body, category_id, to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, published, cover_url, cover_mode, cover_generated_for, cover_description FROM articles WHERE $1::boolean ORDER BY created_at DESC, slug`, [has('writing')]),
-        await db.query<{ section: Section; collection: string; category_id: string | null; payload: unknown; createdAt: Date | null; updatedAt: Date }>('SELECT section, collection, category_id, payload, created_at AS "createdAt", updated_at AS "updatedAt" FROM cms_entries WHERE $1::text[] IS NULL OR section = ANY($1::text[]) ORDER BY section, collection, position, id', [selected]),
+        await db.query<{ slug: string; title: string; excerpt: string; body: string; category_id: string; date: string; published: boolean; cover_url: string; cover_mode: string; cover_generated_for: string; cover_description: string }>(`SELECT slug, title, excerpt, body, category_id, to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, published, cover_url, cover_mode, cover_generated_for, cover_description FROM articles WHERE $1::boolean AND (NOT $2::boolean OR published) ORDER BY created_at DESC, slug`, [has('writing') && !options.metadataOnly, options.publicOnly ?? false]),
+        await db.query<{ section: Section; collection: string; category_id: string | null; payload: unknown; createdAt: Date | null; updatedAt: Date }>(`SELECT section, collection, category_id, payload, created_at AS "createdAt", updated_at AS "updatedAt" FROM cms_entries
+          WHERE ($1::text[] IS NULL OR section = ANY($1::text[]))
+          AND (NOT $2::boolean OR published OR collection IN ('categories','statuses','scenes','agentStatuses','skillCategories','sections'))
+          AND (NOT $3::boolean OR collection IN ('categories','statuses','scenes','agentStatuses','skillCategories','sections'))
+          ORDER BY section, collection, position, id`, [selected,options.publicOnly ?? false,options.metadataOnly ?? false]),
       ];
       await db.query('COMMIT');
       return { results: sectionResult.rows, categories: categories.rows, articles: articles.rows, entries: entries.rows };
@@ -199,7 +205,7 @@ function publicLoader(key: string) {
   if (!loader) {
     const sections = key.split(',') as (keyof PublicContent)[];
     loader = cacheForRequest(async () => {
-      const { content } = await getDocuments(sections);
+      const { content } = await getDocuments(sections, { publicOnly: true });
       if (sections.includes('tracks')) content.tracks = publicMusic(content.tracks);
       const visible = publishedOnly(content) as Partial<PublicContent>;
       return Object.fromEntries(sections.map((name) => [name, visible[name]]));
@@ -211,6 +217,19 @@ function publicLoader(key: string) {
 
 export function getPublicContent<T extends keyof PublicContent>(sections: readonly T[]): Promise<Pick<PublicContent, T>> {
   return publicLoader([...sections].sort().join(','))() as Promise<Pick<PublicContent, T>>;
+}
+
+export async function getPublicPlaybackContent(): Promise<PublicContent['tracks']> {
+  const { content, revisions } = await getDocuments(['tracks'], { publicOnly: true, metadataOnly: true });
+  if (revisions.tracks !== undefined) {
+    content.tracks.items = await withReadDatabase(async (db) =>
+      (await db.query<{ payload: typeof defaults.tracks.items[number] }>(
+        "SELECT payload FROM cms_entries WHERE section='tracks' AND collection='items' AND published ORDER BY position,id"))
+        .rows.map((row)=>row.payload));
+  }
+  // The persistent player needs the complete lightweight playback queue, not playlist bodies.
+  content.tracks.playlists = [];
+  return publishedOnly(migrateMusic(content.tracks)) as PublicContent['tracks'];
 }
 
 export async function getPublicArticle(slug: string) {
@@ -254,16 +273,16 @@ export async function getRecentProjects(limit: number) {
   const saved = await withDatabase(async (db) => {
     const section = await db.query('SELECT 1 FROM cms_sections WHERE section = $1', ['projects']);
     if (!section.rowCount) return null;
-    const result = await db.query<{ payload: typeof defaults.projects.items[number] }>(
-      `SELECT payload FROM cms_entries WHERE section = 'projects' AND collection = 'items' AND published
-       ORDER BY occurred_at DESC NULLS LAST, position LIMIT $1`,
+    const result = await db.query<{ payload: typeof defaults.projects.items[number]; createdAt: Date; updatedAt: Date }>(
+      `SELECT payload, created_at AS "createdAt", updated_at AS "updatedAt" FROM cms_entries WHERE section = 'projects' AND collection = 'items' AND published
+       ORDER BY created_at DESC, position, id LIMIT $1`,
       [limit],
     );
     const options = await db.query<{ collection: string; payload: { id: string; name: string } }>(
       "SELECT collection, payload FROM cms_entries WHERE section = 'projects' AND collection IN ('categories', 'statuses') ORDER BY position",
     );
     return resolveProjects({
-      items: result.rows.map((row) => row.payload),
+      items: result.rows.map((row) => ({ ...row.payload, ...recordTimes(row), createdAt: recordTimes(row).createdAt ?? '' })),
       categories: options.rows.filter((row) => row.collection === 'categories').map((row) => row.payload),
       statuses: options.rows.filter((row) => row.collection === 'statuses').map((row) => row.payload),
     }).items;
@@ -274,7 +293,7 @@ export async function getRecentProjects(limit: number) {
 export async function getWritingArchive(query = '', group = '', page = 1, pageSize: number = contentPageSizes.writing): Promise<WritingArchive & { categories: typeof defaults.categories }> {
   const requestedPage = Math.max(1, Math.trunc(page));
   const search = query.trim().toLowerCase();
-  const saved = await withDatabase(async (db) => {
+  const saved = await withReadDatabase(async (db) => {
     const section = await db.query('SELECT 1 FROM cms_sections WHERE section = $1', ['writing']);
     if (!section.rowCount) return null;
     const categoryRows = await db.query<{ id: string; name: string; description: string; parent_id: string | null }>(
@@ -286,17 +305,19 @@ export async function getWritingArchive(query = '', group = '', page = 1, pageSi
     const pattern = `%${search.replace(/[\\%_]/g, '\\$&')}%`;
     const filter = `a.published AND ($1::text[] IS NULL OR a.category_id = ANY($1::text[]))
       AND ($2 = '' OR (a.title || ' ' || a.excerpt || ' ' || a.body) ILIKE $3 ESCAPE '\\' OR a.category_id = ANY($4::text[]))`;
-    const [counts, total, matches, items] = [
+    const [counts, total, matches] = [
       await db.query<{ category_id: string; count: number }>('SELECT category_id, count(*)::int AS count FROM articles WHERE published GROUP BY category_id'),
       await db.query<{ count: number }>('SELECT count(*)::int AS count FROM articles WHERE published'),
       await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM articles a JOIN article_categories c ON c.id = a.category_id WHERE ${filter}`, [branch, search, pattern, matchingCategories]),
-      await db.query<ArchiveArticle>(`SELECT a.slug, a.title, a.excerpt, a.category_id AS "categoryId",
+    ];
+    const currentPage = Math.min(requestedPage, Math.max(1, Math.ceil(matches.rows[0].count / pageSize)));
+    const items = await db.query<ArchiveArticle>(`SELECT a.slug, a.title, a.excerpt, a.category_id AS "categoryId",
         c.name AS category, to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, a.cover_url AS cover
         FROM articles a JOIN article_categories c ON c.id = a.category_id WHERE ${filter}
         ORDER BY a.created_at DESC, a.slug LIMIT $5 OFFSET $6`,
-      [branch, search, pattern, matchingCategories, pageSize, (requestedPage - 1) * pageSize]),
-    ];
+      [branch, search, pattern, matchingCategories, pageSize, (currentPage - 1) * pageSize]);
     return {
+      page: currentPage,
       categories,
       items: items.rows,
       total: matches.rows[0].count,
@@ -313,9 +334,11 @@ export async function getWritingArchive(query = '', group = '', page = 1, pageSi
     `${item.title} ${item.excerpt} ${item.body} ${item.category}`.toLowerCase().includes(search));
   const counts: Record<string, number> = {};
   for (const article of all) counts[article.categoryId] = (counts[article.categoryId] ?? 0) + 1;
+  const currentPage = Math.min(requestedPage, Math.max(1, Math.ceil(filtered.length / pageSize)));
   return {
+    page: currentPage,
     categories,
-    items: filtered.sort((a, b) => b.date.localeCompare(a.date)).slice((requestedPage - 1) * pageSize, requestedPage * pageSize),
+    items: filtered.sort((a, b) => b.date.localeCompare(a.date)).slice((currentPage - 1) * pageSize, currentPage * pageSize),
     total: filtered.length,
     allCount: all.length,
     categoryCounts: counts,
@@ -324,19 +347,20 @@ export async function getWritingArchive(query = '', group = '', page = 1, pageSi
 
 export async function getStoryArchive(page = 1, period?: number): Promise<StoryArchive> {
   const requestedPage = Math.max(1, Math.trunc(page));
-  const saved = await withDatabase(async (db) => {
+  const saved = await withReadDatabase(async (db) => {
     const section = await db.query('SELECT 1 FROM cms_sections WHERE section = $1', ['stories']);
     if (!section.rowCount) return null;
-    const [latest, total, items] = [
+    const [latest, total] = [
       await db.query<{ date: Date | null }>(`SELECT max(occurred_at) AS date FROM cms_entries
         WHERE section = 'stories' AND collection = 'root' AND published`),
       await db.query<{ count: number }>(`SELECT count(*)::int AS count FROM cms_entries
         WHERE section = 'stories' AND collection = 'root' AND published`),
-      await db.query<{ payload: typeof defaults.stories[number] }>(`SELECT payload FROM cms_entries
+    ];
+    const currentPage = Math.min(requestedPage, Math.max(1, Math.ceil(total.rows[0].count / contentPageSizes.stories)));
+    const items = await db.query<{ payload: typeof defaults.stories[number] }>(`SELECT payload FROM cms_entries
         WHERE section = 'stories' AND collection = 'root' AND published
         ORDER BY occurred_at DESC NULLS LAST, id LIMIT $1 OFFSET $2`,
-      [contentPageSizes.stories, (requestedPage - 1) * contentPageSizes.stories]),
-    ];
+      [contentPageSizes.stories, (currentPage - 1) * contentPageSizes.stories]);
     const latestDate = latest.rows[0].date;
     const latestLocal = latestDate ? new Date(latestDate.getTime() + 8 * 3600000) : null;
     const latestPeriod = latestLocal ? latestLocal.getUTCFullYear() * 12 + latestLocal.getUTCMonth() : 2026 * 12 + 8;
@@ -363,6 +387,7 @@ export async function getStoryArchive(page = 1, period?: number): Promise<StoryA
     const counts = new Map(daily.rows.map((row) => [row.day, row.count]));
     calendar.days = calendar.days.map((day) => ({ ...day, count: counts.get(day.day) ?? 0 }));
     return {
+      page: currentPage,
       items: items.rows.map((row) => row.payload), total: total.rows[0].count,
       yearlyCount: yearly.rows[0].count, latestPeriod, calendar,
     };
@@ -374,8 +399,10 @@ export async function getStoryArchive(page = 1, period?: number): Promise<StoryA
   const current = period ?? latestPeriod;
   const year = Math.floor(current / 12);
   const month = current % 12 + 1;
+  const currentPage = Math.min(requestedPage, Math.max(1, Math.ceil(stories.length / contentPageSizes.stories)));
   return {
-    items: stories.slice((requestedPage - 1) * contentPageSizes.stories, requestedPage * contentPageSizes.stories),
+    page: currentPage,
+    items: stories.slice((currentPage - 1) * contentPageSizes.stories, currentPage * contentPageSizes.stories),
     total: stories.length, yearlyCount: stories.filter((story) => story.date.startsWith(`${year}-`)).length,
     latestPeriod, calendar: monthSummary(stories.map((story) => story.date), year, month),
   };

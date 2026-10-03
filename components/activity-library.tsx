@@ -1,5 +1,7 @@
 'use client';
 import { useState } from 'react';
+import { usePublicCollection } from './use-public-collection';
+import { PublicListError } from './public-list-error';
 import Image from 'next/image';
 import { MarkdownContent } from './markdown-content';
 import { Compass, Sparkles } from 'lucide-react';
@@ -30,8 +32,9 @@ export function ActivityLibrary({
         .toLowerCase()
         .includes(query.trim().toLowerCase()),
   );
-  const pages = Math.max(1, Math.ceil(filtered.length / 12));
-  const current = Math.min(page, pages);
+  const archive = usePublicCollection(`${section}.items`,filtered,page,{q:query,category,onPageChange:setPage});
+  const pages = Math.max(1, Math.ceil(archive.total / 12));
+  const current = archive.currentPage;
   return (
     <section
       className={`activity-library activity-library-${section}`}
@@ -65,7 +68,8 @@ export function ActivityLibrary({
         />
       </div>
       <div className="activity-grid">
-        {filtered.slice((current - 1) * 12, current * 12).map((item) => (
+        <PublicListError error={archive.error} />
+        {archive.items.map((item) => (
           <article className="activity-card" key={item.id}>
             <div className="activity-cover">
               {item.cover ? (
@@ -142,7 +146,7 @@ export function ActivityLibrary({
           </article>
         ))}
       </div>
-      {!filtered.length && (
+      {!archive.total && (
         <div className="activity-empty">
           <p>
             {doc.items.length
@@ -165,7 +169,7 @@ export function ActivityLibrary({
       )}
       <nav className="activity-pagination" aria-label={`${label}分页`}>
         <span>
-          {filtered.length} 项 · 第 {current} / {pages} 页
+          {archive.total} 项 · 第 {current} / {pages} 页
         </span>
         <div>
           <button

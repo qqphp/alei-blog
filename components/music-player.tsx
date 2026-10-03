@@ -23,9 +23,11 @@ import {
   X,
 } from 'lucide-react';
 import { formatTime } from '@/lib/music';
+import type { PublicContent } from '@/lib/cms-defaults';
 
 const MusicContext = createContext<{
   index: number;
+  tracks: PublicContent['tracks']['items'];
   playing: boolean;
   playTrack: (index: number) => void;
   toggle: () => void;
@@ -162,6 +164,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const controls = useMemo(
     () => ({
       index,
+      tracks,
       playing,
       playTrack,
       toggle,
@@ -173,6 +176,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     }),
     [
       index,
+      tracks,
       playing,
       playTrack,
       toggle,

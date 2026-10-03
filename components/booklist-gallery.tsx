@@ -1,6 +1,8 @@
 'use client';
 import { contentPageSizes } from '@/lib/content-page-sizes';
-import { ContentPagination, paginateItems } from '@/components/content-pagination';
+import { ContentPagination } from '@/components/content-pagination';
+import { usePublicCollection } from './use-public-collection';
+import { PublicListError } from './public-list-error';
 
 import { useState } from 'react';
 import Image from 'next/image';
@@ -45,7 +47,7 @@ export function BooklistGallery({ lists }: { lists: BookList[] }) {
       .toLowerCase()
       .includes(query.trim().toLowerCase()),
   );
-  const paginated = paginateItems(filtered, page, contentPageSizes.booklists);
+  const paginated = usePublicCollection('books.lists',filtered,page,{q:query,onPageChange:setPage});
   return (
     <section className="booklist-gallery" aria-label="主题书单">
       <div className="booklist-toolbar">
@@ -54,7 +56,7 @@ export function BooklistGallery({ lists }: { lists: BookList[] }) {
             READING COLLECTIONS / 主题阅读
           </span>
           <h2>从一个主题，走进几本书。</h2>
-          <p>{lists.length} 份书单，把相近的思考放在一起。</p>
+          <p>{paginated.remote ? paginated.allCount : lists.length} 份书单，把相近的思考放在一起。</p>
         </div>
         <label className="booklist-search">
           <Search size={17} />
@@ -68,6 +70,7 @@ export function BooklistGallery({ lists }: { lists: BookList[] }) {
         </label>
       </div>
       <div className="booklist-card-grid">
+        <PublicListError error={paginated.error} />
         {paginated.items.map((list, index) => (
           <button
             type="button"
@@ -91,10 +94,10 @@ export function BooklistGallery({ lists }: { lists: BookList[] }) {
           </button>
         ))}
       </div>
-      {!filtered.length && (
+      {!paginated.total && (
         <div className="booklist-empty">
           <p>
-            {lists.length ? '没有找到匹配的书单。' : '暂无发布的主题书单。'}
+            {paginated.allCount ? '没有找到匹配的书单。' : '暂无发布的主题书单。'}
           </p>
           {query && (
             <button type="button" onClick={() => { setQuery(''); setPage(1); }}>
@@ -103,7 +106,7 @@ export function BooklistGallery({ lists }: { lists: BookList[] }) {
           )}
         </div>
       )}
-      <ContentPagination ariaLabel="主题书单分页" itemCount={filtered.length} itemLabel="份书单" page={paginated.currentPage} pageSize={contentPageSizes.booklists} onPageChange={setPage} />
+      <ContentPagination ariaLabel="主题书单分页" itemCount={paginated.total} itemLabel="份书单" page={paginated.currentPage} pageSize={contentPageSizes.booklists} onPageChange={setPage} />
       <Dialog
         open={!!opened}
         onOpenChange={(open) => {

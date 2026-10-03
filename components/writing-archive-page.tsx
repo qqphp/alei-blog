@@ -34,7 +34,10 @@ export default function WritingPage({ initial }: { initial: WritingArchive & { c
         const params = new URLSearchParams({ q: query, group, page: String(page) });
         const response = await fetch(`/api/writing?${params}`, { signal: controller.signal });
         if (!response.ok) throw new Error('查询失败，请稍后重试。');
-        setArchive(await response.json() as WritingArchive);
+        const result = await response.json() as WritingArchive;
+        const currentPage = result.page ?? Math.min(page, Math.max(1, Math.ceil(result.total / contentPageSizes.writing)));
+        setArchive(result);
+        if (currentPage !== page) setPage(currentPage);
         setError('');
       } catch (reason) {
         if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : '查询失败');

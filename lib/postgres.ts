@@ -101,3 +101,17 @@ export async function queryOne<T extends QueryResultRow>(sql: string, values: un
     return result.rows[0] ?? null;
   });
 }
+
+export function withReadDatabase<T>(run: (client: Client) => Promise<T>): Promise<T> {
+  return withDatabase(async (client) => {
+    await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
+    try {
+      const result = await run(client);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    }
+  });
+}
