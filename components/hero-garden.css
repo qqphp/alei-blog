@@ -22,7 +22,6 @@
 .spark-one { right:5%; top:23%; }.spark-two { left:11%; bottom:22%; font-size:28px; color:var(--garden-teal); animation-direction:reverse; }
 .garden-seed { position:absolute; border-radius:4px; width:13px; height:30px; background:var(--garden-blue); animation:garden-float 7s ease-in-out infinite alternate; }
 .seed-one { top:8%; left:48%; rotate:30deg; }.seed-two { bottom:12%; right:23%; width:8px; height:18px; background:var(--garden-warm); animation-delay:-4s; rotate:-25deg; }
-.garden-caption { position:absolute; bottom:0; left:50%; transform:translateX(-50%); color:var(--muted); font:10px ui-monospace,monospace; letter-spacing:.24em; white-space:nowrap; }
 @keyframes garden-orbit { to { transform:rotate(360deg); } }
 @keyframes garden-float { from { transform:translateY(-7px) rotate(-3deg); } to { transform:translateY(9px) rotate(3deg); } }
 @keyframes garden-breathe { from { transform:scale(.95); opacity:.8; } to { transform:scale(1.06); opacity:1; } }
@@ -30,5 +29,5 @@
 @keyframes garden-unfold-two { from { transform:rotate(32deg) translate(0,-2%); } to { transform:rotate(49deg) translate(2%,2%); } }
 @keyframes garden-unfold-three { from { transform:rotate(-22deg) translateY(2%); } to { transform:rotate(-10deg) translateY(-3%); } }
 @media(max-width:900px) { .hero.hero-live { gap:0; padding-inline:35px; min-height:540px; }.hero-live h1 { font-size:44px; }.hero-live .hero-bottom { flex-wrap:wrap; }.hero-garden { width:115%; } }
-@media(max-width:600px) { .hero.hero-live { grid-template-columns:minmax(0,1fr); padding:42px 25px 28px; gap:12px; }.hero-live h1 { font-size:clamp(34px,8vw,46px); margin:22px 0 24px; }.hero-live .hero-bottom { flex-wrap:nowrap; gap:14px; }.hero-live .hero-bottom p { font-size:14px; }.hero-live .round-link { width:42px; height:42px; }.hero-garden { width:min(100%,330px); }.garden-caption { font-size:9px; } }
+@media(max-width:600px) { .hero.hero-live { grid-template-columns:minmax(0,1fr); padding:42px 25px 28px; gap:12px; }.hero-live h1 { font-size:clamp(34px,8vw,46px); margin:22px 0 24px; }.hero-live .hero-bottom { flex-wrap:nowrap; gap:14px; }.hero-live .hero-bottom p { font-size:14px; }.hero-live .round-link { width:42px; height:42px; }.hero-garden { width:min(100%,330px); } }
 @media(prefers-reduced-motion:reduce) { .hero-garden * { animation:none!important; } }

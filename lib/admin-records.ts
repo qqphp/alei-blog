@@ -1,6 +1,6 @@
 import type { Client } from 'pg';
 import { withDatabase, withReadDatabase } from './postgres';
-import { defaults, type Section } from './cms-defaults';
+import { defaults, siteWithFooter, type Section } from './cms-defaults';
 import { validateContent } from './cms-validation';
 import { adminCollections, configKeys, sectionMetadata, validCollection } from './admin-sections';
 import { deleteLocalMedia, readLocalMedia } from './local-media';
@@ -188,8 +188,9 @@ function defaultConfig(section: Section): Item {
 function savedConfig(section: Section, value: Item | undefined) {
   const fallback = defaultConfig(section);
   const allowed = new Set(Object.keys(fallback));
-  return Object.fromEntries(Object.entries(value ?? fallback)
+  const saved = Object.fromEntries(Object.entries(value ?? (section === 'site' ? {} : fallback))
     .filter(([key]) => allowed.has(key)));
+  return section === 'site' ? siteWithFooter(saved as Partial<typeof defaults.site>) : saved;
 }
 
 export async function getAdminConfig(section: Section, scope: string) {

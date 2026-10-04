@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
-import { defaults, sectionLabels, type Content, type Section } from '@/lib/cms-defaults';
+import { defaults, sectionLabels, footerIconOptions, type Content, type Section } from '@/lib/cms-defaults';
 import { adminCollections, collectionLabels, configScopes } from '@/lib/admin-sections';
 import { musicSample } from '@/lib/music-content';
 import { storyDate, type Story } from '@/lib/story-content';
@@ -34,9 +34,10 @@ const sidebarSections: { label?: string; sections: Section[] }[] = [
   { label: '设置', sections: ['aiSettings', 'site'] },
 ];
 const websiteTabs = [
-  { id: 'site', label: '站点', keys: ['name', 'mark', 'title', 'description', 'footer', 'copyright', 'footerLink', 'footerUrl'] },
+  { id: 'site', label: '站点', keys: ['name', 'mark', 'title', 'description'] },
   { id: 'navigation', label: '导航', keys: ['links', 'sites', 'life'] },
-  { id: 'home', label: '首页', keys: ['eyebrow', 'title', 'description', 'noteTitle', 'noteText'] },
+  { id: 'home', label: '首页', keys: ['eyebrow', 'title', 'description', 'nowBuilding', 'nowWriting', 'nowExploring', 'heroArtTopText', 'heroArtBottomText', 'noteTitle', 'noteText', 'noteArtText'] },
+  { id: 'footer', label: '页脚', keys: ['footer', 'copyright', 'footerLink', 'footerUrl', 'footerLinks', 'footerSocialLinks', 'footerMotto'] },
 ];
 const EMPTY_COLLECTIONS: readonly string[] = [];
 const listSubtitlePaths = new Set([
@@ -497,6 +498,7 @@ export function AdminGranularPanel() {
               dirty={dirty} onChange={(value) => setConfig({ ...config, value: asJson(value) })} /> :
             <Field path={`${section}.${activeScope}`} label={scopes.find((scope) => scope.id === activeScope)?.label ?? sectionLabels[section]}
               value={configValue!} sample={configSample ?? config.value}
+              options={section === 'site' && activeScope === 'footer' ? { icon: footerIconOptions } : undefined}
               onWorking={setWorking}
               onChange={(value) => setConfig({ ...config,
                 value: websiteTab ? asJson({ ...config.value as Item, ...value as Item }) : value })} />}

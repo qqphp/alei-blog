@@ -8,6 +8,5 @@ export function HeroGarden() {
     <div className="garden-satellite satellite-one"><i /></div><div className="garden-satellite satellite-two"><i /></div>
     <div className="garden-spark spark-one">✳</div><div className="garden-spark spark-two">+</div>
     <div className="garden-seed seed-one" /><div className="garden-seed seed-two" />
-    <span className="garden-caption">{"IDEAS IN BLOOM"}</span>
   </div>;
 }

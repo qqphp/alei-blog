@@ -3,7 +3,7 @@ import { bookSample, type BookDocument } from './book-content';
 import { podcastSample, type PodcastDocument } from './podcast-content';
 import { filmSample, type FilmDocument } from './film-content';
 import { musicSample, type MusicDocument } from './music-content';
-import { defaults, type Section } from './cms-defaults';
+import { defaults, footerLinkSample, footerSocialLinkSample, footerIconOptions, type Section } from './cms-defaults';
 import { skillCategorySample } from './ai-resources';
 import { storyDate } from './story-content';
 
@@ -68,7 +68,9 @@ export function validateContent(key: Section, value: unknown) {
         (key === 'ai' && ['ai.agents', 'ai.skills', 'ai.relays', 'ai.agentStatuses', 'ai.skillCategories'].includes(path));
       if (list.length > (growingCollection ? 10000 : 500))
         fail(growingCollection ? '最多 10000 项' : '最多 500 项');
-      const itemSample = path === 'ai.skillCategories' ? skillCategorySample : sample[0] ?? '';
+      const itemSample = path === 'site.footerLinks' ? footerLinkSample
+        : path === 'site.footerSocialLinks' ? footerSocialLinkSample
+        : path === 'ai.skillCategories' ? skillCategorySample : sample[0] ?? '';
       list.forEach((item, i) => walk(item, itemSample, `${path}[${i + 1}]`));
       for (const identity of ['id', 'slug']) {
         const ids = list.flatMap((item) =>
@@ -93,6 +95,10 @@ export function validateContent(key: Section, value: unknown) {
         fail('请上传音频或填写时长');
       if (typeof input !== typeof sample) fail(`需要 ${typeof sample}`);
       if (typeof input === 'string') {
+        if (key === 'site' && field === 'icon' && !footerIconOptions.some((option) => option.id === input))
+          fail('请选择有效的社交图标');
+        if (key === 'site' && field === 'href' && path.includes('.footer') && !input.trim())
+          fail('请填写链接地址');
         if (key === 'writing' && field === 'coverDescription' && input.length > 5000)
           fail('图片描述最多 5000 字');
         if (input.length > (field === 'body' || (key === 'investing' && path.includes('.paragraphs[')) ? 200000 : 30000))

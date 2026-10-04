@@ -651,7 +651,7 @@
 .ai-model-guide {
   padding: 12px;
   border: 1px solid var(--line);
-  background: var(--ai-paper);
+  background: var(--ai-surface);
 }
 .ai-model-vendors > h3,
 .ai-model-guide > h3 {
@@ -723,10 +723,16 @@
   color: var(--muted);
   font: 0.65rem ui-monospace, monospace;
 }
+.ai-model-vendor-list button:hover {
+  background: color-mix(in srgb, var(--ai-accent) 8%, transparent);
+}
 .ai-model-vendor-list button[aria-pressed='true'] {
   border-color: var(--line);
-  background: var(--ai-surface);
+  background: color-mix(in srgb, var(--ai-accent) 14%, transparent);
   color: var(--ai-accent);
+}
+.ai-model-vendor-list button[aria-pressed='true'] small {
+  color: var(--ink);
 }
 .ai-model-vendor-picker {
   display: block;
@@ -738,6 +744,7 @@
   font-size: 0.7rem;
 }
 .ai-model-vendor-picker select {
+  color-scheme: dark;
   width: 100%;
   min-height: 38px;
   padding: 0 8px;
@@ -746,6 +753,10 @@
   color: var(--ink);
   font: inherit;
   font-size: 0.75rem;
+}
+.ai-model-vendor-picker select:focus-visible {
+  outline: 2px solid var(--ai-accent);
+  outline-offset: 3px;
 }
 .ai-model-results {
   min-width: 0;
@@ -850,6 +861,19 @@
   --ai-soft: #625785;
   --ai-surface: #e0eeea;
   --ai-paper: #d7e3d3;
+}
+.fresh-theme .ai-model-vendors,
+.fresh-theme .ai-model-guide {
+  background: var(--ai-paper);
+}
+.fresh-theme .ai-model-sidebar {
+  --muted: #3d5961;
+}
+.fresh-theme .ai-model-vendor-list button[aria-pressed='true'] {
+  color: var(--ink);
+}
+.fresh-theme .ai-model-vendor-picker select {
+  color-scheme: light;
 }
 .fresh-theme .ai-relay-card .ai-card-icon {
   border-color: #9cc4bd;

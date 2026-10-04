@@ -10,7 +10,7 @@ import { env } from 'cloudflare:workers';
 import { cacheForRequest } from 'vinext/cache';
 import { withDatabase, withReadDatabase } from './postgres';
 import { adminCollections } from './admin-sections';
-import { defaults, type PublicContent, type Section } from './cms-defaults';
+import { defaults, siteWithFooter, type PublicContent, type Section } from './cms-defaults';
 import { publishedOnly } from './cms-validation';
 import { recordTimes } from './content-times';
 import { migrateProjects, resolveProjects } from './project-content';
@@ -89,6 +89,7 @@ export async function getDocuments(sections?: Section[], options: { publicOnly?:
   });
   const content = {} as typeof defaults;
   for (const key of wanted) (content as Record<Section, unknown>)[key] = structuredClone(defaults[key]);
+  if (has('site')) content.site = siteWithFooter({});
   const revisions: Partial<Record<Section, number>> = {};
   for (const row of results) {
     if (!Object.hasOwn(defaults, row.section)) continue;
@@ -99,7 +100,7 @@ export async function getDocuments(sections?: Section[], options: { publicOnly?:
     Object.assign(content, {
       [row.section]: saved && typeof saved === 'object' && !Array.isArray(saved)
         && base && typeof base === 'object' && !Array.isArray(base)
-        ? { ...base, ...saved }
+        ? row.section === 'site' ? siteWithFooter(saved as Partial<typeof defaults.site>) : { ...base, ...saved }
         : saved,
     });
   }

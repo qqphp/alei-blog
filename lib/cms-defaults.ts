@@ -19,6 +19,18 @@ import { categoryId, stripArticleExtras } from './article-categories';
 
 const publish = <T extends object>(items: T[]) =>
   items.map((item) => ({ ...item, _published: true }));
+export const footerLinkSample = { name: '', href: '' };
+export const footerSocialLinkSample = { name: '', icon: '', href: '' };
+export const footerIconOptions = [
+  { id: 'github', name: 'GitHub' }, { id: 'rss', name: 'RSS' },
+  { id: 'bilibili', name: 'Bilibili' }, { id: 'wechat', name: '微信' },
+  { id: 'weibo', name: '微博' }, { id: 'link', name: '通用链接' },
+  { id: 'zhihu', name: '知乎' }, { id: 'xiaohongshu', name: '小红书' },
+  { id: 'douyin', name: '抖音' }, { id: 'qq', name: 'QQ' },
+  { id: 'x', name: 'X' }, { id: 'youtube', name: 'YouTube' },
+  { id: 'telegram', name: 'Telegram' }, { id: 'discord', name: 'Discord' },
+  { id: 'linkedin', name: 'LinkedIn' }, { id: 'facebook', name: 'Facebook' },
+];
 export const defaults = {
   aiSettings: {
     booklistCoverSize: '1536x1024',
@@ -78,6 +90,9 @@ export const defaults = {
     copyright: '© 2026 · 开发阿雷',
     footerLink: '保持联系 ↗',
     footerUrl: '/about#profile-contact',
+    footerLinks: [] as typeof footerLinkSample[],
+    footerSocialLinks: [] as typeof footerSocialLinkSample[],
+    footerMotto: 'Stay curious. Keep building.',
     links: [
       { name: '写作', href: '/writing' },
       { name: '项目', href: '/projects' },
@@ -104,6 +119,12 @@ export const defaults = {
     title: '思考、制作，\n并留下值得回看的东西。',
     description:
       '这里存放我的写作、项目与尚未成形的灵感。\n欢迎从最近的更新开始。',
+    nowBuilding: '',
+    nowWriting: '',
+    nowExploring: '',
+    heroArtTopText: 'Build\nCreate\nShare\nLive',
+    heroArtBottomText: 'Ideas to build\nA better tomorrow',
+    noteArtText: 'More\nThan\nArticles',
     noteTitle: '不是所有内容都需要成为文章。',
     noteText:
       '说说记录正在形成的想法、值得再次查看的素材，以及尚未适合被归类的问题。',
@@ -203,6 +224,11 @@ export const defaults = {
 };
 export type Content = typeof defaults;
 export type PublicContent = Omit<Content, 'aiSettings'>;
+export function siteWithFooter(value: Partial<typeof defaults.site>) {
+  return { ...defaults.site, ...value,
+    footerLinks: value.footerLinks ?? value.links ?? defaults.site.links };
+}
+
 export type Section = keyof Content;
 export const sectionLabels: Record<Section, string> = {
   aiSettings: 'AI 大模型设置',

@@ -3,7 +3,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { readFile, readdir, copyFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import pg from 'pg';
-import { defaults } from '../lib/cms-defaults.ts';
+import { defaults, footerIconOptions } from '../lib/cms-defaults.ts';
 import { adminCollections } from '../lib/admin-sections.ts';
 import { restrictSecretFile } from './secret-permissions.mjs';
 
@@ -248,8 +248,15 @@ try {
       throw new Error(`测试请求失败：${method} ${path}`, { cause: error });
     }
   };
+  const legacySiteDb = new pg.Client({ connectionString: testUrl.toString() });
+  await legacySiteDb.connect();
+  try {
+    await legacySiteDb.query("UPDATE cms_sections SET value = value - 'footerLinks' - 'footerSocialLinks' - 'footerMotto' WHERE section = 'site'");
+  } finally { await legacySiteDb.end(); }
   const site = await request('/api/admin/config/site/root');
   assert.equal(site.data.value.title, 'ISOLATED_GRANULAR_TEST', '测试服务必须连接独立数据库');
+  assert.deepEqual(site.data.value.footerLinks, site.data.value.links, '旧配置页脚导航应继承当前主导航');
+  assert.deepEqual(site.data.value.footerSocialLinks, []);
   const savedSite = await request('/api/admin/config/site/root', 'PUT', {
     value: { ...site.data.value, name: '网站设置持久化测试', footer: '网站设置页脚测试' },
     revision: site.data.revision,
@@ -269,14 +276,55 @@ try {
     value: savedSite.data.value, revision: savedSite.data.revision,
   });
   assert.equal(staleSite.status, 409, '站点和导航共用版本，旧版本不能覆盖新导航');
+  const homeBeforeFooter = await request('/api/admin/config/home/root');
+  const footerValue = { ...savedNavigation.data.value,
+    footerLinks: [{ name: '页脚项目', href: '/projects' }, { name: '页脚写作', href: '/writing' }],
+    footerSocialLinks: footerIconOptions.map(({ id: icon }) =>
+      ({ name: `社交${icon}`, icon, href: `https://example.com/${icon}` })),
+    footerMotto: '页脚短句持久化测试' };
+  const savedFooter = await request('/api/admin/config/site/root', 'PUT', {
+    value: footerValue, revision: savedNavigation.data.revision,
+  });
+  assert.equal(savedFooter.status, 200, JSON.stringify(savedFooter.data));
+  for (const key of ['name', 'title', 'links', 'sites', 'life'])
+    assert.deepEqual(savedFooter.data.value[key], savedNavigation.data.value[key]);
+  assert.deepEqual((await request('/api/admin/config/home/root')).data, homeBeforeFooter.data);
+  for (const item of [{ name: '非法地址', icon: 'rss', href: 'javascript:alert(1)' },
+    { name: '非法图标', icon: 'unknown', href: '/about' }, { name: '空地址', icon: 'rss', href: '' }]) {
+    assert.equal((await request('/api/admin/config/site/root', 'PUT', {
+      value: { ...footerValue, footerSocialLinks: [item] }, revision: savedFooter.data.revision,
+    })).status, 400);
+  }
+  assert.equal((await request('/api/admin/config/site/root', 'PUT', {
+    value: footerValue, revision: savedNavigation.data.revision,
+  })).status, 409, '旧版本不能覆盖页脚');
+  const footerHtml = await (await fetch(origin + '/projects')).text();
+  assert.ok(footerHtml.includes('页脚短句持久化测试'));
+  assert.ok(footerHtml.indexOf('页脚项目') < footerHtml.indexOf('页脚写作'));
+  for (const item of footerValue.footerSocialLinks) {
+    const link = footerHtml.match(new RegExp(`<a\\b[^>]*aria-label="${item.name}"[^>]*>`))?.[0];
+    assert.ok(link, `前台缺少 ${item.icon} 社交入口`);
+    assert.ok(link.includes('target="_blank"'));
+    assert.ok(link.includes('rel="noopener noreferrer"'));
+  }
+  const clearedFooter = await request('/api/admin/config/site/root', 'PUT', {
+    value: { ...footerValue, footerLinks: [], footerSocialLinks: [], footerMotto: '' }, revision: savedFooter.data.revision,
+  });
+  assert.equal(clearedFooter.status, 200);
+  const clearedFooterHtml = await (await fetch(origin + '/')).text();
+  for (const text of ['页脚项目', '社交github', '页脚短句持久化测试']) assert.ok(!clearedFooterHtml.includes(text));
+  const restoredFooter = await request('/api/admin/config/site/root', 'PUT', {
+    value: footerValue, revision: clearedFooter.data.revision,
+  });
+  assert.equal(restoredFooter.status, 200);
   const reloadedSite = await request('/api/admin/config/site/root');
-  assert.deepEqual(reloadedSite.data.value, savedNavigation.data.value);
-  assert.equal(reloadedSite.data.revision, savedNavigation.data.revision);
+  assert.deepEqual(reloadedSite.data.value, restoredFooter.data.value);
+  assert.equal(reloadedSite.data.revision, restoredFooter.data.revision);
   const settingsDb = new pg.Client({ connectionString: testUrl.toString() });
   await settingsDb.connect();
   try {
     const persisted = await settingsDb.query("SELECT value FROM cms_sections WHERE section='site'");
-    assert.deepEqual(persisted.rows[0].value, savedNavigation.data.value);
+    assert.deepEqual(persisted.rows[0].value, restoredFooter.data.value);
   } finally { await settingsDb.end(); }
   for (const path of [
     ...['writing', 'projects', 'films', 'podcasts', 'travel', 'hobbies', 'investing', 'aiCover', 'travelCover', 'root'].map((scope) => `/api/admin/config/pageSettings/${scope}`),
@@ -600,9 +648,21 @@ try {
   assert.equal(largeList.status, 200);
   assert.equal(largeList.data.total, 1000);
   assert.equal(largeList.data.items.length, 20);
+  const legacyHomeDb = new pg.Client({ connectionString: testUrl.toString() });
+  await legacyHomeDb.connect();
+  try {
+    await legacyHomeDb.query("UPDATE cms_sections SET value = value - 'nowBuilding' - 'nowWriting' - 'nowExploring' - 'heroArtTopText' - 'heroArtBottomText' - 'noteArtText' WHERE section = 'home'");
+  } finally { await legacyHomeDb.end(); }
   const page = await request('/api/admin/config/home/root');
+  for (const field of ['nowBuilding', 'nowWriting', 'nowExploring'])
+    assert.equal(page.data.value[field], '', '旧首页配置应合并空近况默认值');
+  for (const field of ['heroArtTopText', 'heroArtBottomText', 'noteArtText'])
+    assert.equal(page.data.value[field], defaults.home[field]);
+  assert.ok(!(await (await fetch(origin + '/')).text()).includes('aria-label="当前近况"'));
   const pageSaved = await request('/api/admin/config/home/root', 'PUT',
-    { value: { ...page.data.value, title: '网站设置首页持久化测试' }, revision: page.data.revision });
+    { value: { ...page.data.value, title: '网站设置首页持久化测试', nowBuilding: '开发近况持久化测试',
+      nowWriting: '写作近况持久化测试', nowExploring: '探索近况持久化测试',
+      heroArtTopText: 'Custom\nBuild', heroArtBottomText: 'Custom\nTomorrow', noteArtText: 'Custom\nArticles' }, revision: page.data.revision });
   assert.equal(pageSaved.status, 200, JSON.stringify(pageSaved.data));
   const pageStale = await request('/api/admin/config/home/root', 'PUT',
     { value: page.data.value, revision: page.data.revision });
@@ -613,8 +673,27 @@ try {
   assert.deepEqual((await request('/api/admin/config/site/root')).data, reloadedSite.data,
     '首页保存不能改变站点和导航');
   const homeHtml = await (await fetch(origin + '/')).text();
-  for (const text of ['网站设置持久化测试', '网站设置页脚测试', '导航持久化测试', '网站设置首页持久化测试'])
+  for (const text of ['网站设置持久化测试', '网站设置页脚测试', '导航持久化测试', '网站设置首页持久化测试',
+    '开发近况持久化测试', '写作近况持久化测试', '探索近况持久化测试'])
     assert.ok(homeHtml.includes(text), `前台应读取实际保存的${text}`);
+  const partialNow = await request('/api/admin/config/home/root', 'PUT', {
+    value: { ...reloadedHome.data.value, nowWriting: '', nowExploring: '   ' }, revision: reloadedHome.data.revision,
+  });
+  assert.equal(partialNow.status, 200);
+  const partialHtml = await (await fetch(origin + '/')).text();
+  assert.ok(partialHtml.includes('开发近况持久化测试'));
+  assert.ok(!partialHtml.includes('写作近况持久化测试'));
+  const clearedNow = await request('/api/admin/config/home/root', 'PUT', {
+    value: { ...partialNow.data.value, nowBuilding: '', nowWriting: '', nowExploring: '',
+      heroArtTopText: '', heroArtBottomText: '  ', noteArtText: '' }, revision: partialNow.data.revision,
+  });
+  assert.equal(clearedNow.status, 200);
+  assert.equal((await request('/api/admin/config/home/root')).data.value.nowBuilding, '');
+  assert.ok(!(await (await fetch(origin + '/')).text()).includes('aria-label="当前近况"'));
+  const clearedArtHtml = await (await fetch(origin + '/')).text();
+  for (const className of ['home-art-top', 'home-art-bottom', 'home-art-handwriting'])
+    assert.ok(!clearedArtHtml.includes(`class="${className}`), '清空后不渲染英文装饰');
+  assert.deepEqual((await request('/api/admin/config/site/root')).data, reloadedSite.data);
   const categoryPath = '/api/admin/records/writing/categories/' + categoryId;
   const currentCategory = await request(categoryPath);
   const blocked = await request(categoryPath,
@@ -630,6 +709,26 @@ try {
     '带正文的不存在接口请求不能阻塞后续有效请求');
   const { checkContentManagement } = await import('./test-content-management.mjs');
   await checkContentManagement({ request, origin, testUrl, defaults });
+  const emptyHomeDb = new pg.Client({ connectionString: testUrl.toString() });
+  await emptyHomeDb.connect();
+  try {
+    await emptyHomeDb.query('UPDATE articles SET published = false');
+    await emptyHomeDb.query("UPDATE cms_entries SET published = false WHERE section = 'projects' AND collection = 'items'");
+    const emptyHtml = await (await fetch(origin + '/')).text();
+    assert.ok(emptyHtml.includes('还没有已发布的文章。'));
+    assert.ok(emptyHtml.includes('还没有已发布的项目。'));
+    const article = (await emptyHomeDb.query('SELECT slug FROM articles ORDER BY created_at DESC, slug LIMIT 1')).rows[0];
+    await emptyHomeDb.query("UPDATE articles SET published = true, cover_url = '' WHERE slug = $1", [article.slug]);
+    const project = (await emptyHomeDb.query("SELECT id FROM cms_entries WHERE section = 'projects' AND collection = 'items' ORDER BY created_at DESC, position, id LIMIT 1")).rows[0];
+    await emptyHomeDb.query("UPDATE cms_entries SET published = true, payload = jsonb_set(payload, '{images}', '[]'::jsonb) WHERE section = 'projects' AND collection = 'items' AND id = $1", [project.id]);
+    const singleHtml = await (await fetch(origin + '/')).text();
+    assert.equal((singleHtml.match(/class="home-article home-article-featured"/g) ?? []).length, 1);
+    assert.equal((singleHtml.match(/class="home-project-card"/g) ?? []).length, 1);
+    assert.equal((singleHtml.match(/class="home-cover-placeholder"/g) ?? []).length, 2);
+    assert.ok(singleHtml.includes(`/writing/${article.slug}`));
+    assert.ok(singleHtml.includes(`/projects?project=${project.id}`));
+  } finally { await emptyHomeDb.end(); }
+  console.log('PASS homepage legacy config, Now persistence/clearing, empty collections and missing covers');
   console.log('PASS isolated PostgreSQL record lists, detail, single-record writes, conflicts, publication, move, delete, category references, config scopes and 1000-row pagination');
 } finally {
   if (worker && worker.exitCode === null) {

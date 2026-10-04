@@ -19,7 +19,8 @@ const { createElement, act, useState } = await import('react');
 const { render, screen, waitFor, cleanup, within, fireEvent } = await import('@testing-library/react');
 const { default: userEvent } = await import('@testing-library/user-event');
 const { AdminGranularPanel } = await import('../components/admin-granular-panel.tsx');
-const { defaults } = await import('../lib/cms-defaults.ts');
+const { defaults, footerIconOptions } = await import('../lib/cms-defaults.ts');
+const { SiteFooter } = await import('../components/site-chrome.tsx');
 const { musicSample } = await import('../lib/music-content.ts');
 const { Field } = await import('../components/admin-fields.tsx');
 const { AiNotebook } = await import('../components/ai-notebook.tsx');
@@ -389,12 +390,12 @@ try {
   await user.click(within(nav).getByRole('button', { name: '网站设置' }));
   await screen.findByLabelText('站点标记');
   assert.ok(screen.getByRole('heading', { name: '网站设置' }));
-  assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['站点', '导航', '首页']);
+  assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['站点', '导航', '首页', '页脚']);
   assert.equal(screen.getByRole('tab', { name: '站点' }).getAttribute('aria-selected'), 'true');
   assert.equal(screen.getByRole('link', { name: '查看前台 ↗' }).getAttribute('href'), '/');
   const settingsLabels = () => [...window.document.querySelectorAll('.admin-form label')].map((node) => node.textContent);
-  const siteLabels = ['名称', '站点标记', '标题', '说明', '页脚文字', '版权文字', '页脚链接文字', '页脚链接地址'];
-  const homeLabels = ['眉题', '标题', '说明', '说说区标题', '说说区说明'];
+  const siteLabels = ['名称', '站点标记', '标题', '说明'];
+  const homeLabels = ['眉题', '标题', '说明', '正在开发', '正在写作', '正在探索', '主视觉右上英文', '主视觉右下英文', '说说区标题', '说说区说明', '说说装饰英文'];
   const assertNavigationOrder = () => {
     assert.deepEqual([...window.document.querySelectorAll('.admin-form .admin-array > legend')]
       .map((node) => node.childNodes[0].textContent.trim()), ['主导航', '网站导航', '生活导航']);
@@ -473,12 +474,21 @@ try {
   await screen.findByLabelText('标题');
   assert.deepEqual(settingsLabels(), homeLabels);
   await user.type(screen.getByLabelText('标题'), ' 测试');
+  await user.type(screen.getByLabelText('正在开发'), '开发近况测试');
+  await user.type(screen.getByLabelText('正在写作'), '写作近况测试');
+  await user.type(screen.getByLabelText('正在探索'), '探索近况测试');
+  await user.clear(screen.getByLabelText('主视觉右上英文'));
+  await user.type(screen.getByLabelText('主视觉右上英文'), 'Build\nTogether');
   assert.equal(home.title, defaults.home.title);
   await user.click(screen.getByRole('button', { name: '确认提交' }));
   await waitFor(() => assert.ok(home.title.endsWith(' 测试')));
   await waitFor(() => assert.equal(screen.getByRole('button', { name: '确认提交' }).disabled, true));
   assert.deepEqual(settingsLabels(), homeLabels);
   assert.equal(screen.getByLabelText('标题').value, home.title);
+  assert.equal(home.nowBuilding, '开发近况测试');
+  assert.equal(home.nowWriting, '写作近况测试');
+  assert.equal(home.nowExploring, '探索近况测试');
+  assert.equal(home.heroArtTopText, 'Build\nTogether');
   assert.deepEqual(site, beforeConflict, '首页保存不能改变站点或导航');
   await user.click(screen.getByRole('tab', { name: '导航' }));
   await screen.findByRole('group', { name: /^主导航/ });
@@ -488,6 +498,64 @@ try {
   await screen.findByLabelText('标题');
   assert.equal(screen.getByLabelText('标题').value, home.title);
   assert.deepEqual(settingsLabels(), homeLabels);
+  assert.equal(screen.getByLabelText('正在开发').value, home.nowBuilding);
+  await user.clear(screen.getByLabelText('正在开发'));
+  await user.clear(screen.getByLabelText('正在写作'));
+  await user.clear(screen.getByLabelText('正在探索'));
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await waitFor(() => assert.equal(home.nowBuilding, ''));
+  assert.equal(home.nowWriting, '');
+  assert.equal(home.nowExploring, '');
+  await user.click(screen.getByRole('tab', { name: '页脚' }));
+  await screen.findByLabelText('页脚文字');
+  const siteBeforeFooter = structuredClone(site);
+  const homeBeforeFooter = structuredClone(home);
+  assert.equal(screen.getByLabelText('页脚文字').value, site.footer);
+  const footerNav = screen.getByRole('group', { name: /^页脚导航/ });
+  await user.click(within(footerNav).getByRole('button', { name: '＋ 添加一项' }));
+  await user.click(footerNav.querySelector('summary'));
+  await user.clear(within(footerNav).getByLabelText('名称'));
+  await user.type(within(footerNav).getByLabelText('名称'), '独立页脚导航');
+  await user.type(within(footerNav).getByLabelText('链接地址'), '/projects');
+  const socials = screen.getByRole('group', { name: /^社交入口/ });
+  await user.click(within(socials).getByRole('button', { name: '＋ 添加一项' }));
+  await user.click(socials.querySelector('summary'));
+  await user.clear(within(socials).getByLabelText('名称'));
+  await user.type(within(socials).getByLabelText('名称'), '测试RSS');
+  assert.deepEqual(Array.from(within(socials).getByLabelText('图标').options)
+    .filter((option) => option.value).map((option) => option.value), footerIconOptions.map((option) => option.id));
+  await user.selectOptions(within(socials).getByLabelText('图标'), 'rss');
+  await user.type(within(socials).getByLabelText('链接地址'), 'https://example.com/rss');
+  await user.clear(screen.getByLabelText('页脚右下角短句'));
+  await user.type(screen.getByLabelText('页脚右下角短句'), 'Keep building.');
+  assert.deepEqual(site, siteBeforeFooter, '页脚操作须确认提交后生效');
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await waitFor(() => assert.equal(site.footerMotto, 'Keep building.'));
+  assert.deepEqual(site.footerLinks, [{ name: '独立页脚导航', href: '/projects' }]);
+  assert.deepEqual(site.footerSocialLinks, [{ name: '测试RSS', icon: 'rss', href: 'https://example.com/rss' }]);
+  for (const key of ['name', 'mark', 'title', 'description', 'links', 'sites', 'life'])
+    assert.deepEqual(site[key], siteBeforeFooter[key]);
+  assert.deepEqual(home, homeBeforeFooter);
+  await user.click(screen.getByRole('tab', { name: '站点' }));
+  await screen.findByLabelText('站点标记');
+  await user.click(screen.getByRole('tab', { name: '页脚' }));
+  await screen.findByLabelText('页脚右下角短句');
+  assert.equal(screen.getByLabelText('页脚右下角短句').value, 'Keep building.');
+  for (const { id } of footerIconOptions.slice(6)) {
+    const socialGroup = screen.getByRole('group', { name: /^社交入口/ });
+    const details = socialGroup.querySelector('details');
+    if (!details.open) await user.click(details.querySelector('summary'));
+    await user.selectOptions(within(socialGroup).getByLabelText('图标'), id);
+    await user.click(screen.getByRole('button', { name: '确认提交' }));
+    await waitFor(() => assert.equal(site.footerSocialLinks[0].icon, id));
+    await user.click(screen.getByRole('tab', { name: '站点' }));
+    await screen.findByLabelText('站点标记');
+    await user.click(screen.getByRole('tab', { name: '页脚' }));
+    await screen.findByLabelText('页脚右下角短句');
+    const reloadedSocials = screen.getByRole('group', { name: /^社交入口/ });
+    await user.click(reloadedSocials.querySelector('summary'));
+    assert.equal(within(reloadedSocials).getByLabelText('图标').value, id);
+  }
   await user.click(within(screen.getByRole('navigation', { name: '后台栏目' })).getByRole('button', { name: '写作' }));
   await screen.findByRole('button', { name: '原文章已修改' });
   await user.click(within(nav).getByRole('button', { name: '网站设置' }));
@@ -1207,6 +1275,29 @@ try {
   assert.equal(customStatus.className, 'ai-agent-status ai-status-maintenance');
   cleanup();
   console.log('PASS seven description image fields, exact AI request data and explicit generation controls');
+  const footerSocialLinks = footerIconOptions.map(({ id, name }) =>
+    ({ name, icon: id, href: `https://example.com/${id}` }));
+  render(createElement(ContentProvider, { content: { site: {
+    ...defaults.site, footerLinks: [{ name: '页脚普通导航', href: '/projects' }],
+    footerSocialLinks: [...footerSocialLinks, { name: '', icon: 'rss', href: '/rss' }],
+  } } }, createElement(SiteFooter)));
+  const icons = [];
+  for (const item of footerSocialLinks) {
+    const link = screen.getByRole('link', { name: item.name, exact: true });
+    assert.equal(link.getAttribute('href'), item.href);
+    assert.equal(link.getAttribute('target'), '_blank');
+    assert.equal(link.getAttribute('rel'), 'noopener noreferrer');
+    assert.equal(link.getAttribute('title'), item.name);
+    const svg = link.querySelector('svg');
+    assert.equal(svg.getAttribute('aria-hidden'), 'true');
+    assert.equal(svg.getAttribute('width'), '18');
+    icons.push(svg.innerHTML);
+  }
+  assert.equal(new Set(icons).size, 16, '每个平台应渲染对应图标');
+  assert.equal(window.document.querySelectorAll('.footer-socials a').length, 16);
+  assert.equal(screen.getByRole('link', { name: '页脚普通导航' }).getAttribute('target'), null);
+  cleanup();
+  console.log('PASS all 16 footer social icons, new-tab attributes and unchanged ordinary navigation');
   console.log('PASS unified writing/project forms, story time/Enter topics/IME/limits, per-image generation/failure/reorder and explicit persistence');
   console.log('PASS per-record admin UI and website settings tabs: explicit submit, navigation editing, preserved fields, unsaved drafts and conflict retention');
 } finally {

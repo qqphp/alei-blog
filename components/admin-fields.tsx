@@ -1,7 +1,7 @@
 'use client';
 import { useState } from 'react';
 import type { Json } from '@/lib/cms-validation';
-import type { Content, Section } from '@/lib/cms-defaults';
+import { footerLinkSample, footerSocialLinkSample, type Content, type Section } from '@/lib/cms-defaults';
 import type { ProjectImage } from '@/lib/project-content';
 import { AdminMarkdownEditor } from './admin-markdown-editor';
 
@@ -86,11 +86,21 @@ const names: Record<string, string> = {
   copyright: '版权文字',
   footerLink: '页脚链接文字',
   footerUrl: '页脚链接地址',
+  footerLinks: '页脚导航',
+  footerSocialLinks: '社交入口',
+  footerMotto: '页脚右下角短句',
+  icon: '图标',
   links: '主导航',
   sites: '网站导航',
   life: '生活导航',
   eyebrow: '眉题',
   noteTitle: '说说区标题',
+  nowBuilding: '正在开发',
+  nowWriting: '正在写作',
+  nowExploring: '正在探索',
+  heroArtTopText: '主视觉右上英文',
+  heroArtBottomText: '主视觉右下英文',
+  noteArtText: '说说装饰英文',
   noteText: '说说区说明',
   director: '导演',
   genre: '类型',
@@ -450,7 +460,9 @@ export function Field({
     return <ProjectImagesField value={value as unknown as ProjectImage[]}
       onChange={onChange} onWorking={onWorking} />;
   if (Array.isArray(value)) {
-    const template = Array.isArray(sample) ? (sample[0] ?? '') : '';
+    const template = path === 'site.footer.footerLinks' ? footerLinkSample
+      : path === 'site.footer.footerSocialLinks' ? footerSocialLinkSample
+      : Array.isArray(sample) ? (sample[0] ?? '') : '';
     const move = (index: number, direction: number) => {
       const items = [...value];
       [items[index], items[index + direction]] = [
