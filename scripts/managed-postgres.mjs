@@ -1,10 +1,10 @@
+import { postgresTool } from './postgres-tools.mjs';
 import { randomBytes } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { restrictSecretFile } from './secret-permissions.mjs';
 
-const bin = process.env.POSTGRES_BIN || 'C:\\Program Files\\PostgreSQL\\18\\bin';
 const data = resolve('.local/postgres18');
 const secretPath = join(data, 'admin-password');
 const port = 55433;
@@ -14,7 +14,7 @@ async function exists(path) {
 }
 
 function run(name, args, timeout = 30000) {
-  const result = spawnSync(join(bin, `${name}.exe`), args, {
+  const result = spawnSync(postgresTool(name), args, {
     encoding: 'utf8', timeout, windowsHide: true,
     stdio: name === 'pg_ctl' ? 'ignore' : 'pipe',
   });
@@ -23,6 +23,10 @@ function run(name, args, timeout = 30000) {
 }
 
 export async function ensureManagedPostgres(create = false) {
+  if (process.env.DATABASE_URL && !create) {
+    const url = new URL(process.env.DATABASE_URL);
+    if (!['127.0.0.1', 'localhost'].includes(url.hostname) || Number(url.port || 5432) !== port) return null;
+  }
   if (!(await exists(join(data, 'PG_VERSION')))) {
     if (!create) return null;
     if (await exists(data)) throw new Error('博客 PostgreSQL 数据目录不完整，请检查 .local/postgres18');
@@ -39,7 +43,7 @@ export async function ensureManagedPostgres(create = false) {
       await unlink(temporary).catch(() => undefined);
     }
   }
-  const status = spawnSync(join(bin, 'pg_ctl.exe'), ['-D', data, 'status'], {
+  const status = spawnSync(postgresTool('pg_ctl'), ['-D', data, 'status'], {
     encoding: 'utf8', windowsHide: true,
   });
   if (status.status !== 0)

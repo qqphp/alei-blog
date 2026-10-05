@@ -2,29 +2,28 @@
 
 中文个人博客，包含写作、项目、说说、AI 手记、投资研究、网站收藏与生活记录。前台保留现有视觉和交互，后台位于 `/admin`，通过表单管理内容。
 
-本项目当前按**本地运行**维护。数据库和上传素材都存放在本机，不需要登录 Cloudflare 或 ChatGPT，不会自动发布或上传站点。
+项目使用 Node.js 运行，支持 Windows 本地开发和 Linux VPS 自托管。数据库为 PostgreSQL，上传素材由应用直接读写持久化目录。Linux 从零部署、systemd、Nginx 和数据迁移见 [部署指南](docs/self-hosting.md)。
 
 ## 快速开始
 
-需要 PostgreSQL 18、Node.js **22.13 或以上**和 npm；从旧 D1 导入时还需要 Python 3。在项目根目录执行：
+需要 PostgreSQL 18、Node.js **22.13 或以上**和 npm。在项目根目录执行：
 
 ```powershell
 npm ci
+Copy-Item .env.example .env
 npm run db:setup
-npm run db:migrate
-npm run db:import-d1
-npm run db:seed-missing
+npm run db:init
 npm run admin:password
 npm run dev
 ```
 
 打开终端打印的本地地址，默认是 [http://localhost:3000](http://localhost:3000)。后台为 [http://localhost:3000/admin](http://localhost:3000/admin)。如开发服务器使用其他端口，后台也使用同一端口。
 
-管理员密码由 `npm run admin:password` 随机生成并显示，同时保存在根目录 `.dev.vars` 中。后台只需要密码，不需要用户名。
+管理员密码由 `npm run admin:password` 随机生成并显示，同时保存在根目录 `.env` 中。后台只需要密码，不需要用户名。
 
-### 已经在运行 npm run dev
+### 数据库与密码配置
 
-`db:setup` 默认使用已安装的 PostgreSQL 18 程序，在 `.local/postgres18/` 建立博客专用实例，仅监听 `127.0.0.1:55433`，并创建 `alei_blog` 数据库和同名独立账号。账号使用随机强密码和 SCRAM 认证；连接串写入 `.dev.vars`。本地开发与构建预览会自动启动这个实例。若要使用已有 PostgreSQL 服务，先在 `.dev.vars` 中填写 `PG_ADMIN_URL=postgresql://postgres:经过URL编码的密码@127.0.0.1:5432/postgres`，再运行 `db:setup`；成功后会移除临时管理员连接串。`db:import-d1` 只允许导入到空库，保留旧 D1 文件原样；已有博客内容时运行一次即可。改动 `.dev.vars` 后请重启开发服务。
+`db:setup` 默认使用已安装的 PostgreSQL 18，在 `.local/postgres18/` 建立博客专用实例，仅监听 `127.0.0.1:55433`，创建 `alei_blog` 数据库和独立账号，并将随机密码连接串写入 `.env`。开发与本地生产启动会自动启动这个实例。程序不在默认目录时配置 `POSTGRES_BIN`。使用已有同机或外部服务时，直接填写已创建空库的 `DATABASE_URL`；`db:setup` 会验证连接，`db:init` 创建表并写入示例内容。也可临时配置 `PG_ADMIN_URL` 由脚本创建独立账号和数据库，成功后会从 `.env` 移除该项。进程环境变量优先于文件；修改后需重启服务。
 
 `npm run admin:password` 检测到已有密码时不会覆盖。忘记密码时执行：
 
@@ -32,7 +31,7 @@ npm run dev
 npm run admin:password -- --reset
 ```
 
-随后重启开发服务；旧登录会话会失效。请勿把 `.dev.vars` 发送给别人或提交到版本库。
+随后重启开发服务；旧登录会话会失效。请勿把 `.env` 发送给别人或提交到版本库。
 
 ## 后台可以管理什么
 
@@ -70,7 +69,7 @@ npm run admin:password -- --reset
 写作正文使用 Markdown 编辑器。文章封面支持填写素材地址、上传替换，或填写图片描述后点击「AI 生成配图」。AI 生图使用写作配置中的模型、尺寸、风格和提示词；文章封面提示词须包含 {{description}}。提交文章不会自动生成或重新生成封面。生成失败时保留原封面及表单内容。
 ### 素材上传
 
-图片 / 音频字段旁可直接「上传替换」。支持 PNG、JPEG、WebP、GIF、MP3、WAV，单文件最大 **20 MB**。后端按文件头检查格式，不接受 HTML 或 SVG 上传。
+图片 / 音频字段旁可直接「上传替换」。支持 PNG、JPEG、WebP、GIF、MP3、WAV，单文件最大 **20 MB**。图片和音频按文件头检查格式。Markdown 附件支持其他文件，按二进制下载并保留原始文件名，不作为网页执行。
 
 上传后点击当前表单的「确认提交」，才会更换页面使用的素材。返回地址形如 `/api/media/…`。这些素材地址公开可访问，草稿过滤不等于素材保密。已有 `public/` 素材仍可直接填写路径，例如 `/covers/writing-notes.png`；当前没有独立素材列表；可通过已保存字段旁的「查看素材」打开文件。
 
@@ -80,35 +79,38 @@ npm run admin:password -- --reset
 
 ## 数据与备份
 
-- 结构化内容：本机 PostgreSQL `alei_blog` 数据库；默认实例位于 `.local/postgres18/`，连接信息位于 `.dev.vars`。
+- 结构化内容：本机 PostgreSQL `alei_blog` 数据库；默认实例位于 `.local/postgres18/`，连接信息位于 `.env`。
 - 上传文件与 AI 生成图片：普通本地文件，位于 `.local/media/`。
-- 管理员密码：`.dev.vars`。
+- 管理员密码：`.env`。
 - 默认内容：`lib/cms-defaults.ts`、`lib/article-seed.json` 及原有数据模块。
 
 数据源是服务端数据库，**不是浏览器 localStorage**。刷新、换浏览器、重启开发服务后仍保留。现有数据已迁移为逐条记录，缺失的默认栏目由 db:seed-missing 补齐；清空列表不会重新出现默认条目。
 
 ### 完整本地备份
 
-定期执行 `npm run db:backup`，它会把 PostgreSQL 自定义格式备份和素材目录复制到 `.local/backups/` 下的带时间戳目录。素材目录默认是 `.local/media`，设置了 `CMS_MEDIA_DIRECTORY` 时使用该目录；目录不存在则备份失败。备份期间内容写入会等待数据库与素材复制完成。也可指定外部硬盘目录：`npm run db:backup -- E:\你的备份目录`。请单独妥善备份 `.dev.vars` 和 `.local/postgres18/admin-password`。恢复时先用 `pg_restore` 恢复数据库，再还原素材目录。数据库备份包含内容与后台保存的 API 密钥，请保护备份文件；只保存在项目所在硬盘不足以应对硬盘故障。
+定期执行 `npm run db:backup`，它会把 PostgreSQL 自定义格式备份和素材目录复制到 `.local/backups/` 下的带时间戳目录。素材目录默认是 `.local/media`，设置了 `CMS_MEDIA_DIRECTORY` 时使用该目录；目录不存在则备份失败。备份期间内容写入会等待数据库与素材复制完成。也可指定外部硬盘目录：`npm run db:backup -- E:\你的备份目录`。请单独妥善备份 `.env` 和 `.local/postgres18/admin-password`。恢复时将 `DATABASE_URL` 指向新建空库、`CMS_MEDIA_DIRECTORY` 指向空目录，再执行 `npm run db:restore -- 备份目录`；随后运行 `db:migrate`。恢复拒绝覆盖非空数据库和素材目录。数据库备份包含内容与后台保存的 API 密钥，请保护备份文件；只保存在项目所在硬盘不足以应对硬盘故障。
 
-`.wrangler/`、`.local/`、`.dev.vars`、测试临时文件和构建产物均已加入 Git 忽略规则。旧 D1 状态保留作迁移核对；不要删除 `.local/postgres18` 或 `.local/media`，否则数据库或上传素材会丢失。
+`.local/`、`.env`、测试临时文件和构建产物均被 Git 忽略。保留 `.env.example` 供克隆者使用。不要删除 `.local/postgres18` 或 `.local/media`，否则数据库或上传素材会丢失。
 
 ## 开发命令
 
 | 命令                     | 用途                                                                |
 | ------------------------ | ------------------------------------------------------------------- |
 | `npm run dev`            | 启动本地开发服务器                                                  |
-| `npm run build`          | 生成前台和 Worker 构建产物，不发布                                  |
-| `npm start`              | 在本地预览构建产物，默认端口 8787；使用相同的本地数据目录和密码文件 |
+| `npm run build`          | 生成 Node 独立产物 `dist/standalone`                                  |
+| `npm start`              | 启动独立 Node 服务，默认 `127.0.0.1:3000` |
 | `npm run db:setup`       | 创建 PostgreSQL 博客数据库和独立账号                               |
+| `npm run db:init`       | 初始化表结构、示例内容和素材目录 |
+| `npm run db:restore -- 目录` | 将数据库和素材恢复到空目标 |
 | `npm run db:migrate`     | 在 PostgreSQL 中创建或更新博客表及索引                              |
-| `npm run db:import-d1`   | 将旧 D1 内容一次性导入空的 PostgreSQL 数据库                       |
 | `npm run db:seed-missing` | 补齐数据库中缺失的默认栏目和记录，重复执行不会覆盖已有内容        |
 | `npm run db:backup`      | 备份 PostgreSQL 数据和上传素材                                    |
 | `npm run admin:password` | 首次生成管理员密码                                                  |
 | `npm run typecheck`      | TypeScript 类型检查                                                 |
 | `npm run test:cms`       | 在独立测试数据库运行逐条读写与冲突集成测试                           |
-| `npm run test:audit-regressions` | 在独立库验证导入、并发引用与素材回收、备份锁、前台分页及数据库约束 |
+| `npm run test:self-hosting` | 备份传输恢复、记录与文件核对、HTTPS 代理登录和重启持久化 |
+| `npm run test:server-fetch` | Node 代理出站与 NO_PROXY |
+| `npm run test:audit-regressions` | 在独立库验证初始化、并发引用与素材回收、备份锁、前台分页及数据库约束 |
 | `npm run test:admin-ui`  | 现有组件交互测试                                                   |
 | `npm run test:content-order` | 前台写作、项目、说说的排序与分页                             |
 | `npm run test:admin-granular-ui` | 逐条保存后台交互测试                                        |
@@ -119,13 +121,13 @@ npm run admin:password -- --reset
 | `npm run test:public-remote-ui` | 前台各列表远程翻页、加载更多与数据减少后的页码校正 |
 | `npm run lint`           | 全项目静态检查                                                      |
 
-`npm start` 前需要先执行 `npm run build`。它只运行本地 Wrangler，不上传任何内容。
+`npm start` 前需要先执行 `npm run build`。它读取 `.env` 或进程环境；不会自动发布。
 
 ### 验证范围
 
 `npm run test:cms` 从本地备份恢复到临时独立数据库，执行迁移、逐条读写、版本冲突、分类关联及千条记录分页验证，结束时删除测试库。运行前先执行 `npm run db:backup` 和 `npm run build`。后台交互用 Happy DOM 测试，生产数据库不会被测试写入。
 
-`npm run test:audit-regressions` 另建临时空库，验证全部迁移后初始化和重复初始化，再读取项目保留的旧 D1 文件验证导入。还覆盖同栏目并发操作、分类与状态改名，以及 Markdown 图片的共享引用和回收；素材使用独立临时目录，结束时清理测试库和目录。
+`npm run test:audit-regressions` 另建临时空库，验证空库迁移、示例初始化和重复初始化。还覆盖同栏目并发操作、分类与状态改名，以及 Markdown 图片的共享引用和回收；素材使用独立临时目录，结束时清理测试库和目录。
 
 ## 项目结构
 
@@ -138,9 +140,10 @@ lib/cms-validation.ts   字段校验、草稿过滤
 lib/admin-auth.ts       登录会话与请求保护
 db/migrations/          PostgreSQL 版本化表结构与索引
 scripts/               密码初始化与集成测试
-scripts/local-media-storage.mjs  仅监听本机的文件存储服务
+lib/local-media.ts      进程内文件读写与图片转换
+deploy/                systemd 和 Nginx 配置示例
 public/                项目自带静态素材
-vite.config.ts         Vinext / Cloudflare 本地运行配置
+vite.config.ts         Vinext Node 开发与构建配置
 ```
 
 技术栈：React 19、TypeScript、Vinext / Vite、PostgreSQL 18、Node.js 本地文件存储、React Markdown。使用单管理员密码、8 小时 HttpOnly / SameSite 会话、服务端权限检查和持久化登录限流；没有多用户、角色分配或找回密码邮件流程。
@@ -148,10 +151,10 @@ vite.config.ts         Vinext / Cloudflare 本地运行配置
 ## 常见问题
 
 - **看到「请先配置密码」**：运行 `npm run admin:password`，随后重启开发服务。
-- **提示数据库表不存在**：检查 `.dev.vars` 中的 `DATABASE_URL`，在项目根目录执行 `npm run db:migrate`，然后重启。
-- **更新代码后旧开发进程报错**：本次增加了运行时绑定并安装依赖，需要完整重启一次，单纯刷新浏览器不能代替重启。
+- **提示数据库表不存在**：检查 `.env` 中的 `DATABASE_URL`，在项目根目录执行 `npm run db:migrate`，然后重启。
+- **更新代码后旧开发进程报错**：更换运行环境后需要重新安装依赖，需要完整重启一次，单纯刷新浏览器不能代替重启。
 - **保存后看不到内容**：确认已提交当前记录、条目已发布、前台筛选条件没有隐藏它，并刷新前台。
 - **书单里的书名没有跟着书籍记录变化**：书单单独保存书名和作者。需要在书单里改对应一行。
 - **忘记密码**：运行 `npm run admin:password -- --reset` 后重启。
 - **本地请求受代理影响**：检查代理的 localhost 排除设置；命令行可使用 `curl.exe --noproxy "*" http://localhost:3000/`。
-- **准备部署到服务器**：本 README 只覆盖本地使用；需要另外配置生产存储、密钥和 HTTPS。本项目不会自动执行部署。
+- **准备部署到服务器**：按 [Linux 自托管指南](docs/self-hosting.md) 配置持久化目录、独立生产密码、systemd 和 Nginx。

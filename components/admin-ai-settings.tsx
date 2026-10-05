@@ -122,7 +122,7 @@ export function AdminAiSettings({
           </span>
         </div>
         <p>
-          密钥从服务端 .dev.vars
+          密钥从服务端 .env
           读取，不会显示在后台或内容备份中。更改密钥后需要重启服务。
         </p>
         <div className="admin-fields">

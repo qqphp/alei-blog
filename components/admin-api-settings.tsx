@@ -85,7 +85,7 @@ export function AdminApiSettings() {
         <span>{statusText(status)}</span>
       </div>
       <p>
-        用于前台“大模型数据”栏目。后台密钥优先于 .dev.vars 中的 AA_API_KEY；密钥仅写入，读取接口只返回配置状态。
+        用于前台“大模型数据”栏目。后台密钥优先于 .env 中的 AA_API_KEY；密钥仅写入，读取接口只返回配置状态。
       </p>
       <div className="admin-fields">
         <div className="admin-field admin-wide">

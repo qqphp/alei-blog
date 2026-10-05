@@ -1,10 +1,9 @@
 import assert from 'node:assert/strict';
 import { register } from 'node:module';
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
-import { startLocalMediaStorage } from './local-media-storage.mjs';
 register('./film-ai-test-loader.mjs', import.meta.url);
 const { defaults } = await import('../lib/cms-defaults.ts');
 const settings = {
@@ -30,25 +29,13 @@ const stored = [];
 const requests = [];
 let settingsReads = 0;
 const mediaDirectory = await mkdtemp(join(tmpdir(), 'blog-generated-webp-'));
-const previousMediaDirectory = process.env.CMS_MEDIA_DIRECTORY;
+const previousEnvironment = { ...process.env };
 process.env.CMS_MEDIA_DIRECTORY = mediaDirectory;
-const storage = await startLocalMediaStorage();
-globalThis.__filmTestBindings = {
-  TEAMOROUTER_KEY: 'test-only-key',
-  ADMIN_PASSWORD: 'test-story-password-only',
-  ...storage.vars,
-  DB: {
-    prepare: () => ({
-      all: async () => {
-        settingsReads++;
-        return {
-        results: [
-          { key: 'aiSettings', value: JSON.stringify(settings), revision: 1 },
-        ],
-        };
-      },
-    }),
-  },
+process.env.TEAMOROUTER_KEY = 'test-only-key';
+process.env.ADMIN_PASSWORD = 'test-story-password-only';
+globalThis.__filmTestSettings = async () => {
+  settingsReads++;
+  return { value: settings, revision: 1 };
 };
 const image = sharp({ create: {
   width: 2, height: 2, channels: 4,
@@ -71,18 +58,6 @@ globalThis.fetch = async (url, init) => {
       : url instanceof URL
         ? url.href
         : url.url;
-  if (href.startsWith(`${storage.vars.LOCAL_MEDIA_STORAGE}/media/`) && init?.method === 'PUT') {
-    assert.equal(init.method, 'PUT');
-    assert.equal(init.headers.get('X-Local-Media-Token'), storage.vars.LOCAL_MEDIA_TOKEN);
-    stored.push({
-      key: href.split('/').at(-1),
-      bytes: Buffer.from(init.body),
-      contentType: init.headers.get('Content-Type'),
-      source: init.headers.get('X-Media-Source'),
-    });
-    return originalFetch(url, init);
-  }
-  if (href.startsWith(storage.vars.LOCAL_MEDIA_STORAGE)) return originalFetch(url, init);
   if (href === 'https://images.example.com/generated.png')
     return new Response(generatedBytes, { headers: { 'Content-Type': 'image/png' } });
   assert.equal(
@@ -101,7 +76,15 @@ globalThis.fetch = async (url, init) => {
       : { b64_json: (invalidImage ? Buffer.from([137, 80, 78, 71]) : generatedBytes).toString('base64') }] });
 };
 try {
-  const { generateCover } = await import('../lib/ai-provider.ts');
+  const provider = await import('../lib/ai-provider.ts');
+  const fileCount = async () => (await readdir(mediaDirectory)).filter((name) => name.endsWith('.webp')).length;
+  const generateCover = async (input) => {
+    const result = await provider.generateCover(input);
+    const key = result.url.split('/').at(-1);
+    const metadata = JSON.parse(await readFile(join(mediaDirectory, '.metadata', `${key}.json`), 'utf8'));
+    stored.push({ key, bytes: await readFile(join(mediaDirectory, key)), contentType: 'image/webp', ...metadata });
+    return result;
+  };
   const description = '雨夜街道上的红色雨伞';
   const result = await generateCover({ action: 'film-cover', description });
   assert.equal(requests[0].model, 'test-image-model');
@@ -146,11 +129,11 @@ try {
   const savedCount = stored.length;
   fail = true;
   await assert.rejects(() => generateCover({ action: 'film-cover', description }), /502/);
-  assert.equal(stored.length, savedCount, '失败不得写入或替换图片');
+  assert.equal(await fileCount(), savedCount, '失败不得写入或替换图片');
   fail = false;
   invalidImage = true;
   await assert.rejects(() => generateCover({ action: 'film-cover', description }), /转为 WebP 失败/);
-  assert.equal(stored.length, savedCount, '转换失败不得写入素材');
+  assert.equal(await fileCount(), savedCount, '转换失败不得写入素材');
   invalidImage = false;
   const articleCover = await generateCover({ action: 'cover', description });
   assert.equal(articleCover.generatedFor, JSON.stringify([description]));
@@ -183,13 +166,12 @@ try {
     assert.ok(!prompt.includes('不能传给模型'));
     assert.equal((await response.json()).generatedFor, JSON.stringify([description]));
   }
-  assert.equal(requests.length, stored.length + 2, '失败只产生一次模型请求，没有自动重试');
+  assert.equal(requests.length, await fileCount() + 2, '失败只产生一次模型请求，没有自动重试');
   console.log('PASS all image actions, PNG/JPEG/WebP and URL conversion, media persistence, invalid input and no retry');
 } finally {
   globalThis.fetch = originalFetch;
-  delete globalThis.__filmTestBindings;
-  await storage.close();
+  delete globalThis.__filmTestSettings;
   await rm(mediaDirectory, { recursive: true, force: true });
-  if (previousMediaDirectory === undefined) delete process.env.CMS_MEDIA_DIRECTORY;
-  else process.env.CMS_MEDIA_DIRECTORY = previousMediaDirectory;
+  for (const key of Object.keys(process.env)) if (!(key in previousEnvironment)) delete process.env[key];
+  Object.assign(process.env, previousEnvironment);
 }

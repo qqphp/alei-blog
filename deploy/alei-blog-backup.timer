@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Alei blog backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=alei-blog-backup.service
+
+[Install]
+WantedBy=timers.target

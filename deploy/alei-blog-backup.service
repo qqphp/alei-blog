@@ -1,0 +1,21 @@
+[Unit]
+Description=Back up Alei blog database and media
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=alei-blog
+Group=alei-blog
+WorkingDirectory=/opt/alei-blog
+EnvironmentFile=/etc/alei-blog/alei-blog.env
+Environment=CMS_BACKUP_DIRECTORY=/var/backups/alei-blog
+Environment=CMS_BACKUP_RETENTION_DAYS=14
+ExecStart=/usr/bin/node /opt/alei-blog/scripts/backup-postgres.mjs
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/alei-blog
+TimeoutStartSec=1h

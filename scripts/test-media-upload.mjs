@@ -3,17 +3,13 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { register } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
-import { startLocalMediaStorage } from './local-media-storage.mjs';
 
 register('./ui-test-loader.mjs', import.meta.url);
 const directory = await mkdtemp(join(tmpdir(), 'alei-media-upload-'));
 const originalEnvironment = { ...process.env };
-let storage;
 try {
   process.env.CMS_MEDIA_DIRECTORY = directory;
   process.env.ADMIN_PASSWORD = crypto.randomUUID();
-  storage = await startLocalMediaStorage();
-  Object.assign(process.env, storage.vars);
   const { POST } = await import('../app/api/admin/media/route.ts');
   const { GET } = await import('../app/api/media/[key]/route.ts');
   const { sessionCookie } = await import('../lib/admin-auth.ts');
@@ -79,7 +75,6 @@ try {
   assert.equal((await read('../private.file')).status, 404);
   console.log('PASS attachment upload, persisted bytes, original download names, range/cache, inline media, auth and limits');
 } finally {
-  if (storage) await storage.close();
   for (const key of Object.keys(process.env)) if (!(key in originalEnvironment)) delete process.env[key];
   Object.assign(process.env, originalEnvironment);
   assert.equal(dirname(directory), resolve(tmpdir()));

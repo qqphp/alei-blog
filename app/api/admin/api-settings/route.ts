@@ -4,7 +4,7 @@ import {
   readLimitedBody,
   sameOrigin,
 } from '@/lib/admin-auth';
-import { bindings } from '@/lib/cms-server';
+import { serverConfig } from '@/lib/server-config';
 import { queryOne, withDatabase } from '@/lib/postgres';
 
 const service = 'artificialanalysis';
@@ -13,7 +13,7 @@ async function getStatus() {
   const saved = await queryOne<{ api_key: string }>('SELECT api_key FROM api_integration_keys WHERE service = $1', [service]);
   if (saved?.api_key.trim())
     return { configured: true, source: 'admin' as const };
-  if (bindings().AA_API_KEY?.trim())
+  if (serverConfig().AA_API_KEY?.trim())
     return { configured: true, source: 'environment' as const };
   return { configured: false, source: 'missing' as const };
 }

@@ -1,14 +1,14 @@
 import { spawnSync } from 'node:child_process';
-import { cp, mkdir, stat } from 'node:fs/promises';
+import { cp, mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import pg from 'pg';
 import { ensureManagedPostgres } from './managed-postgres.mjs';
+import { postgresTool, postgresEnvironment } from './postgres-tools.mjs';
 
 if (!process.env.DATABASE_URL) throw new Error('请先配置 DATABASE_URL');
 await ensureManagedPostgres();
-const url = new URL(process.env.DATABASE_URL);
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const base = resolve(process.argv[2] || '.local/backups');
+const base = resolve(process.argv[2] || process.env.CMS_BACKUP_DIRECTORY || '.local/backups');
 const destination = join(base, `alei-${stamp}`);
 const media = resolve(process.env.CMS_MEDIA_DIRECTORY || '.local/media');
 const mediaToBase = relative(media, base);
@@ -26,23 +26,28 @@ try {
   await db.query("SELECT pg_advisory_lock(hashtext('cms-backup'))");
   await mkdir(base, { recursive: true });
   await mkdir(destination, { recursive: false });
-  const bin = process.env.POSTGRES_BIN || 'C:\\Program Files\\PostgreSQL\\18\\bin';
-  const result = spawnSync(join(bin, 'pg_dump.exe'), ['-Fc', '-f', join(destination, 'database.dump')], {
+  const result = spawnSync(postgresTool('pg_dump'), ['-Fc', '--no-owner', '--no-acl', '-f', join(destination, 'database.dump')], {
     encoding: 'utf8', windowsHide: true,
-    env: {
-      ...process.env,
-      PGHOST: url.hostname,
-      PGPORT: url.port || '5432',
-      PGUSER: decodeURIComponent(url.username),
-      PGPASSWORD: decodeURIComponent(url.password),
-      PGDATABASE: url.pathname.slice(1),
-    },
+    env: postgresEnvironment(process.env.DATABASE_URL),
   });
   if (result.error || result.status !== 0)
     throw new Error(`数据库备份失败：${result.error?.message || result.stderr?.trim() || '未知错误'}`);
   await cp(media, join(destination, 'media'), { recursive: true });
+  await writeFile(join(destination, 'complete.json'), JSON.stringify({ createdAt: new Date().toISOString() }), { mode: 0o600 });
 } finally {
   await db.end();
 }
 console.log(`数据库和素材备份完成：${destination}`);
-console.log('备份中包含内容及 API 密钥，请妥善保管，并单独备份 .dev.vars。');
+console.log('备份中包含内容及 API 密钥，请妥善保管，并单独备份 .env。');
+const retention = Number(process.env.CMS_BACKUP_RETENTION_DAYS || 0);
+if (Number.isFinite(retention) && retention > 0) {
+  const cutoff = Date.now() - retention * 86400000;
+  for (const entry of await readdir(base, { withFileTypes: true })) {
+    if (!entry.isDirectory() || entry.isSymbolicLink() || !/^alei-\d{4}-\d{2}-\d{2}T/.test(entry.name)) continue;
+    const candidate = resolve(base, entry.name);
+    const child = relative(base, candidate);
+    if (!child || child.startsWith('..') || isAbsolute(child) || candidate === destination) continue;
+    const complete = await stat(join(candidate, 'complete.json')).catch(() => null);
+    if (complete?.isFile() && complete.mtimeMs < cutoff) await rm(candidate, { recursive: true });
+  }
+}

@@ -6,7 +6,6 @@ import { migratePodcasts } from './podcast-content';
 import { migrateFilms } from './film-content';
 import { migrateMusic, publicMusic } from './music-content';
 import { migrateDirectory, resolveDirectory } from './directory-content';
-import { env } from 'cloudflare:workers';
 import { cacheForRequest } from 'vinext/cache';
 import { withDatabase, withReadDatabase } from './postgres';
 import { adminCollections } from './admin-sections';
@@ -37,18 +36,6 @@ export type StoryArchive = {
   calendar: ReturnType<typeof monthSummary>;
 };
 
-export function bindings() {
-  return env as unknown as {
-    DATABASE_URL?: string;
-    ADMIN_PASSWORD?: string;
-    TEAMOROUTER_KEY?: string;
-    AA_API_KEY?: string;
-    LOCAL_AI_TRANSPORT?: string;
-    LOCAL_AI_TOKEN?: string;
-    LOCAL_MEDIA_STORAGE?: string;
-    LOCAL_MEDIA_TOKEN?: string;
-  };
-}
 
 function collectionsFor(key: Section): readonly string[] {
   if (key === 'writing') return [];

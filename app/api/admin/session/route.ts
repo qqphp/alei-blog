@@ -7,18 +7,18 @@ import {
   sameOrigin,
   sessionCookie,
 } from '@/lib/admin-auth';
-import { bindings } from '@/lib/cms-server';
+import { serverConfig } from '@/lib/server-config';
 import { queryOne, withDatabase } from '@/lib/postgres';
 
 export async function GET(request: Request) {
   return json({
     authenticated: await authenticated(request),
-    configured: (bindings().ADMIN_PASSWORD?.length ?? 0) >= 12,
+    configured: (serverConfig().ADMIN_PASSWORD?.length ?? 0) >= 12,
   });
 }
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: '请求来源无效' }, 403);
-  if ((bindings().ADMIN_PASSWORD?.length ?? 0) < 12)
+  if ((serverConfig().ADMIN_PASSWORD?.length ?? 0) < 12)
     return json(
       { error: '请运行 npm run admin:password，并重启开发服务。' },
       503,

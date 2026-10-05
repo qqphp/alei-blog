@@ -1,15 +1,16 @@
+import { serverConfig } from '@/lib/server-config';
 import {
   authenticated,
   json,
   sameOrigin,
   readLimitedBody,
 } from '@/lib/admin-auth';
-import { bindings, getDocuments } from '@/lib/cms-server';
+import { getDocuments } from '@/lib/cms-server';
 import { generateCover, imageActions, providerRequest, type ImageAction } from '@/lib/ai-provider';
 
 export async function GET(request: Request) {
   if (!(await authenticated(request))) return json({ error: '请先登录' }, 401);
-  return json({ keyConfigured: Boolean(bindings().TEAMOROUTER_KEY?.trim()) });
+  return json({ keyConfigured: Boolean(serverConfig().TEAMOROUTER_KEY?.trim()) });
 }
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: '请求来源无效' }, 403);

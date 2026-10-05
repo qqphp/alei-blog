@@ -4,7 +4,6 @@ import { readFile, rm } from 'node:fs/promises';
 import { register } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import pg from 'pg';
-import { startLocalMediaStorage } from './local-media-storage.mjs';
 
 register('./ui-test-loader.mjs', import.meta.url);
 const sourceUrl = new URL(process.env.DATABASE_URL);
@@ -16,7 +15,7 @@ const admin = new pg.Client({ host: sourceUrl.hostname, port: Number(sourceUrl.p
   user: 'postgres', database: 'postgres',
   password: (await readFile('.local/postgres18/admin-password', 'utf8')).trim() });
 await admin.connect();
-let db, storage, releaseWrite, creating, deleting;
+let db, releaseWrite, creating, deleting;
 const originalQuery = Reflect.get(pg.Client.prototype, 'query');
 const originalEnvironment = { ...process.env };
 const run = (args) => {
@@ -44,17 +43,15 @@ try {
   assert.deepEqual((await db.query('SELECT section,collection,id,position,payload FROM cms_entries ORDER BY section,collection,id')).rows, seedSnapshot);
   console.log('PASS fresh migrations, complete investment seed and repeated seed');
 
-  await db.query('TRUNCATE cms_sections,cms_entries,articles,article_categories,aa_language_model_snapshots,api_integration_keys CASCADE');
-  run(['scripts/import-d1.mjs']);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM articles WHERE created_at IS NULL')).rows[0].n, 0);
   assert.equal((await db.query('SELECT count(*)::int AS n FROM cms_entries WHERE created_at IS NULL')).rows[0].n, 0);
-  assert.equal((await db.query("SELECT count(*)::int AS n FROM cms_entries WHERE section='projects' AND collection='items' AND payload ? 'year'")).rows[0].n, 0, '旧数据导入不能恢复项目年份');
+  assert.equal((await db.query("SELECT count(*)::int AS n FROM cms_entries WHERE section='projects' AND collection='items' AND payload ? 'year'")).rows[0].n, 0, '示例数据不能包含项目年份');
   assert.equal((await db.query('SELECT count(*)::int AS n FROM articles WHERE cover_description IS NULL')).rows[0].n, 0);
   const writingPrompt = (await db.query("SELECT value->>'coverPrompt' AS prompt FROM cms_sections WHERE section='aiSettings'")).rows[0]?.prompt;
   assert.ok(writingPrompt?.includes('{{description}}'));
   assert.doesNotMatch(writingPrompt, /\{\{(?:title|excerpt)\}\}/);
   const imported = (await db.query("SELECT section,collection,id,payload,revision,updated_at FROM cms_entries ORDER BY section,collection,id")).rows;
-  assert.ok(imported.length > 0, '使用真实旧 D1 数据验证导入');
+  assert.ok(imported.length > 0, '示例数据必须完整');
   assert.equal((await db.query("SELECT count(*)::int AS n FROM cms_entries WHERE btrim(search_text)='' AND (payload ? 'title' OR payload ? 'name' OR payload ? 'text')")).rows[0].n, 0);
   assert.equal((await db.query("SELECT count(*)::int AS n FROM cms_entries WHERE section='tracks' AND collection='items' AND category_id IS DISTINCT FROM payload->>'moodId'")).rows[0].n, 0);
   assert.equal((await db.query("SELECT count(*)::int AS n FROM cms_entries WHERE section='projects' AND collection='items' AND status_id IS DISTINCT FROM payload->>'statusId'")).rows[0].n, 0);
@@ -79,7 +76,7 @@ try {
       [field]: field === 'categoryId' ? row.category_id : row.status_id, q: row.payload.title });
     assert.ok(filtered.items.some((item) => item.id === row.payload.id));
   }
-  console.log('PASS actual D1 import, search/scene/status filters and non-destructive query-field repair');
+  console.log('PASS seeded content, search/scene/status filters and non-destructive query-field repair');
 
   const optionKey = { section: 'bookmarks', collection: 'categories', id: 'audit-category' };
   await createAdminRecord(optionKey.section, optionKey.collection, { id: optionKey.id, name: '并发检查分类' });
@@ -125,8 +122,6 @@ try {
   console.log('PASS homepage project labels resolve current option names');
 
   process.env.CMS_MEDIA_DIRECTORY = mediaDirectory;
-  storage = await startLocalMediaStorage();
-  Object.assign(process.env, storage.vars);
   const { saveLocalMedia, readLocalMedia } = await import('../lib/local-media.ts');
   const key = `${crypto.randomUUID()}.png`;
   const url = `/api/media/${key}`;
@@ -289,7 +284,6 @@ try {
   releaseWrite?.();
   await Promise.allSettled([Promise.resolve(creating), Promise.resolve(deleting)]);
   pg.Client.prototype.query = originalQuery;
-  if (storage) await storage.close();
   if (db) await db.end();
   await admin.query(`DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`);
   await admin.end();

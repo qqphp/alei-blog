@@ -1,11 +1,13 @@
 import assert from 'node:assert/strict';
 import { spawn, spawnSync } from 'node:child_process';
-import { readFile, readdir, copyFile, writeFile } from 'node:fs/promises';
+import { readFile, readdir, mkdtemp, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import pg from 'pg';
 import { defaults, footerIconOptions } from '../lib/cms-defaults.ts';
 import { adminCollections } from '../lib/admin-sections.ts';
-import { restrictSecretFile } from './secret-permissions.mjs';
+import { postgresTool, postgresEnvironment } from './postgres-tools.mjs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 if (!process.env.DATABASE_URL || !process.env.ADMIN_PASSWORD)
   throw new Error('测试需要本地数据库和后台密码');
@@ -17,15 +19,15 @@ const adminPassword = (await readFile(resolve('.local/postgres18/admin-password'
 const admin = new pg.Client({ host: sourceUrl.hostname, port: Number(sourceUrl.port),
   user: 'postgres', password: adminPassword, database: 'postgres' });
 await admin.connect();
-let worker;
+const mediaDirectory = await mkdtemp(join(tmpdir(), 'alei-cms-'));
+let server;
 try {
   await admin.query(`CREATE DATABASE ${dbName} OWNER alei_blog`);
   const backups = (await readdir(resolve('.local/backups'))).filter((name) => name.startsWith('alei-')).sort();
   const archive = resolve('.local/backups', backups.at(-1), 'database.dump');
-  const restored = spawnSync(resolve('C:/Program Files/PostgreSQL/18/bin/pg_restore.exe'),
-    ['--no-owner', '--no-privileges', '-h', sourceUrl.hostname, '-p', sourceUrl.port,
-      '-U', decodeURIComponent(sourceUrl.username), '-d', dbName, archive],
-    { encoding: 'utf8', env: { ...process.env, PGPASSWORD: decodeURIComponent(sourceUrl.password) } });
+  const restored = spawnSync(postgresTool('pg_restore'),
+    ['--no-owner', '--no-acl', '-d', dbName, archive],
+    { encoding: 'utf8', env: postgresEnvironment(testUrl.toString()) });
   assert.equal(restored.status, 0, restored.stderr);
   const snapshot = async () => {
     const db = new pg.Client({ connectionString: testUrl.toString() });
@@ -208,29 +210,25 @@ try {
       ON CONFLICT (section) DO UPDATE SET value = jsonb_set(cms_sections.value,
         '{title}', '"ISOLATED_GRANULAR_TEST"'::jsonb)`);
   } finally { await testDb.end(); }
-  const secrets = await readFile(resolve('.dev.vars'), 'utf8');
-  assert.match(secrets, /^DATABASE_URL=.*$/m);
-  await writeFile(resolve('dist/server/.dev.vars'),
-    secrets.replace(/^DATABASE_URL=.*$/m, `DATABASE_URL="${testUrl.toString()}"`));
-  restrictSecretFile(resolve('dist/server/.dev.vars'));
   const port = 8893;
   const origin = `http://localhost:${port}`;
-  worker = spawn(process.execPath, [resolve('node_modules/wrangler/bin/wrangler.js'),
-    'dev', '--config', resolve('dist/server/wrangler.json'), '--port', String(port)], { stdio: ['ignore', 'pipe', 'pipe'],
-    env: { ...process.env, DATABASE_URL: testUrl.toString(),
-      MINIFLARE_REGISTRY_PATH: resolve('.local/granular-test-registry') } });
-  let workerError = '';
-  // Wrangler logs every request; an unread pipe eventually blocks the test server.
-  worker.stdout.resume();
-  worker.stderr.on('data', (data) => { workerError += data.toString().slice(0, 3000); });
+  server = spawn(process.execPath, [resolve('dist/standalone/server.js')], {
+    stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
+    env: { ...process.env, DATABASE_URL: testUrl.toString(), HOST: '127.0.0.1', PORT: String(port),
+      CMS_MEDIA_DIRECTORY: mediaDirectory, VINEXT_TRUST_PROXY: '1' },
+  });
+  let serverError = '';
+  // Drain output so the test server cannot block on a full pipe.
+  server.stdout.resume();
+  server.stderr.on('data', (data) => { serverError += data.toString().slice(0, 3000); });
   let ready = false;
   for (let attempt = 0; attempt < 60; attempt++) {
-    if (worker.exitCode !== null) throw new Error(workerError || '测试服务启动失败');
+    if (server.exitCode !== null) throw new Error(serverError || '测试服务启动失败');
     try { if ((await fetch(`${origin}/api/admin/session`)).status === 200) { ready = true; break; } }
     catch { /* Still starting. */ }
     await new Promise((done) => setTimeout(done, 500));
   }
-  assert.ok(ready, workerError || '测试服务启动超时');
+  assert.ok(ready, serverError || '测试服务启动超时');
   const login = await fetch(`${origin}/api/admin/session`, { method: 'POST',
     headers: { origin, 'content-type': 'application/json' },
     body: JSON.stringify({ password: process.env.ADMIN_PASSWORD }) });
@@ -731,12 +729,11 @@ try {
   console.log('PASS homepage legacy config, Now persistence/clearing, empty collections and missing covers');
   console.log('PASS isolated PostgreSQL record lists, detail, single-record writes, conflicts, publication, move, delete, category references, config scopes and 1000-row pagination');
 } finally {
-  if (worker && worker.exitCode === null) {
-    worker.kill();
-    await new Promise((done) => { worker.once('exit', done); setTimeout(done, 3000); });
+  if (server && server.exitCode === null) {
+    server.kill();
+    await new Promise((done) => { server.once('exit', done); setTimeout(done, 3000); });
   }
-  await copyFile(resolve('.dev.vars'), resolve('dist/server/.dev.vars'));
-  restrictSecretFile(resolve('dist/server/.dev.vars'));
+  await rm(mediaDirectory, { recursive: true, force: true });
   await admin.query(`DROP DATABASE IF EXISTS ${dbName} WITH (FORCE)`);
   await admin.end();
 }

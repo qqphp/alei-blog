@@ -1,13 +1,12 @@
 export async function withDatabase(run) {
-  const saved = await globalThis.__filmTestBindings.DB.prepare().all();
-  const settingsRow = saved.results.find((item) => item.key === 'aiSettings');
+  const settingsRow = await globalThis.__filmTestSettings();
   const client = {
     async query(sql) {
       if (String(sql).includes('FROM cms_sections') && settingsRow) {
         return {
           rows: [{
             section: 'aiSettings',
-            value: JSON.parse(settingsRow.value),
+            value: settingsRow.value,
             revision: settingsRow.revision,
           }],
         };

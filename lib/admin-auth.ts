@@ -1,4 +1,4 @@
-import { bindings } from './cms-server';
+import { serverConfig } from './server-config';
 
 const cookieName = 'alei_admin';
 const encoder = new TextEncoder();
@@ -39,7 +39,7 @@ export async function readLimitedBody(
   return body;
 }
 async function signature(message: string) {
-  const password = bindings().ADMIN_PASSWORD;
+  const password = serverConfig().ADMIN_PASSWORD;
   if (!password || password.length < 12)
     throw new Error('请先运行 npm run admin:password 并重启开发服务');
   const key = await crypto.subtle.importKey(
@@ -67,7 +67,7 @@ export async function authenticated(request: Request) {
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${cookieName}=`))
     ?.slice(cookieName.length + 1);
-  if (!token || !bindings().ADMIN_PASSWORD) return false;
+  if (!token || !serverConfig().ADMIN_PASSWORD) return false;
   const [expires, nonce, sig] = token.split('.');
   if (
     !expires ||
@@ -82,7 +82,7 @@ export async function authenticated(request: Request) {
 export async function checkPassword(password: string) {
   return equal(
     await signature(`password:${password}`),
-    await signature(`password:${bindings().ADMIN_PASSWORD}`),
+    await signature(`password:${serverConfig().ADMIN_PASSWORD}`),
   );
 }
 export async function sessionCookie(request: Request, clear = false) {

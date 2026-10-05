@@ -1,4 +1,5 @@
-import { bindings } from './cms-server';
+import { serverFetch } from './server-fetch';
+import { serverConfig } from './server-config';
 import { queryOne, withDatabase } from './postgres';
 
 const cacheKey = 'language-models-free';
@@ -142,7 +143,7 @@ async function configuredKey() {
     'SELECT api_key AS "apiKey" FROM api_integration_keys WHERE service = $1',
     ['artificialanalysis'],
   );
-  return saved?.apiKey.trim() || bindings().AA_API_KEY?.trim() || '';
+  return saved?.apiKey.trim() || serverConfig().AA_API_KEY?.trim() || '';
 }
 
 async function fetchAllPages(apiKey: string) {
@@ -154,7 +155,7 @@ async function fetchAllPages(apiKey: string) {
     url.searchParams.set('page', String(page));
     let response: Response;
     try {
-      response = await fetch(url, {
+      response = await serverFetch(url, {
         headers: { 'x-api-key': apiKey },
         signal: AbortSignal.timeout(25000),
       });

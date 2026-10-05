@@ -1,9 +1,8 @@
 import { Client, type QueryResultRow } from 'pg';
-import { env } from 'cloudflare:workers';
+import { serverConfig } from './server-config';
 import { cacheForRequest } from 'vinext/cache';
 import { isInsideUnifiedScope } from 'vinext/shims/unified-request-context';
 
-type DatabaseBindings = { DATABASE_URL?: string; HYPERDRIVE?: { connectionString: string } };
 type Slot = {
   opening: Promise<Client> | null;
   tail: Promise<void>;
@@ -17,8 +16,7 @@ const slotForRequest = cacheForRequest((): Slot => ({
 }));
 
 function connectionString() {
-  const bindings = env as unknown as DatabaseBindings;
-  const value = bindings.HYPERDRIVE?.connectionString || bindings.DATABASE_URL;
+  const value = serverConfig().DATABASE_URL;
   if (!value) throw new Error('未配置 PostgreSQL DATABASE_URL');
   return value;
 }

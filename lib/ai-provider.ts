@@ -1,30 +1,24 @@
-import { bindings, getDocuments } from './cms-server';
+import { serverFetch } from './server-fetch';
+import { serverConfig } from './server-config';
+import { getDocuments } from './cms-server';
 import { readLimitedBody } from './admin-auth';
 import { validateProviderUrl } from './cms-validation';
 import { convertGeneratedImage, saveLocalMedia } from './local-media';
 import type { Content } from './cms-defaults';
 
-function aiFetch(url: string | URL, init: RequestInit) {
-  const { LOCAL_AI_TRANSPORT, LOCAL_AI_TOKEN } = bindings();
-  if (!LOCAL_AI_TRANSPORT || !LOCAL_AI_TOKEN) return fetch(url, init);
-  const headers = new Headers(init.headers);
-  headers.set('X-Local-Ai-Token', LOCAL_AI_TOKEN);
-  headers.set('X-Local-Ai-Target', String(url));
-  return fetch(LOCAL_AI_TRANSPORT, { ...init, headers });
-}
 
 export async function providerRequest(path: string, body?: unknown, settings?: Content['aiSettings']) {
   settings ??= (await getDocuments(['aiSettings'])).content.aiSettings;
-  const key = bindings().TEAMOROUTER_KEY?.trim();
+  const key = serverConfig().TEAMOROUTER_KEY?.trim();
   if (!key)
-    throw new Error('未配置 TEAMOROUTER_KEY，请填写 .dev.vars 并重启服务。');
+    throw new Error('未配置 TEAMOROUTER_KEY，请填写 .env 并重启服务。');
   const base = validateProviderUrl(settings.baseUrl).href.replace(
     /\/$/,
     '',
   );
   let response: Response;
   try {
-    response = await aiFetch(`${base}/${path}`, {
+    response = await serverFetch(`${base}/${path}`, {
       method: body ? 'POST' : 'GET',
       redirect: 'manual',
       headers: {
@@ -117,7 +111,7 @@ export async function generateCover(input: {
     }
   } else if (first?.url) {
     const url = validateProviderUrl(first.url, true);
-    const response = await aiFetch(url, {
+    const response = await serverFetch(url, {
       redirect: 'manual',
       signal: AbortSignal.timeout(45000),
     });

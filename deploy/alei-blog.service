@@ -1,0 +1,28 @@
+[Unit]
+Description=Alei blog Node application
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=alei-blog
+Group=alei-blog
+WorkingDirectory=/opt/alei-blog
+EnvironmentFile=/etc/alei-blog/alei-blog.env
+Environment=NODE_ENV=production
+Environment=HOST=127.0.0.1
+Environment=PORT=3000
+Environment=VINEXT_TRUST_PROXY=1
+ExecStart=/usr/bin/node /opt/alei-blog/dist/standalone/server.js
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/alei-blog
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
