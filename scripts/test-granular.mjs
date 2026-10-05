@@ -122,6 +122,9 @@ try {
       const { storyImagePrompt: _newStory, ...current } = actual;
       for (const field of fields) { delete previous[field]; delete current[field]; }
       assert.deepEqual(current, previous, '其余 AI 设置应保留');
+    } else if (section.section === 'profile') {
+      assert.deepEqual(actual, { followTitle: defaults.profile.followTitle, followDescription: defaults.profile.followDescription,
+        communityName: '', communityDescription: '', communityQr: '', ...section.value }, '关于资料迁移应保留联系方式、二维码和平台');
     } else assert.deepEqual(actual, section.value, `${section.section} 其余设置应保留`);
   }
   const media = (state) => new Set(JSON.stringify(state).match(/\/api\/media\/[a-f0-9-]+\.(?:png|jpg|gif|webp|mp3|wav)/g) ?? []);
@@ -215,7 +218,7 @@ try {
   server = spawn(process.execPath, [resolve('dist/standalone/server.js')], {
     stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true,
     env: { ...process.env, DATABASE_URL: testUrl.toString(), HOST: '127.0.0.1', PORT: String(port),
-      CMS_MEDIA_DIRECTORY: mediaDirectory, VINEXT_TRUST_PROXY: '1' },
+      CMS_MEDIA_DIRECTORY: mediaDirectory, VINEXT_TRUST_PROXY: '1', CONTACT_MAIL_WORKER_ENABLED: '0' },
   });
   let serverError = '';
   // Drain output so the test server cannot block on a full pipe.

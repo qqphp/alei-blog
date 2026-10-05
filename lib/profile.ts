@@ -4,6 +4,11 @@ export const profile = {
   wechat: '',
   email: '',
   publicAccountQr: '',
+  followTitle: '关注我的记录，也欢迎一起交流。',
+  followDescription: '关注公众号获取更新，或扫码加入交流群，聊聊开发、工具与日常探索。',
+  communityName: '',
+  communityDescription: '',
+  communityQr: '',
   serviceUrl: 'https://shop.qqphp.com',
   platforms: [
     { name: 'GitHub', label: '代码与小作品', url: '' },

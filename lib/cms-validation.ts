@@ -108,7 +108,7 @@ export function validateContent(key: Section, value: unknown) {
         if (['id', 'slug'].includes(field) && !/^[a-zA-Z0-9_-]+$/.test(input))
           fail('请使用英文、数字、短横线或下划线');
         if (
-          /^(url|href|src|audio|cover|image|publicAccountQr|serviceUrl|footerUrl)$/i.test(
+          /^(url|href|src|audio|cover|image|publicAccountQr|communityQr|serviceUrl|footerUrl)$/i.test(
             field,
           ) &&
           input

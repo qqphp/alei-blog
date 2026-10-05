@@ -107,6 +107,7 @@ const start = async () => {
       HOST: '127.0.0.1',
       PORT: '8894',
       VINEXT_TRUST_PROXY: '1',
+      CONTACT_MAIL_WORKER_ENABLED: '0',
     },
   });
   let errors = '';

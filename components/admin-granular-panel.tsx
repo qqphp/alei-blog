@@ -13,6 +13,7 @@ import { AdminStoryEditor } from './admin-story-editor';
 import { AdminAiSettings } from './admin-ai-settings';
 import { AdminAiResources } from './admin-ai-resources';
 import { AdminInvestmentEditor } from './admin-investment-editor';
+import { AdminMailSettings, AdminContactRecords } from './admin-contact';
 import { formatRecordTime } from '@/lib/content-times';
 import { api, asJson, Field, fresh } from './admin-fields';
 import './admin.css';
@@ -38,6 +39,7 @@ const websiteTabs = [
   { id: 'navigation', label: '导航', keys: ['links', 'sites', 'life'] },
   { id: 'home', label: '首页', keys: ['eyebrow', 'title', 'description', 'nowBuilding', 'nowWriting', 'nowExploring', 'heroArtTopText', 'heroArtBottomText', 'noteTitle', 'noteText', 'noteArtText'] },
   { id: 'footer', label: '页脚', keys: ['footer', 'copyright', 'footerLink', 'footerUrl', 'footerLinks', 'footerSocialLinks', 'footerMotto'] },
+  { id: 'email', label: '邮箱设置', keys: [] },
 ];
 const EMPTY_COLLECTIONS: readonly string[] = [];
 const listSubtitlePaths = new Set([
@@ -147,6 +149,7 @@ export function AdminGranularPanel() {
   const [config, setConfig] = useState<Edit | null>(null);
   const [busy, setBusy] = useState(false);
   const [working, setWorking] = useState(false);
+  const [mailDirty, setMailDirty] = useState(false);
   const [pendingStoryTopic, setPendingStoryTopic] = useState('');
   const [pendingTag, setPendingTag] = useState('');
   const [message, setMessage] = useState('');
@@ -155,13 +158,15 @@ export function AdminGranularPanel() {
   const editRequest = useRef(0);
   const collections = useMemo(() => section === 'stories' ? ['root', 'covers'] : adminCollections[section] ?? EMPTY_COLLECTIONS, [section]);
   const recordSection = section === 'stories' && tab === 'covers' ? 'slides' : section;
-  const scopes = section === 'site' ? websiteTabs : configScopes(section);
+  const scopes = section === 'site' ? websiteTabs : section === 'profile'
+    ? [...configScopes(section), { id: 'messages', label: '留言' }, { id: 'codes', label: '验证码' }] : configScopes(section);
   const activeCollection = collections.includes(tab) ? tab === 'covers' ? 'root' : tab : null;
   const hasTagInput = activeCollection === 'items' && ['projects', 'bookmarks', 'friends'].includes(recordSection);
-  const activeScope = !activeCollection && scopes.some((scope) => scope.id === tab) ? tab : null;
+  const privateTab = (section === 'site' && tab === 'email') || (section === 'profile' && ['messages', 'codes'].includes(tab));
+  const activeScope = !privateTab && !activeCollection && scopes.some((scope) => scope.id === tab) ? tab : null;
   const configSection = section === 'site' && tab === 'home' ? 'home' : section;
   const configScope = section === 'site' ? 'root' : activeScope;
-  const dirty = Boolean((edit && JSON.stringify(edit.value) !== edit.original) ||
+  const dirty = Boolean(mailDirty || (edit && JSON.stringify(edit.value) !== edit.original) ||
     (config && JSON.stringify(config.value) !== config.original) ||
     (edit && recordSection === 'stories' && pendingStoryTopic.trim()) ||
     (edit && hasTagInput && pendingTag.trim()));
@@ -236,6 +241,7 @@ export function AdminGranularPanel() {
     listRequest.current++;
     editRequest.current++;
     setSection(next);
+    setMailDirty(false);
     setTab(next === 'site' ? websiteTabs[0].id : adminCollections[next]?.[0] ?? configScopes(next)[0]?.id ?? 'root');
     setEdit(null); setConfig(null); setList(null); setOptions({}); setPage(1); setQuery('');
     setStatus('all'); setCategoryId(''); setStatusId(''); setPendingTag(''); setMessage('');
@@ -245,6 +251,7 @@ export function AdminGranularPanel() {
     listRequest.current++;
     editRequest.current++;
     setTab(next); setEdit(null); setConfig(null); setList(null);
+    setMailDirty(false);
     setPage(1); setQuery(''); setStatus('all'); setCategoryId(''); setStatusId(''); setPendingTag(''); setMessage('');
   }
   async function openRecord(id: string) {
@@ -507,6 +514,8 @@ export function AdminGranularPanel() {
             {busy ? '提交中…' : '确认提交'}
           </button></div>
         </section>}
+        {section === 'site' && tab === 'email' && <AdminMailSettings onDirty={setMailDirty} onWorking={setWorking} />}
+        {section === 'profile' && (tab === 'messages' || tab === 'codes') && <AdminContactRecords key={tab} kind={tab} />}
         {loading && <p className="admin-empty">正在加载…</p>}
       </div>
     </div>

@@ -11,7 +11,8 @@ export default defineConfig(async ({ command, mode }) => {
   if (command === 'serve') await ensureManagedPostgres();
   return {
     css: { postcss: { plugins: [tailwindcss()] } },
-    ssr: { external: ['pg', 'sharp', 'undici'] },
+    ssr: { external: ['pg', 'sharp', 'undici', 'nodemailer', 'imapflow'] },
+    optimizeDeps: { exclude: ['nodemailer', 'imapflow'] },
     server: {
       host: process.env.HOST || '127.0.0.1',
       port: 3000,

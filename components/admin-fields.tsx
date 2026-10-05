@@ -59,6 +59,11 @@ const names: Record<string, string> = {
   wechat: '微信号',
   email: '邮箱',
   publicAccountQr: '公众号二维码',
+  followTitle: '关注区标题',
+  followDescription: '关注区说明',
+  communityName: '交流群名称',
+  communityDescription: '交流群说明',
+  communityQr: '交流群二维码',
   serviceUrl: '服务网址',
   platforms: '平台入口',
   url: '网址',
@@ -120,6 +125,7 @@ const describedCoverActions: Record<string, string> = {
 const orderedRecordPaths = new Set([
   'projects.items', 'tracks.items', 'tracks.playlists', 'films.items',
   'podcasts.items', 'books.items', 'travel.items', 'hobbies.items',
+  'profile.root',
 ]);
 export const asJson = (value: unknown) => value as Json;
 export function titleOf(value: Json, index: number) {
@@ -551,7 +557,7 @@ export function Field({
       : path === 'writing.categories' ? ['name', 'parentId', 'description']
         : path === 'bookmarks.items' || path === 'friends.items'
           ? ['name', 'url', 'description', 'initials', 'categoryId', 'tags', '_published', ...Object.keys(value)]
-        : orderedRecordPaths.has(path) ? Object.keys(template) : Object.keys(value);
+        : orderedRecordPaths.has(path) || /^profile\.root\.platforms\.\d+$/.test(path) ? Object.keys(template) : Object.keys(value);
     return (
       <div className={`admin-object${path === 'slides.root' ? ' admin-slide-cover' : ''}${path === 'writing.categories' ? ' admin-article-category' : ''}${path === 'ai.agents' ? ' admin-agent-resource' : ''}`}>
         {label && <h3>{label}</h3>}
@@ -613,7 +619,7 @@ export function Field({
         onChange={onChange}
       />
     );
-  const asset = /^(src|cover|image|audio|publicAccountQr|logo)$/.test(field) || /\.album\.\d+$/.test(path);
+  const asset = /^(src|cover|image|audio|publicAccountQr|communityQr|logo)$/.test(field) || /\.album\.\d+$/.test(path);
   const long =
     typeof value === 'string' &&
     ((typeof sample === 'string' &&

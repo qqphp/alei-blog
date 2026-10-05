@@ -1389,3 +1389,21 @@ body:has(.admin-login) .music-dock {
 .admin-record-times div { display: grid; gap: 4px; }
 .admin-record-times dt { color: #68776e; }
 .admin-record-times dd { margin: 0; font-variant-numeric: tabular-nums; }
+
+.admin-mail-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.admin-mail-fields > label { display: grid; gap: 6px; }
+.admin-mail-fields .admin-mail-enabled { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; }
+.admin-mail-enabled input { width: auto; }
+.admin-mail-actions { flex-wrap: wrap; gap: 12px; }
+.admin-contact-dialog { --admin-ink: #263c34; --admin-line: #d5dad1; width: calc(100% - 32px); max-width: 720px; max-height: calc(100dvh - 48px); grid-template-rows: auto minmax(0, 1fr); gap: 0; padding: 0; overflow: hidden; border: 1px solid var(--admin-line); border-radius: 4px; background: #fff; color: var(--admin-ink); font: 14px/1.6 Arial, 'Microsoft YaHei', sans-serif; }
+.admin-contact-dialog, .admin-contact-dialog * { box-sizing: border-box; }
+.admin-contact-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--admin-line); }
+.admin-contact-dialog-heading h2 { margin: 0; font-size: 18px; }
+.admin-contact-dialog-heading button { border: 1px solid var(--admin-line); border-radius: 3px; padding: 8px 13px; background: #fff; color: var(--admin-ink); cursor: pointer; font: inherit; flex-shrink: 0; }
+.admin-contact-dialog :focus-visible { outline: 2px solid #44795d; outline-offset: 3px; }
+.admin-contact-detail { padding: 20px; min-height: 0; overflow: auto; overflow-wrap: anywhere; }
+.admin-contact-detail dl { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; margin: 0; }
+.admin-contact-detail dt { color: #68776e; }
+.admin-contact-detail dd { margin: 0; }
+.admin-contact-content { white-space: pre-wrap; }
+@media (max-width: 700px) { .admin-mail-fields { grid-template-columns: 1fr; }.admin-contact-detail dl { grid-template-columns: 1fr; } }

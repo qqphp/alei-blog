@@ -391,7 +391,7 @@ try {
   await user.click(within(nav).getByRole('button', { name: '网站设置' }));
   await screen.findByLabelText('站点标记');
   assert.ok(screen.getByRole('heading', { name: '网站设置' }));
-  assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['站点', '导航', '首页', '页脚']);
+  assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['站点', '导航', '首页', '页脚', '邮箱设置']);
   assert.equal(screen.getByRole('tab', { name: '站点' }).getAttribute('aria-selected'), 'true');
   assert.equal(screen.getByRole('link', { name: '查看前台 ↗' }).getAttribute('href'), '/');
   const settingsLabels = () => [...window.document.querySelectorAll('.admin-form label')].map((node) => node.textContent);
