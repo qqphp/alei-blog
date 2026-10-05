@@ -2,7 +2,7 @@
 .profile-kicker { margin: 0 0 10px; color: var(--lime); font: .63rem/1.6 ui-monospace, monospace; letter-spacing: .12em; }
 .profile-index { display: grid; grid-template-columns: 1fr 1fr auto; align-items: center; gap: 30px; padding: 28px 0; border-bottom: 1px solid var(--line); }
 .profile-index-name { display: flex; align-items: center; gap: 18px; }
-.profile-index-mark { color: var(--lime); font: italic 2.8rem Georgia, serif; letter-spacing: -.14em; }
+.profile-index-mark { flex-shrink: 0; white-space: nowrap; color: var(--lime); font: italic 2.8rem Georgia, serif; letter-spacing: -.14em; }
 .profile-index h1 { margin: 0; font-size: clamp(1.65rem, 3vw, 2.3rem); font-weight: 500; letter-spacing: -.05em; }
 .profile-index .profile-kicker { margin-bottom: 5px; }
 .profile-index > p { margin: 0; padding-left: 24px; border-left: 1px solid var(--line); font-size: .87rem; line-height: 1.8; color: var(--muted); }

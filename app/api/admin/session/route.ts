@@ -18,6 +18,8 @@ export async function GET(request: Request) {
 }
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: '请求来源无效' }, 403);
+  if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json')
+    return json({ error: '需要 JSON 请求' }, 415);
   if ((serverConfig().ADMIN_PASSWORD?.length ?? 0) < 12)
     return json(
       { error: '请运行 npm run admin:password，并重启开发服务。' },
@@ -25,10 +27,10 @@ export async function POST(request: Request) {
     );
   if (Number(request.headers.get('content-length')) > 4096)
     return json({ error: '请求过大' }, 413);
-  let body: { password?: unknown };
+  let input: unknown;
   try {
-    body = JSON.parse(
-      new TextDecoder().decode(await readLimitedBody(request, 4096)),
+    input = JSON.parse(
+      new TextDecoder('utf-8', { fatal: true }).decode(await readLimitedBody(request, 4096)),
     );
   } catch (error) {
     return json(
@@ -36,7 +38,10 @@ export async function POST(request: Request) {
       error instanceof RangeError ? 413 : 400,
     );
   }
-  if (typeof body?.password !== 'string' || body.password.length > 256)
+  if (!input || typeof input !== 'object' || Array.isArray(input))
+    return json({ error: '请求格式无效' }, 400);
+  const body = input as Record<string, unknown>;
+  if (typeof body.password !== 'string' || !body.password.length || body.password.length > 256)
     return json({ error: '请输入有效密码' }, 400);
   const now = Date.now();
   // Single administrator: a durable global window also covers local requests without an IP header.

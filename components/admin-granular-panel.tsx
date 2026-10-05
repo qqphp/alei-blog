@@ -356,7 +356,7 @@ export function AdminGranularPanel() {
     <p>在这里整理、编辑和发布你的博客。</p>
     {!configured && <p className="admin-notice">请先运行 <code>npm run admin:password</code> 设置管理员密码。</p>}
     <label htmlFor="admin-password">管理员密码</label>
-    <input id="admin-password" type="password" autoComplete="current-password" required
+    <input id="admin-password" type="password" autoComplete="current-password" required maxLength={256}
       value={password} onChange={(event) => setPassword(event.target.value)} />
     <button className="admin-primary" disabled={busy || !configured}>{busy ? '登录中…' : '登录后台'}</button>
     <p role="alert">{message}</p><Link href="/">← 返回博客</Link>

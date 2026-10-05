@@ -5,9 +5,9 @@ import { ContactError } from './contact-mail';
 export async function contactBody(request: Request, admin = false) {
   if (admin && !await authenticated(request)) throw new ContactError('请先登录', 401);
   if (!sameOrigin(request)) throw new ContactError('请求来源无效', 403);
-  if (!request.headers.get('content-type')?.startsWith('application/json')) throw new ContactError('需要 JSON 请求', 415);
+  if (request.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') throw new ContactError('需要 JSON 请求', 415);
   let input: unknown;
-  try { input = JSON.parse(new TextDecoder().decode(await readLimitedBody(request, 16000))); }
+  try { input = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(await readLimitedBody(request, 16000))); }
   catch (error) { throw new ContactError(error instanceof RangeError ? '请求内容过大' : '请求内容无效', error instanceof RangeError ? 413 : 400); }
   if (!input || typeof input !== 'object' || Array.isArray(input)) throw new ContactError('请求内容无效');
   const body = input as Record<string, unknown>;

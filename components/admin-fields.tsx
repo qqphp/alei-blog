@@ -59,6 +59,8 @@ const names: Record<string, string> = {
   wechat: '微信号',
   email: '邮箱',
   publicAccountQr: '公众号二维码',
+  publicAccountName: '公众号名称',
+  publicAccountDescription: '公众号说明',
   followTitle: '关注区标题',
   followDescription: '关注区说明',
   communityName: '交流群名称',

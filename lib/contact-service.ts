@@ -68,7 +68,11 @@ export async function requestContactCode(rawEmail: unknown, ip: string, send: Ma
 }
 export async function submitContactMessage(input: Record<string, unknown>, ip: string, now?: Date) {
   const email = normalizeEmail(input.email);
-  if (typeof input.content !== 'string' || !input.content.trim() || Array.from(input.content).length > 3000 || input.content.includes('\0')) throw new ContactError('留言需要 1–3000 字');
+  if (typeof input.content !== 'string' || !input.content.trim() || Array.from(input.content).length > 3000) throw new ContactError('留言需要 1–3000 字');
+  if (Array.from(input.content).some((char) => {
+    const code = char.charCodeAt(0);
+    return (code < 32 && ![9, 10, 13].includes(code)) || (code >= 127 && code <= 159);
+  })) throw new ContactError('留言包含无效控制字符');
   const content = input.content.trim();
   if (typeof input.challengeId !== 'string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(input.challengeId) || typeof input.code !== 'string' || !/^\d{6}$/.test(input.code)) throw new ContactError('请填写 6 位邮箱验证码');
   const settings = await readMailSettings();

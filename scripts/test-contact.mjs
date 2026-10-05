@@ -18,6 +18,7 @@ let db;
 const previousUrl = process.env.DATABASE_URL;
 const previousKey = process.env.MAIL_ENCRYPTION_KEY;
 const previousSmtpAuth = process.env.SMTP_AUTH_CODE;
+const previousAdminPassword = process.env.ADMIN_PASSWORD;
 try {
   await admin.query(`CREATE DATABASE ${name} OWNER alei_blog`);
   const archives = (await readdir('.local/backups')).filter((value) => value.startsWith('alei-')).sort();
@@ -25,6 +26,7 @@ try {
     resolve('.local/backups', archives.at(-1), 'database.dump')], { encoding: 'utf8', env: postgresEnvironment(url.toString()) });
   assert.equal(restored.status, 0, restored.stderr);
   process.env.DATABASE_URL = url.toString();
+  process.env.ADMIN_PASSWORD = '  Literal-Admin-Password:<script>\'"&😀  ';
   delete process.env.MAIL_ENCRYPTION_KEY;
   delete process.env.SMTP_AUTH_CODE;
   process.env.CONTACT_MAIL_WORKER_ENABLED = '0';
@@ -41,6 +43,7 @@ try {
   const messagesRoute = await import('../app/api/contact/messages/route.ts');
   const configRoute = await import('../app/api/admin/mail-settings/route.ts');
   const recordsRoute = await import('../app/api/admin/contact/[kind]/route.ts');
+  const sessionRoute = await import('../app/api/admin/session/route.ts');
   const settings = { ...mailDefaults, enabled: true, sender: 'sender@example.com', recipient: 'owner@example.com' };
   await readMailSettings();
   assert.equal((await db.query('SELECT count(*)::int AS n FROM contact_mail_keys')).rows[0].n, 0, 'metadata reads do not initialize a key');
@@ -147,6 +150,30 @@ try {
   await assert.rejects(submitContactMessage({ ...payload(newer, 'person@example.com'), content: 'x'.repeat(3001) }, 'one', at(63)), /3000/);
   console.log('PASS expiry, normalization, email binding, resend invalidation and concurrent one-time consumption');
 
+  const securityText = '<script>alert(1)</script><img src=x onerror=alert(1)>\n\' OR 1=1; DROP TABLE contact_messages; --\n中文😀\t制表符\r\nBcc: attacker@example.com';
+  const securityCode = await requestContactCode('security@example.com', 'security', send, clock);
+  for (const content of ['', '  ', 42, null, {}, [], 'x'.repeat(3001)])
+    await assert.rejects(submitContactMessage({ ...payload(securityCode, 'security@example.com'), content }, 'security', at(1)), /3000/);
+  for (const char of ['\0', '\x01', '\x0b', '\x1f', '\x7f', '\x85'])
+    await assert.rejects(submitContactMessage(payload(securityCode, 'security@example.com', `内容${char}结尾`), 'security', at(1)), /控制字符/);
+  for (const email of ['person@example.com\r\nBcc: attacker@example.com', 'person@example.com\0', {}, 42])
+    await assert.rejects(requestContactCode(email, 'security', send, clock), /邮箱/);
+  const securityMessage = await submitContactMessage(payload(securityCode, 'security@example.com', securityText), 'security', at(1));
+  assert.equal((await db.query('SELECT content FROM contact_messages WHERE id=$1', [securityMessage.id])).rows[0].content, securityText);
+  const securityMails = [];
+  await processContactNotifications(async (mail) => { securityMails.push(mail); }, at(2));
+  const securityMail = securityMails.find((mail) => mail.replyTo === 'security@example.com');
+  assert.ok(securityMail.text.endsWith(securityText));
+  assert.equal(securityMail.html, undefined);
+  assert.equal(securityMail.bcc, undefined);
+  const boundaryCode = await requestContactCode('boundary@example.com', 'boundary', send, clock);
+  const boundaryText = '😀'.repeat(3000);
+  const boundaryMessage = await submitContactMessage(payload(boundaryCode, 'boundary@example.com', boundaryText), 'boundary', at(1));
+  assert.equal((await db.query('SELECT content FROM contact_messages WHERE id=$1', [boundaryMessage.id])).rows[0].content, boundaryText);
+  const singleCode = await requestContactCode('single@example.com', 'single', send, clock);
+  await submitContactMessage(payload(singleCode, 'single@example.com', '字'), 'single', at(1));
+  console.log('PASS literal script/SQL storage and text-only mail, control/type validation, header injection rejection and Unicode length boundaries');
+
   challenge = await requestContactCode('wrong@example.com', 'wrong', send, clock);
   const wrong = codeFor(challenge) === '000000' ? '111111' : '000000';
   for (let i = 0; i < 5; i++) await assert.rejects(submitContactMessage({ ...payload(challenge, 'wrong@example.com'), code: wrong }, 'wrong', at(i)), /验证码/);
@@ -227,6 +254,48 @@ try {
   const cookie = await sessionCookie(new Request(origin));
   const req = (path, body, options = {}) => new Request(origin + path, { method: body ? 'POST' : 'GET',
     headers: { origin, 'content-type': 'application/json', ...options.headers }, ...(body ? { body: JSON.stringify(body) } : {}), ...options });
+  const rawRequest = (path, body, headers = {}) => new Request(origin + path, { method: 'POST',
+    headers: { origin, 'content-type': 'application/json', ...headers }, body, ...(body instanceof ReadableStream ? { duplex: 'half' } : {}) });
+  const stream = (size) => new ReadableStream({ start(controller) {
+    controller.enqueue(new TextEncoder().encode('{"content":"'));
+    controller.enqueue(new Uint8Array(size).fill(120));
+    controller.close();
+  } });
+  for (const [path, route, maximum] of [
+    ['/api/admin/session', sessionRoute, 4096], ['/api/contact/codes', codesRoute, 16000], ['/api/contact/messages', messagesRoute, 16000],
+  ]) {
+    for (const type of ['text/plain', 'application/jsonp', 'application/json-extra', ''])
+      assert.equal((await route.POST(rawRequest(path, '{}', { 'content-type': type }))).status, 415);
+    for (const body of ['null', '[]', '1', '"text"', '{', '{"password":null}', '{"website":0}'])
+      assert.equal((await route.POST(rawRequest(path, body))).status, 400);
+    const invalidUtf8 = Buffer.concat([Buffer.from('{"password":"'), Buffer.from([0xc3, 0x28]), Buffer.from('","website":""}')]);
+    assert.equal((await route.POST(rawRequest(path, invalidUtf8))).status, 400);
+    assert.equal((await route.POST(rawRequest(path, stream(maximum)))).status, 413, 'stream limit without Content-Length');
+    assert.equal((await route.POST(rawRequest(path, '{}', { 'content-length': String(maximum + 1) }))).status, 413);
+    assert.equal((await route.POST(rawRequest(path, '{}', { origin: 'http://evil.test' }))).status, 403);
+    assert.equal((await route.POST(rawRequest(path, '{}', { origin: '' }))).status, 403);
+  }
+  for (const password of ['', 123, null, [], {}, 'x'.repeat(257)])
+    assert.equal((await sessionRoute.POST(req('/api/admin/session', { password }))).status, 400);
+  await db.query('DELETE FROM cms_login_attempts');
+  for (const password of ['x', 'x'.repeat(256), "' OR 1=1 --", '<script>alert(1)</script>', { $ne: null }]) {
+    const response = await sessionRoute.POST(req('/api/admin/session', { password }));
+    assert.equal(response.status, typeof password === 'string' ? 401 : 400);
+    assert.equal(response.headers.get('set-cookie'), null);
+  }
+  const exactPassword = process.env.ADMIN_PASSWORD;
+  assert.equal((await sessionRoute.POST(req('/api/admin/session', { password: exactPassword.trim() }))).status, 401);
+  const login = await sessionRoute.POST(rawRequest('/api/admin/session', JSON.stringify({ password: exactPassword }), { 'content-type': 'Application/JSON; charset=utf-8' }));
+  assert.equal(login.status, 200);
+  assert.ok(login.headers.get('set-cookie').includes('HttpOnly; SameSite=Strict'));
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM cms_login_attempts')).rows[0].n, 0);
+  for (let i = 0; i < 10; i++) assert.equal((await sessionRoute.POST(req('/api/admin/session', { password: 'wrong' }))).status, 401);
+  assert.equal((await sessionRoute.POST(req('/api/admin/session', { password: exactPassword }))).status, 429);
+  await db.query('UPDATE cms_login_attempts SET expires = $1', [Date.now() - 1]);
+  assert.equal((await sessionRoute.POST(req('/api/admin/session', { password: exactPassword }))).status, 200);
+  for (const route of [codesRoute, messagesRoute])
+    assert.equal((await route.POST(rawRequest('/api/contact/test', '{"website":""}', { 'content-type': 'Application/JSON; charset=utf-8' }))).status, 400, 'JSON parameters accepted, required fields validated');
+  console.log('PASS strict JSON/UTF-8/shape/stream limits, CSRF, literal passwords, no injection bypass and durable login throttling');
   assert.equal((await codesRoute.POST(req('/api/contact/codes', { email: 'a@example.com', website: '' }, { headers: { origin: 'http://evil.test', 'content-type': 'application/json' } }))).status, 403);
   assert.equal((await codesRoute.POST(req('/api/contact/codes', { email: 'a@example.com', website: 'bot' }))).status, 400);
   assert.equal((await messagesRoute.POST(req('/api/contact/messages', { website: '', content: 'x'.repeat(20000) }))).status, 413);
@@ -246,6 +315,27 @@ try {
   assert.equal((await db.query('SELECT secret FROM contact_mail_settings')).rows[0].secret, encrypted);
   assert.equal(recordsRoute.POST, undefined);
   const { getPublicContent } = await import('../lib/cms-server.ts');
+  const { getAdminConfig, saveAdminConfig } = await import('../lib/admin-records.ts');
+  const { defaults } = await import('../lib/cms-defaults.ts');
+  const storedProfile = (await db.query("SELECT value FROM cms_sections WHERE section='profile'")).rows[0].value;
+  const { publicAccountName: _accountName, publicAccountDescription: _accountDescription, ...oldProfile } = storedProfile;
+  await db.query("UPDATE cms_sections SET value=$1 WHERE section='profile'", [oldProfile]);
+  const legacyConfig = await getAdminConfig('profile', 'root');
+  assert.equal(legacyConfig.value.publicAccountName, defaults.profile.publicAccountName);
+  assert.equal(legacyConfig.value.publicAccountDescription, defaults.profile.publicAccountDescription);
+  const legacyPublic = (await getPublicContent(['profile'])).profile;
+  assert.equal(legacyPublic.publicAccountName, defaults.profile.publicAccountName);
+  assert.equal(legacyPublic.publicAccountDescription, defaults.profile.publicAccountDescription);
+  const updatedProfile = { ...legacyConfig.value, publicAccountName: '安全测试公众号', publicAccountDescription: '扫码关注测试更新' };
+  await saveAdminConfig('profile', 'root', updatedProfile, legacyConfig.revision);
+  const persistedProfile = (await db.query("SELECT value FROM cms_sections WHERE section='profile'")).rows[0].value;
+  assert.deepEqual(persistedProfile, { ...oldProfile, publicAccountName: '安全测试公众号', publicAccountDescription: '扫码关注测试更新' });
+  const reloadedProfile = await getAdminConfig('profile', 'root');
+  assert.equal(reloadedProfile.value.publicAccountName, '安全测试公众号');
+  assert.equal((await getPublicContent(['profile'])).profile.publicAccountDescription, '扫码关注测试更新');
+  await saveAdminConfig('profile', 'root', { publicAccountDescription: '' }, reloadedProfile.revision);
+  assert.equal((await getPublicContent(['profile'])).profile.publicAccountDescription, '');
+  console.log('PASS legacy profile defaults, public/admin config readback, persisted captions and empty description');
   const publicData = JSON.stringify(await getPublicContent(['profile']));
   assert.ok(!publicData.includes('mock-authorization') && !publicData.includes('reply@example.com') && !publicData.includes('contact_messages'));
   assert.ok(!publicData.includes(databaseKey.toString('base64')) && !publicData.includes(databaseKey.toString('hex')));
@@ -288,4 +378,5 @@ try {
   process.env.DATABASE_URL = previousUrl;
   if (previousKey === undefined) delete process.env.MAIL_ENCRYPTION_KEY; else process.env.MAIL_ENCRYPTION_KEY = previousKey;
   if (previousSmtpAuth === undefined) delete process.env.SMTP_AUTH_CODE; else process.env.SMTP_AUTH_CODE = previousSmtpAuth;
+  if (previousAdminPassword === undefined) delete process.env.ADMIN_PASSWORD; else process.env.ADMIN_PASSWORD = previousAdminPassword;
 }

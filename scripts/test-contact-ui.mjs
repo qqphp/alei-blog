@@ -25,9 +25,10 @@ const originalNow = Date.now;
 const calls = [];
 let settings = { value: { enabled: true, smtpHost: 'smtp.163.com', smtpPort: 465, imapHost: 'imap.163.com', imapPort: 993, sender: 'sender@example.com', recipient: 'owner@example.com' }, configured: true, revision: 1 };
 let profile = structuredClone(defaults.profile);
-const messageContent = ('<script>这是纯文本留言</script>\n' + '保留换行的长留言。\n'.repeat(400)).slice(0, 3000);
+const messageContent = ('<script>alert(1)</script><img src=x onerror=alert(1)>\n\' OR 1=1; DROP TABLE contact_messages; --\n' + '保留换行的长留言。\n'.repeat(400)).slice(0, 3000);
 let rejectCode = false;
 let rejectMessage = false;
+let loggedIn = true;
 globalThis.fetch = async (input, init = {}) => {
   const path = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
   const body = typeof init.body === 'string' ? JSON.parse(init.body) : null;
@@ -36,7 +37,7 @@ globalThis.fetch = async (input, init = {}) => {
   if (path === '/api/contact/codes') return rejectCode ? json({ error: '验证码发送失败，请稍后再试', retryAt: new Date(Date.now() + 60000).toISOString() }, 502)
     : json({ challengeId: 'ui-challenge', expiresAt: new Date(Date.now() + 180000).toISOString(), retryAt: new Date(Date.now() + 60000).toISOString() });
   if (path === '/api/contact/messages') return rejectMessage ? json({ error: '验证码不正确' }, 400) : json({ id: 'ui-message-id' }, 201);
-  if (path === '/api/admin/session') return json({ configured: true, authenticated: true });
+  if (path === '/api/admin/session') return json(init.method === 'POST' ? { ok: true } : { configured: true, authenticated: loggedIn });
   if (path.startsWith('/api/admin/options/')) return json({ categories: [] });
   if (path.startsWith('/api/admin/records/')) return json({ items: [], total: 0, page: 1, size: 20 });
   if (path === '/api/admin/config/profile/root') {
@@ -69,6 +70,18 @@ try {
   assert.equal(screen.queryByAltText('交流群二维码'), null, 'missing group QR must not invent an image');
   assert.ok(screen.getByText('04 / 散落在互联网'));
   assert.ok(screen.getByLabelText('软件技术服务：代码窗口与数据库'));
+  assert.equal(window.document.querySelector('.profile-index-mark').textContent, 'AL /');
+  assert.equal(window.document.querySelectorAll('.profile-qr')[1].querySelector('p').textContent,
+    defaults.profile.publicAccountName + defaults.profile.publicAccountDescription);
+  cleanup();
+  const customProfile = { ...defaults.profile, name: '个人名称', publicAccountName: '阿雷的公众号',
+    publicAccountDescription: '', publicAccountQr: '/test-qr.png' };
+  render(createElement(ContentProvider, { content: { ...defaults, profile: customProfile } }, createElement(AboutProfile)));
+  assert.ok(screen.getByRole('heading', { name: '个人名称' }));
+  assert.equal(window.document.querySelector('.profile-account-name').textContent, '阿雷的公众号微信公众号');
+  assert.ok(screen.getByAltText('阿雷的公众号微信公众号二维码，使用微信扫码关注'));
+  assert.equal(window.document.querySelectorAll('.profile-qr')[1].querySelector('p').textContent, '阿雷的公众号');
+  assert.equal(window.document.querySelectorAll('.profile-qr')[1].querySelector('br'), null);
   cleanup();
   render(createElement(ContactForm));
   assert.ok(screen.getByText('见字如面，你的分享与想法，都值得被认真倾听。'));
@@ -130,10 +143,12 @@ try {
   assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['设置','留言','验证码']);
   const profileOrder = () => [...screen.getByRole('region', { name: '设置表单' }).querySelectorAll('.admin-fields label')]
     .filter((node) => node.htmlFor).map((node) => node.textContent);
-  const expectedOrder = ['名称', '微信号', '邮箱', '公众号二维码', '关注区标题', '关注区说明', '交流群名称', '交流群说明', '交流群二维码', '服务网址',
+  const expectedOrder = ['名称', '微信号', '邮箱', '公众号二维码', '公众号名称', '公众号说明', '关注区标题', '关注区说明', '交流群名称', '交流群说明', '交流群二维码', '服务网址',
     ...defaults.profile.platforms.flatMap(() => ['名称', '标签 / 栏目', '网址'])];
   assert.deepEqual(profileOrder(), expectedOrder, 'initial order follows the template despite shuffled response keys');
   await user.clear(screen.getByLabelText('关注区标题')); await user.type(screen.getByLabelText('关注区标题'), '欢迎来聊开发');
+  await user.clear(screen.getByLabelText('公众号名称')); await user.type(screen.getByLabelText('公众号名称'), '阿雷的公众号');
+  await user.clear(screen.getByLabelText('公众号说明')); await user.type(screen.getByLabelText('公众号说明'), '扫码关注，一起记录开发');
   await user.type(screen.getByLabelText('交流群名称'), '开发交流');
   const qrField = screen.getByLabelText('交流群二维码').closest('.admin-field');
   const file = new window.File(['test-image'], 'qr.png', { type: 'image/png' });
@@ -151,6 +166,8 @@ try {
   await screen.findByLabelText('关注区标题');
   assert.deepEqual(profileOrder(), expectedOrder, 'reloading retains the same field order');
   assert.equal(screen.getByLabelText('关注区标题').value, '欢迎来聊开发');
+  assert.equal(screen.getByLabelText('公众号名称').value, '阿雷的公众号');
+  assert.equal(screen.getByLabelText('公众号说明').value, '扫码关注，一起记录开发');
   await user.click(screen.getByRole('tab', { name: '留言' }));
   await screen.findByText('private@example.com');
   assert.equal(screen.queryByRole('button', { name: /新增|编辑|删除|重发/ }), null);
@@ -160,6 +177,7 @@ try {
   assert.equal(messageDialog.querySelector('.admin-contact-content').textContent, messageContent);
   assert.equal(messageContent.length, 3000);
   assert.equal(window.document.querySelector('.admin-contact-detail script'), null);
+  assert.equal(messageDialog.querySelector('img'), null);
   await waitFor(() => assert.equal(window.document.activeElement, within(messageDialog).getByRole('button', { name: '关闭详情' })));
   await user.tab(); assert.ok(messageDialog.contains(window.document.activeElement), 'Tab stays inside the dialog');
   await user.tab({ shift: true }); assert.ok(messageDialog.contains(window.document.activeElement), 'Shift+Tab stays inside the dialog');
@@ -210,4 +228,19 @@ try {
   await user.click(screen.getByRole('button', { name: '发送测试邮件' })); await screen.findByText('SMTP 已接受测试邮件');
   cleanup();
   console.log('PASS stable profile field order after load/save/reload, read-only dialogs/focus/search/filter/pagination and mail actions');
+  render(createElement(ContentProvider, { content: { ...defaults, profile } }, createElement(AboutProfile)));
+  assert.equal(window.document.querySelectorAll('.profile-qr')[1].querySelector('p').textContent,
+    '阿雷的公众号扫码关注，一起记录开发');
+  cleanup();
+  loggedIn = false;
+  render(createElement(AdminGranularPanel));
+  const passwordInput = await screen.findByLabelText('管理员密码');
+  assert.equal(passwordInput.type, 'password');
+  assert.equal(passwordInput.maxLength, 256);
+  const password = '  <script>特殊密码\'"&😀</script>  ';
+  fireEvent.change(passwordInput, { target: { value: password } });
+  await user.click(screen.getByRole('button', { name: '登录后台' }));
+  await screen.findByRole('navigation', { name: '后台栏目' });
+  assert.equal(calls.findLast((call) => call.path === '/api/admin/session' && call.method === 'POST').body.password, password);
+  console.log('PASS saved public account captions and literal password submission with frontend length limit');
 } finally { Date.now = originalNow; await act(async () => cleanup()); await window.happyDOM.close(); }
