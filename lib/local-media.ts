@@ -8,8 +8,7 @@ import {
   writeFile,
 } from 'node:fs/promises';
 import { resolve } from 'node:path';
-// Vinext declares the root Sharp import as unknown; use Sharp's own typed entry.
-import sharp from 'sharp/lib/index.js';
+import sharp from 'sharp';
 
 const keyPattern = /^[a-f0-9-]+\.(png|jpg|gif|webp|mp3|wav|file)$/;
 const maximum = 20 * 1024 * 1024;

@@ -1,0 +1,11 @@
+{
+  "name": "@local/vinext-glob",
+  "version": "1.0.0",
+  "private": true,
+  "description": "The sync glob API used by Vinext's dynamic import plugin, without braces",
+  "type": "module",
+  "main": "index.js",
+  "dependencies": {
+    "tinyglobby": "0.2.17"
+  }
+}

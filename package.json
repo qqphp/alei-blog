@@ -6,6 +6,7 @@
     "node": ">=22.13.0"
   },
   "scripts": {
+    "postinstall": "node scripts/patch-vinext.mjs",
     "predev": "node scripts/prepare-markdown-assets.mjs",
     "prebuild": "node scripts/prepare-markdown-assets.mjs",
     "dev": "node --env-file-if-exists=.env node_modules/vinext/dist/cli.js dev",
@@ -22,6 +23,7 @@
     "test:cms": "node --env-file-if-exists=.env --import tsx scripts/test-granular.mjs",
     "test:self-hosting": "node --env-file-if-exists=.env scripts/test-self-hosting.mjs",
     "test:server-fetch": "node --import tsx scripts/test-server-fetch.mjs",
+    "test:dependencies": "node scripts/test-dependency-security.mjs",
     "test:audit-regressions": "node --env-file-if-exists=.env --import tsx scripts/test-audit-regressions.mjs",
     "test:admin-ui": "node --import tsx scripts/test-admin-ui.mjs",
     "test:markdown": "node --import tsx scripts/test-markdown.mjs",
@@ -42,31 +44,33 @@
     "class-variance-authority": "0.7.1",
     "clsx": "2.1.1",
     "date-fns": "4.1.0",
+    "fast-glob": "file:vendor/vinext-glob",
     "github-markdown-css": "5.9.0",
     "highlight.js": "11.12.0",
+    "image-size": "2.0.4",
     "ipaddr.js": "2.5.0",
     "katex": "0.16.47",
     "lucide-react": "1.31.0",
     "mdast-util-to-string": "4.0.0",
     "pg": "^8.23.0",
-    "react": "19.2.6",
+    "react": "19.2.8",
     "react-day-picker": "9.8.1",
-    "react-dom": "19.2.6",
+    "react-dom": "19.2.8",
     "react-markdown": "10.1.0",
-    "react-server-dom-webpack": "19.2.6",
+    "react-server-dom-webpack": "19.2.8",
     "rehype-highlight": "7.0.2",
     "rehype-katex": "7.0.1",
     "rehype-sanitize": "6.0.0",
     "remark-gfm": "4.0.1",
     "remark-math": "6.0.0",
     "remark-parse": "11.0.0",
-    "sharp": "0.34.5",
+    "sharp": "0.35.5",
     "tailwind-merge": "3.6.0",
-    "undici": "7.29.0",
+    "undici": "7.30.0",
     "unified": "11.0.5",
     "unist-util-visit": "5.1.0",
     "vditor": "4.0.0",
-    "vinext": "1.0.0-beta.5"
+    "vinext": "1.0.1"
   },
   "devDependencies": {
     "@openai/sites-vite-plugin": "0.2.0",
@@ -78,7 +82,7 @@
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "@vitejs/plugin-react": "6.0.2",
-    "@vitejs/plugin-rsc": "0.5.26",
+    "@vitejs/plugin-rsc": "0.5.34",
     "happy-dom": "20.14.0",
     "oxfmt": "0.61.0",
     "oxlint": "1.76.0",
@@ -86,7 +90,13 @@
     "tailwindcss": "4.2.1",
     "tsx": "4.23.13",
     "typescript": "5.9.3",
-    "vite": "8.0.13"
+    "vite": "8.3.2"
+  },
+  "overrides": {
+    "fflate": "0.7.5",
+    "vite-plugin-dynamic-import": {
+      "fast-glob": "$fast-glob"
+    }
   },
   "type": "module"
 }

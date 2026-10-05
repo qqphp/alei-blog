@@ -467,7 +467,11 @@ try {
     within(modelRegion).getByText('按厂商整理的模型基准、发布日期、价格与输出速度。').textContent,
     '按厂商整理的模型基准、发布日期、价格与输出速度。',
   );
-  assert.equal(within(modelRegion).queryByRole('link', { name: /Artificial Analysis/ }), null);
+  const sourceLink = within(modelRegion).getByRole('link', { name: /Artificial Analysis/ });
+  assert.equal(sourceLink.getAttribute('href'), 'https://artificialanalysis.ai/');
+  assert.equal(sourceLink.getAttribute('target'), '_blank');
+  assert.ok(sourceLink.relList.contains('noopener'));
+  assert.ok(sourceLink.relList.contains('noreferrer'));
   assert.equal(within(modelRegion).queryByRole('button', { name: '重新读取大模型数据' }), null);
   const agentRegion = await switchAi('智能体');
   assert.equal(within(agentRegion).getAllByRole('article').length, aiAgents.length);
