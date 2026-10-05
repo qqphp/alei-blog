@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { randomBytes, randomUUID, createHmac } from 'node:crypto';
-import { readFile, readdir } from 'node:fs/promises';
+import { randomBytes, randomUUID, createHmac, createCipheriv } from 'node:crypto';
+import { readFile, readdir, unlink } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import pg from 'pg';
@@ -8,6 +8,8 @@ import { postgresTool, postgresEnvironment } from './postgres-tools.mjs';
 
 const source = new URL(process.env.DATABASE_URL);
 const name = `alei_contact_test_${Date.now()}`;
+const restoredName = `${name}_restored`;
+const keyBackup = resolve('.local', `${name}.dump`);
 const url = new URL(source); url.pathname = `/${name}`;
 const admin = new pg.Client({ host: source.hostname, port: Number(source.port), user: 'postgres',
   password: (await readFile(resolve('.local/postgres18/admin-password'), 'utf8')).trim(), database: 'postgres' });
@@ -23,14 +25,15 @@ try {
     resolve('.local/backups', archives.at(-1), 'database.dump')], { encoding: 'utf8', env: postgresEnvironment(url.toString()) });
   assert.equal(restored.status, 0, restored.stderr);
   process.env.DATABASE_URL = url.toString();
-  process.env.MAIL_ENCRYPTION_KEY = randomBytes(32).toString('base64');
+  delete process.env.MAIL_ENCRYPTION_KEY;
   delete process.env.SMTP_AUTH_CODE;
   process.env.CONTACT_MAIL_WORKER_ENABLED = '0';
   const migrated = spawnSync(process.execPath, ['scripts/migrate-postgres.mjs'], { encoding: 'utf8', env: process.env });
   assert.equal(migrated.status, 0, migrated.stderr);
   db = new pg.Client({ connectionString: url.toString() }); await db.connect();
-  await db.query('TRUNCATE contact_codes, contact_messages, contact_limits, contact_mail_settings');
-  const { saveMailSettings, readMailSettings, mailDefaults } = await import('../lib/contact-mail.ts');
+  await db.query('TRUNCATE contact_codes, contact_messages, contact_limits, contact_mail_settings, contact_mail_keys');
+  const { saveMailSettings, readMailSettings, mailDefaults, encryptionKey } = await import('../lib/contact-mail.ts');
+  const { withDatabase } = await import('../lib/postgres.ts');
   const { requestContactCode, submitContactMessage, processContactNotifications, listContactRecords, shanghaiDay } = await import('../lib/contact-service.ts');
   const { contactIp } = await import('../lib/contact-http.ts');
   const { sessionCookie } = await import('../lib/admin-auth.ts');
@@ -39,6 +42,64 @@ try {
   const configRoute = await import('../app/api/admin/mail-settings/route.ts');
   const recordsRoute = await import('../app/api/admin/contact/[kind]/route.ts');
   const settings = { ...mailDefaults, enabled: true, sender: 'sender@example.com', recipient: 'owner@example.com' };
+  await readMailSettings();
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM contact_mail_keys')).rows[0].n, 0, 'metadata reads do not initialize a key');
+  await assert.rejects(saveMailSettings({ value: settings, password: '', revision: 0 }), /请填写授权码/);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM contact_mail_keys')).rows[0].n, 0, 'failed settings transaction rolls back key initialization');
+  const keys = await Promise.all(Array.from({ length: 8 }, () => withDatabase((client) => encryptionKey(client))));
+  assert.equal(keys[0].length, 32);
+  assert.ok(keys.every((key) => key.equals(keys[0])), 'concurrent initialization uses one key');
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM contact_mail_keys')).rows[0].n, 1);
+  const restarted = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e',
+    "import pg from 'pg'; import { encryptionKey } from './lib/contact-mail.ts'; const db = new pg.Client({ connectionString: process.env.DATABASE_URL }); await db.connect(); try { const old = (await db.query('SELECT key FROM contact_mail_keys')).rows[0].key; if (!(await encryptionKey(db)).equals(old)) throw new Error('key changed'); console.log('KEY_REUSED'); } finally { await db.end(); }"],
+    { encoding: 'utf8', env: process.env });
+  assert.equal(restarted.status, 0, restarted.stderr);
+  assert.equal(restarted.stdout.trim(), 'KEY_REUSED');
+  console.log('PASS automatic database key initialization, concurrent first use and process restart');
+
+  await db.query('TRUNCATE contact_mail_keys, contact_mail_settings');
+  process.env.SMTP_AUTH_CODE = 'mock-environment-authorization';
+  await db.query('INSERT INTO contact_mail_settings(id,value) VALUES (true,$1)', [settings]);
+  let firstMail;
+  const firstTime = new Date();
+  const firstChallenge = await requestContactCode('first@example.com', 'first', async (mail) => { firstMail = mail; }, firstTime);
+  const firstKey = (await db.query('SELECT key FROM contact_mail_keys')).rows[0].key;
+  assert.equal(firstKey.length, 32, 'first code request initializes the database key inside its transaction');
+  const firstCode = firstMail.text.match(/验证码是：(\d{6})/)[1];
+  await db.query('TRUNCATE contact_mail_keys');
+  await assert.rejects(withDatabase((client) => encryptionKey(client)), /旧密钥/, 'active challenges also prevent replacement without a legacy key');
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM contact_mail_keys')).rows[0].n, 0);
+  await db.query('INSERT INTO contact_mail_keys(id,key) VALUES (true,$1)', [firstKey]);
+  await submitContactMessage({ email: 'first@example.com', content: '首次调用流程', challengeId: firstChallenge.challengeId, code: firstCode }, 'first', firstTime);
+  await db.query('TRUNCATE contact_mail_keys, contact_mail_settings, contact_codes, contact_messages, contact_limits');
+  delete process.env.SMTP_AUTH_CODE;
+  console.log('PASS first code request and message submission without an environment key, active-code-only migration protection');
+
+  const legacyKey = randomBytes(32), nonce = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', legacyKey, nonce);
+  const ciphertext = Buffer.concat([cipher.update('mock-legacy-authorization', 'utf8'), cipher.final()]);
+  const legacySecret = Buffer.concat([nonce, cipher.getAuthTag(), ciphertext]).toString('base64');
+  await db.query('INSERT INTO contact_mail_settings(id,value,secret) VALUES (true,$1,$2)', [settings, legacySecret]);
+  const legacyId = randomUUID(), legacyEmail = 'legacy@example.com', legacyCode = '654321', legacyTime = new Date();
+  const legacyDigest = createHmac('sha256', legacyKey).update(`${legacyId}\n${legacyEmail}\n${legacyCode}`).digest('hex');
+  await db.query("INSERT INTO contact_codes(id,email,digest,status,created_at,expires_at) VALUES ($1,$2,$3,'sent',$4,$5)",
+    [legacyId, legacyEmail, legacyDigest, legacyTime, new Date(legacyTime.getTime() + 180000)]);
+  await assert.rejects(withDatabase((client) => encryptionKey(client)), /旧密钥/);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM contact_mail_keys')).rows[0].n, 0);
+  process.env.MAIL_ENCRYPTION_KEY = randomBytes(32).toString('base64');
+  await assert.rejects(withDatabase((client) => encryptionKey(client)), /旧密钥/);
+  assert.equal((await db.query('SELECT count(*)::int AS n FROM contact_mail_keys')).rows[0].n, 0);
+  process.env.MAIL_ENCRYPTION_KEY = legacyKey.toString('base64');
+  const databaseKey = await withDatabase((client) => encryptionKey(client));
+  assert.ok(databaseKey.equals(legacyKey));
+  delete process.env.MAIL_ENCRYPTION_KEY;
+  assert.equal((await readMailSettings(true)).password, 'mock-legacy-authorization');
+  await submitContactMessage({ email: legacyEmail, content: '迁移后验证', challengeId: legacyId, code: legacyCode }, 'legacy', legacyTime);
+  process.env.MAIL_ENCRYPTION_KEY = randomBytes(32).toString('base64');
+  assert.ok((await withDatabase((client) => encryptionKey(client))).equals(databaseKey), 'database key takes precedence after migration');
+  delete process.env.MAIL_ENCRYPTION_KEY;
+  await db.query('TRUNCATE contact_codes, contact_messages, contact_limits, contact_mail_settings');
+  console.log('PASS legacy key migration preserves ciphertext and active challenges, missing or wrong legacy key does not overwrite data');
   process.env.SMTP_AUTH_CODE = 'mock-environment-authorization';
   const environmentSettings = await readMailSettings(true);
   assert.equal(environmentSettings.configured, true, 'environment authorization configures the mail service');
@@ -112,7 +173,7 @@ try {
   const fixtures = [];
   for (let i = 0; i < 6; i++) {
     const id = randomUUID(), email = 'quota@example.com', code = '123456';
-    const digest = createHmac('sha256', Buffer.from(process.env.MAIL_ENCRYPTION_KEY, 'base64')).update(`${id}\n${email}\n${code}`).digest('hex');
+    const digest = createHmac('sha256', databaseKey).update(`${id}\n${email}\n${code}`).digest('hex');
     await db.query("INSERT INTO contact_codes(id,email,digest,status,created_at,expires_at) VALUES ($1,$2,$3,'sent',$4,$5)", [id, email, digest, clock, at(180)]);
     fixtures.push({ email, code, challengeId: id, content: `并发留言 ${i}` });
   }
@@ -126,7 +187,7 @@ try {
   console.log('PASS concurrent daily three-message quota and reset without refunding failed notification');
 
   const waitingId = randomUUID(), waitingEmail = 'wait@example.com';
-  const waitingDigest = createHmac('sha256', Buffer.from(process.env.MAIL_ENCRYPTION_KEY, 'base64')).update(`${waitingId}\n${waitingEmail}\n123456`).digest('hex');
+  const waitingDigest = createHmac('sha256', databaseKey).update(`${waitingId}\n${waitingEmail}\n123456`).digest('hex');
   await db.query("INSERT INTO contact_codes(id,email,digest,status,created_at,expires_at) VALUES ($1,$2,$3,'sent',now(),now()+interval '100 milliseconds')", [waitingId, waitingEmail, waitingDigest]);
   await db.query('BEGIN');
   await db.query("SELECT pg_advisory_xact_lock(hashtext('contact-limits'))");
@@ -175,6 +236,7 @@ try {
   const configResponse = await configRoute.GET(authenticated('/api/admin/mail-settings'));
   assert.equal(configResponse.headers.get('cache-control'), 'no-store');
   const serialized = await configResponse.text(); assert.ok(!serialized.includes('mock-authorization') && !serialized.includes(encrypted));
+  assert.ok(!serialized.includes(databaseKey.toString('base64')) && !serialized.includes(databaseKey.toString('hex')));
   const savedSettings = JSON.parse(serialized);
   const putBody = { value: savedSettings.value, revision: savedSettings.revision, password: '' };
   assert.equal((await configRoute.PUT(req('/api/admin/mail-settings', putBody, { method: 'PUT' }))).status, 401);
@@ -186,6 +248,7 @@ try {
   const { getPublicContent } = await import('../lib/cms-server.ts');
   const publicData = JSON.stringify(await getPublicContent(['profile']));
   assert.ok(!publicData.includes('mock-authorization') && !publicData.includes('reply@example.com') && !publicData.includes('contact_messages'));
+  assert.ok(!publicData.includes(databaseKey.toString('base64')) && !publicData.includes(databaseKey.toString('hex')));
   const records = await recordsRoute.GET(authenticated('/api/admin/contact/codes'), { params: Promise.resolve({ kind: 'codes' }) });
   const recordData = await records.json(); assert.ok(recordData.items.every((item) => !('digest' in item) && !('code' in item)));
   const list = await listContactRecords('messages', new URLSearchParams({ q: 'reply@example.com', status: 'sent' })); assert.equal(list.total, 1);
@@ -202,9 +265,26 @@ try {
   const profile = (await db.query("SELECT value FROM cms_sections WHERE section='profile'")).rows[0].value;
   assert.ok('followTitle' in profile && 'communityQr' in profile);
   console.log('PASS same-origin, honeypot/body limits, trusted IP, admin auth, no secret disclosure, search/filter/pagination and retention');
+
+  const dumped = spawnSync(postgresTool('pg_dump'), ['-Fc', '--no-owner', '--no-acl', '-f', keyBackup],
+    { encoding: 'utf8', env: postgresEnvironment(url.toString()) });
+  assert.equal(dumped.status, 0, dumped.stderr);
+  await admin.query(`CREATE DATABASE ${restoredName} OWNER alei_blog`);
+  const restoredUrl = new URL(url); restoredUrl.pathname = `/${restoredName}`;
+  const recovered = spawnSync(postgresTool('pg_restore'), ['--single-transaction', '--exit-on-error', '--no-owner', '--no-acl', '-d', restoredName, keyBackup],
+    { encoding: 'utf8', env: postgresEnvironment(restoredUrl.toString()) });
+  assert.equal(recovered.status, 0, recovered.stderr);
+  const checked = spawnSync(process.execPath, ['--import', 'tsx', '--input-type=module', '-e',
+    "import { readMailSettings } from './lib/contact-mail.ts'; const settings = await readMailSettings(true); if (settings.password !== 'mock-authorization') throw new Error('restored authorization mismatch'); console.log('RESTORED_WITHOUT_ENV_KEY');"],
+    { encoding: 'utf8', env: { ...process.env, DATABASE_URL: restoredUrl.toString() } });
+  assert.equal(checked.status, 0, checked.stderr);
+  assert.equal(checked.stdout.trim(), 'RESTORED_WITHOUT_ENV_KEY');
+  console.log('PASS complete database backup and restore preserves decryption without an environment key');
 } finally {
   if (db) await db.end();
+  await admin.query(`DROP DATABASE IF EXISTS ${restoredName} WITH (FORCE)`);
   await admin.query(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`); await admin.end();
+  await unlink(keyBackup).catch((error) => { if (error.code !== 'ENOENT') throw error; });
   process.env.DATABASE_URL = previousUrl;
   if (previousKey === undefined) delete process.env.MAIL_ENCRYPTION_KEY; else process.env.MAIL_ENCRYPTION_KEY = previousKey;
   if (previousSmtpAuth === undefined) delete process.env.SMTP_AUTH_CODE; else process.env.SMTP_AUTH_CODE = previousSmtpAuth;

@@ -3,8 +3,8 @@ import type { Client } from 'pg';
 import { withDatabase } from './postgres';
 import { ContactError, encryptionKey, normalizeEmail, readMailSettings, sendContactMail, type MailSender } from './contact-mail';
 
-function digest(challenge: string, email: string, code: string) {
-  return createHmac('sha256', encryptionKey()).update(`${challenge}\n${email}\n${code}`).digest('hex');
+async function digest(db: Client, challenge: string, email: string, code: string) {
+  return createHmac('sha256', await encryptionKey(db)).update(`${challenge}\n${email}\n${code}`).digest('hex');
 }
 export function shanghaiDay(now: Date) {
   return new Date(now.getTime() + 8 * 3600000).toISOString().slice(0, 10);
@@ -47,7 +47,7 @@ export async function requestContactCode(rawEmail: unknown, ip: string, send: Ma
       [`code:ip:${ip}:${day}`, 100, dayEnd(now)],
       [`code:global:${day}`, 500, dayEnd(now)],
     ], now);
-    await db.query('INSERT INTO contact_codes (id, email, digest, status, created_at) VALUES ($1,$2,$3,\'sending\',$4)', [id, email, digest(id, email, code), now]);
+    await db.query('INSERT INTO contact_codes (id, email, digest, status, created_at) VALUES ($1,$2,$3,\'sending\',$4)', [id, email, await digest(db, id, email, code), now]);
   });
   try {
     await send({ to: email, subject: '开发阿雷 · 留言邮箱验证码',
@@ -80,7 +80,7 @@ export async function submitContactMessage(input: Record<string, unknown>, ip: s
     const checkedAt = now ?? new Date();
     const row = (await db.query('SELECT * FROM contact_codes WHERE id = $1 AND email = $2 FOR UPDATE', [input.challengeId, email])).rows[0];
     if (!row || row.status !== 'sent' || !row.expires_at || row.expires_at <= checkedAt) return { error: '验证码已失效，请重新发送' };
-    const candidate = Buffer.from(digest(row.id, email, input.code as string), 'hex');
+    const candidate = Buffer.from(await digest(db, row.id, email, input.code as string), 'hex');
     if (!timingSafeEqual(candidate, Buffer.from(row.digest, 'hex'))) {
       await db.query("UPDATE contact_codes SET failures = failures + 1, status = CASE WHEN failures + 1 >= 5 THEN 'locked' ELSE status END WHERE id = $1", [row.id]);
       return { error: row.failures + 1 >= 5 ? '验证码错误次数过多，请重新发送' : '验证码不正确' };
