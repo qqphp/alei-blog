@@ -10,7 +10,7 @@ import { generateCover, imageActions, providerRequest, type ImageAction } from '
 
 export async function GET(request: Request) {
   if (!(await authenticated(request))) return json({ error: '请先登录' }, 401);
-  return json({ keyConfigured: Boolean(serverConfig().TEAMOROUTER_KEY?.trim()) });
+  return json({ keyConfigured: Boolean(serverConfig().AI_PROVIDER_API_KEY?.trim()) });
 }
 export async function POST(request: Request) {
   if (!sameOrigin(request)) return json({ error: '请求来源无效' }, 403);

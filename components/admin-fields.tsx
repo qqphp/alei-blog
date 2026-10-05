@@ -460,7 +460,11 @@ export function Field({
     return <ProjectImagesField value={value as unknown as ProjectImage[]}
       onChange={onChange} onWorking={onWorking} />;
   if (Array.isArray(value)) {
-    const template = path === 'site.footer.footerLinks' ? footerLinkSample
+    const songs = path === 'tracks.playlists.songs';
+    const album = path === 'travel.items.album' || path === 'hobbies.items.album';
+    const compact = songs || album;
+    const template = songs ? { title: '', artist: '' }
+      : path === 'site.footer.footerLinks' ? footerLinkSample
       : path === 'site.footer.footerSocialLinks' ? footerSocialLinkSample
       : Array.isArray(sample) ? (sample[0] ?? '') : '';
     const move = (index: number, direction: number) => {
@@ -472,13 +476,12 @@ export function Field({
       onChange(items);
     };
     return (
-      <fieldset className="admin-array">
+      <fieldset className={`admin-array${compact ? ' admin-array-compact' : ''}${album ? ' admin-array-album' : ''}`}>
         <legend>
           {label} <small>{value.length} 项</small>
         </legend>
-        {value.map((item, index) => (
-          <details key={index} className="admin-nested">
-            <summary>{titleOf(item, index)}</summary>
+        {value.map((item, index) => {
+          const actions = (
             <div className="admin-row-actions">
               <button
                 type="button"
@@ -504,9 +507,15 @@ export function Field({
                 删除
               </button>
             </div>
+          );
+          const entry = <details key={index} className={`admin-nested${compact ? ' admin-nested-compact' : ''}`} open={compact || undefined}>
+            <summary>{compact ? <span className="admin-array-item-title">
+              {album ? `图片 ${index + 1}` : titleOf(item, index)}
+            </span> : titleOf(item, index)}</summary>
+            {!compact && actions}
             <Field
               path={`${path}.${index}`}
-              label={`第 ${index + 1} 项`}
+              label={songs ? '' : album ? '图片地址' : `第 ${index + 1} 项`}
               sample={template}
               value={item}
               onChange={(next) =>
@@ -518,11 +527,14 @@ export function Field({
               pendingTag={pendingTag}
               onPendingTagChange={onPendingTagChange}
             />
-          </details>
-        ))}
+          </details>;
+          return compact ? <div key={index} className="admin-array-item">
+            {entry}{actions}
+          </div> : entry;
+        })}
         <button
           type="button"
-          onClick={() => onChange([...value, fresh(template)])}
+          onClick={() => onChange([...value, songs ? structuredClone(template) : fresh(template)])}
         >
           ＋ 添加一项
         </button>
@@ -542,7 +554,7 @@ export function Field({
         : orderedRecordPaths.has(path) ? Object.keys(template) : Object.keys(value);
     return (
       <div className={`admin-object${path === 'slides.root' ? ' admin-slide-cover' : ''}${path === 'writing.categories' ? ' admin-article-category' : ''}${path === 'ai.agents' ? ' admin-agent-resource' : ''}`}>
-        <h3>{label}</h3>
+        {label && <h3>{label}</h3>}
         <div className="admin-fields">
           {[...new Set(keys)].filter((key) => Object.hasOwn(value, key)).map((key) => [key, value[key]] as const).filter(([key]) =>
             !['id', 'coverGeneratedFor', 'generatedFor', 'createdAt', 'updatedAt'].includes(key) &&

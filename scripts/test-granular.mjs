@@ -347,17 +347,44 @@ try {
       assert.equal(stale.status, 409, `${section}/${collection} stale write`);
     }
   const playlistBase = '/api/admin/records/tracks/playlists';
+  const playlistDb = new pg.Client({ connectionString: testUrl.toString() });
+  await playlistDb.connect();
+  try {
+    await playlistDb.query("DELETE FROM cms_entries WHERE section='tracks' AND collection='items'");
+  } finally { await playlistDb.end(); }
   const playlist = { id: `playlist-${crypto.randomUUID().slice(0, 8)}`, title: '旧颜色歌单',
     description: '', cover: '', coverDescription: '', coverMode: 'upload', coverGeneratedFor: '',
-    songs: [], _published: false, color: '#123456' };
+    songs: [{ title: '独立歌曲', artist: '独立作者' }], _published: false, color: '#123456' };
   const playlistCreated = await request(playlistBase, 'POST', { value: playlist });
   assert.equal(playlistCreated.status, 200, JSON.stringify(playlistCreated.data));
   assert.equal(Object.hasOwn(playlistCreated.data.value, 'color'), false);
   const playlistPath = `${playlistBase}/${playlist.id}`;
+  assert.deepEqual((await request(playlistPath)).data.value.songs, playlist.songs,
+    '没有内容歌曲时也能新增并读取独立歌单');
+  const editedSongs = [{ title: '另一首歌曲', artist: '' }, ...playlist.songs];
   const playlistEdited = await request(playlistPath, 'PUT', { value: { ...playlistCreated.data.value,
-    color: '#abcdef', description: '编辑后仍不保存颜色' }, revision: 1 });
+    songs: editedSongs, color: '#abcdef', description: '编辑后仍不保存颜色' }, revision: 1 });
   assert.equal(playlistEdited.status, 200, JSON.stringify(playlistEdited.data));
   assert.equal(Object.hasOwn(playlistEdited.data.value, 'color'), false);
+  assert.deepEqual((await request(playlistPath)).data.value.songs, editedSongs);
+  assert.equal((await request(playlistPath, 'PUT', { value: { ...playlistEdited.data.value,
+    songs: ['非法字符串歌曲'] }, revision: 2 })).status, 400, '继续拒绝错误歌曲结构');
+  const trackBase = '/api/admin/records/tracks/items';
+  const trackOptions = (await request('/api/admin/options/tracks')).data;
+  const independentTrack = { ...defaults.tracks.items[0], id: `track-${crypto.randomUUID().slice(0, 8)}`,
+    title: '独立歌曲', artist: '内容作者', moodId: trackOptions.scenes[0].id, _published: false };
+  const trackCreated = await request(trackBase, 'POST', { value: independentTrack });
+  assert.equal(trackCreated.status, 200, JSON.stringify(trackCreated.data));
+  const independentTrackPath = `${trackBase}/${independentTrack.id}`;
+  const trackEdited = await request(independentTrackPath, 'PUT', {
+    value: { ...trackCreated.data.value, title: '修改内容歌曲', artist: '修改内容作者' }, revision: 1 });
+  assert.equal(trackEdited.status, 200, JSON.stringify(trackEdited.data));
+  assert.deepEqual((await request(playlistPath)).data.value.songs, editedSongs,
+    '修改内容歌曲不应改变歌单');
+  assert.equal((await request(independentTrackPath, 'DELETE', { revision: 2 })).status, 200);
+  assert.deepEqual((await request(playlistPath)).data.value.songs, editedSongs,
+    '删除内容歌曲不应改变歌单');
+  console.log('PASS independent playlist create/edit/readback with no tracks and unchanged songs after track edits/deletion');
   assert.equal((await request(playlistPath, 'DELETE', { revision: 2 })).status, 200);
   const skillCategoryBase = '/api/admin/records/ai/skillCategories';
   const skillBase = '/api/admin/records/ai/skills';

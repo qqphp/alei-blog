@@ -31,7 +31,7 @@ let settingsReads = 0;
 const mediaDirectory = await mkdtemp(join(tmpdir(), 'blog-generated-webp-'));
 const previousEnvironment = { ...process.env };
 process.env.CMS_MEDIA_DIRECTORY = mediaDirectory;
-process.env.TEAMOROUTER_KEY = 'test-only-key';
+process.env.AI_PROVIDER_API_KEY = 'test-only-key';
 process.env.ADMIN_PASSWORD = 'test-story-password-only';
 globalThis.__filmTestSettings = async () => {
   settingsReads++;

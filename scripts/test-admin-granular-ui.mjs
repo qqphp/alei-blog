@@ -22,7 +22,8 @@ const { AdminGranularPanel } = await import('../components/admin-granular-panel.
 const { defaults, footerIconOptions } = await import('../lib/cms-defaults.ts');
 const { SiteFooter } = await import('../components/site-chrome.tsx');
 const { musicSample } = await import('../lib/music-content.ts');
-const { Field } = await import('../components/admin-fields.tsx');
+const { Field, fresh, asJson } = await import('../components/admin-fields.tsx');
+const { validateContent } = await import('../lib/cms-validation.ts');
 const { AiNotebook } = await import('../components/ai-notebook.tsx');
 const { ContentProvider } = await import('../components/content-provider.tsx');
 const user = userEvent.setup({ document: window.document });
@@ -1229,6 +1230,94 @@ try {
     URL.revokeObjectURL = originalAudioRevokeUrl;
     globalThis.fetch = immediateFetch;
   }
+  for (const initialSongs of [[], [{ title: '已有歌曲', artist: '已有作者' }]]) {
+    let submitted;
+    function PlaylistForm({ onSave }) {
+      const [value, setValue] = useState({ ...fresh(asJson(musicSample.playlists[0])),
+        title: '独立歌单', songs: structuredClone(initialSongs) });
+      return createElement('form', { onSubmit: (event) => { event.preventDefault(); onSave(value); } },
+        createElement(Field, { path: 'tracks.playlists', label: '歌单', value,
+          sample: fresh(asJson(musicSample.playlists[0])), onChange: setValue }),
+        createElement('button', { type: 'submit' }, '保存测试歌单'));
+    }
+    render(createElement(PlaylistForm, { onSave: (value) => { submitted = value; } }));
+    const songs = screen.getByRole('group', { name: /^歌曲/ });
+    await user.click(within(songs).getByRole('button', { name: '＋ 添加一项' }));
+    const row = songs.querySelectorAll('details')[initialSongs.length];
+    assert.equal(row.open, true, '新歌曲应默认展开');
+    const title = within(row).getByLabelText('标题');
+    const artist = within(row).getByLabelText('音乐作者');
+    assert.equal(title.value, '');
+    assert.equal(artist.value, '');
+    await user.type(title, '独立歌曲');
+    await user.type(artist, '独立作者');
+    await user.click(screen.getByRole('button', { name: '保存测试歌单' }));
+    assert.deepEqual(submitted.songs, [...initialSongs, { title: '独立歌曲', artist: '独立作者' }]);
+    validateContent('tracks', { ...musicSample, items: [], scenes: [], playlists: [submitted] });
+    cleanup();
+  }
+  console.log('PASS playlist songs added from empty form templates remain independent objects');
+  for (const [path, initial] of [
+    ['tracks.playlists.songs', [{ title: '原歌曲', artist: '原作者' }]],
+    ['travel.items.album', []],
+    ['travel.items.album', ['/api/media/travel.jpg']],
+    ['hobbies.items.album', []],
+    ['hobbies.items.album', ['/api/media/hobby.jpg']],
+  ]) {
+    let submitted;
+    function ArrayForm({ onSave }) {
+      const [value, setValue] = useState(structuredClone(initial));
+      return createElement('form', { onSubmit: (event) => { event.preventDefault(); onSave(value); } },
+        createElement(Field, { path, label: '测试条目', value, sample: [], onChange: setValue }),
+        createElement('button', { type: 'submit' }, '保存测试条目'));
+    }
+    render(createElement(ArrayForm, { onSave: (value) => { submitted = value; } }));
+    const group = screen.getByRole('group', { name: /^测试条目/ });
+    const rows = () => [...group.querySelectorAll('details')];
+    if (!initial.length) {
+      await user.click(within(group).getByRole('button', { name: '＋ 添加一项' }));
+      assert.equal(rows()[0].open, true, '空相册新增图片应默认展开');
+      await user.type(within(rows()[0]).getByLabelText('图片地址'), '/api/media/first-album.jpg');
+      await user.click(screen.getByRole('button', { name: '保存测试条目' }));
+      assert.deepEqual(submitted, ['/api/media/first-album.jpg']);
+      cleanup();
+      continue;
+    }
+    assert.equal(rows()[0].open, true, '已有条目应默认展开');
+    rows()[0].open = false;
+    await user.click(within(group).getByRole('button', { name: '＋ 添加一项' }));
+    assert.equal(rows()[0].open, false, '添加条目应保留已有折叠状态');
+    assert.equal(rows()[1].open, true);
+    const song = path.endsWith('.songs');
+    const input = within(rows()[1]).getByLabelText(song ? '标题' : '图片地址');
+    const added = song ? '新增歌曲' : '/api/media/new-album.jpg';
+    await user.type(input, added);
+    assert.equal(rows()[0].open, false, '输入应保留已有折叠状态');
+    await user.click(within(rows()[1].parentElement).getByRole('button', { name: '上移' }));
+    assert.equal(rows()[1].open, true, '操作按钮不应触发折叠');
+    await user.click(screen.getByRole('button', { name: '保存测试条目' }));
+    const addedItem = song ? { title: added, artist: '' } : added;
+    assert.deepEqual(submitted, [addedItem].concat(initial));
+    await user.click(within(rows()[0].parentElement).getByRole('button', { name: '下移' }));
+    await user.click(within(rows()[1].parentElement).getByRole('button', { name: '删除' }));
+    await user.click(screen.getByRole('button', { name: '保存测试条目' }));
+    assert.deepEqual(submitted, initial);
+    await user.click(within(group).getByRole('button', { name: '＋ 添加一项' }));
+    if (!song) {
+      const previousFetch = globalThis.fetch;
+      globalThis.fetch = async (input, init) => input === '/api/admin/media'
+        ? Response.json({ url: '/api/media/uploaded-album.png', name: 'album.png' }) : previousFetch(input, init);
+      try {
+        await user.upload(within(rows()[1]).getByLabelText('上传替换'),
+          new window.File(['image'], 'album.png', { type: 'image/png' }));
+        await waitFor(() => assert.equal(within(rows()[1]).getByLabelText('图片地址').value, '/api/media/uploaded-album.png'));
+        await user.click(screen.getByRole('button', { name: '保存测试条目' }));
+        assert.deepEqual(submitted, initial.concat('/api/media/uploaded-album.png'));
+      } finally { globalThis.fetch = previousFetch; }
+    }
+    cleanup();
+  }
+  console.log('PASS compact song/album expansion, preserved collapse, ordering, deletion and uploaded URLs');
   for (const [path, sample, action] of [
     ['tracks.playlists', musicSample.playlists[0], 'playlist-cover'],
     ['films.items', defaults.films.items[0], 'film-cover'],

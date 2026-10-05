@@ -9,9 +9,9 @@ import type { Content } from './cms-defaults';
 
 export async function providerRequest(path: string, body?: unknown, settings?: Content['aiSettings']) {
   settings ??= (await getDocuments(['aiSettings'])).content.aiSettings;
-  const key = serverConfig().TEAMOROUTER_KEY?.trim();
+  const key = serverConfig().AI_PROVIDER_API_KEY?.trim();
   if (!key)
-    throw new Error('未配置 TEAMOROUTER_KEY，请填写 .env 并重启服务。');
+    throw new Error('未配置 AI_PROVIDER_API_KEY，请填写 .env 并重启服务。');
   const base = validateProviderUrl(settings.baseUrl).href.replace(
     /\/$/,
     '',
@@ -32,13 +32,13 @@ export async function providerRequest(path: string, body?: unknown, settings?: C
     });
   } catch {
     throw new Error(
-      '中转站连接失败或超时，请检查网络和 API 地址。图片生成不自动重试，以免重复计费。',
+      'AI 服务连接失败或超时，请检查网络和 API 地址。图片生成不自动重试，以免重复计费。',
     );
   }
   if (!response.ok) {
     await response.body?.cancel();
     throw new Error(
-      `中转站返回 ${response.status}。${[401, 403].includes(response.status) ? '请检查密钥和模型权限。' : response.status === 429 ? '请求受限或额度不足，请检查中转站账户。' : '请检查模型名称、服务状态和账户额度。'}`,
+      `AI 服务返回 ${response.status}。${[401, 403].includes(response.status) ? '请检查密钥和模型权限。' : response.status === 429 ? '请求受限或额度不足，请检查服务账户。' : '请检查模型名称、服务状态和账户额度。'}`,
     );
   }
   return JSON.parse(
@@ -119,7 +119,7 @@ export async function generateCover(input: {
     bytes = await readLimitedBody(response, 20 * 1024 * 1024);
   } else
     throw new Error(
-      '中转站未返回图片，请确认所选模型支持 images/generations。',
+      'AI 服务未返回图片，请确认所选模型支持 images/generations。',
     );
   if (!bytes.length || bytes.length > 20 * 1024 * 1024)
     throw new Error('生成图片超过大小限制。');

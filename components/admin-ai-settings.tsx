@@ -73,7 +73,7 @@ export function AdminAiSettings({
   }, []);
   async function check(action: 'models' | 'test') {
     setWorking(true);
-    setMessage('正在连接中转站…');
+    setMessage('正在连接 AI 服务…');
     try {
       const result = await api<{ models?: string[]; message?: string }>(
         '/api/admin/ai',
@@ -117,8 +117,8 @@ export function AdminAiSettings({
             {keyConfigured === null
               ? '正在读取密钥状态…'
               : keyConfigured
-                ? 'TEAMOROUTER_KEY 已配置'
-                : 'TEAMOROUTER_KEY 未配置'}
+                ? 'AI_PROVIDER_API_KEY 已配置'
+                : 'AI_PROVIDER_API_KEY 未配置'}
           </span>
         </div>
         <p>
@@ -134,8 +134,8 @@ export function AdminAiSettings({
               onChange={(e) => onChange({ ...value, baseUrl: e.target.value })}
             />
             <small>
-              填写包含 /v1 的接口根地址。更换中转站时，请同时替换
-              TEAMOROUTER_KEY；密钥会发给这里配置的站点。
+              填写包含 /v1 的接口根地址。更换 AI 服务时，请同时更新
+              AI_PROVIDER_API_KEY；密钥会发给这里配置的站点。
             </small>
           </div>
           {(

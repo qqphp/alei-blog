@@ -1020,6 +1020,73 @@
   padding: 4px 9px;
   font-size: 12px;
 }
+.admin-array-compact {
+  padding: 10px 12px;
+}
+.admin-nested-compact {
+  padding: 8px 0;
+  margin-bottom: 4px;
+}
+.admin-nested-compact > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  list-style: none;
+  min-height: 30px;
+  padding-right: 170px;
+}
+.admin-nested-compact > summary::-webkit-details-marker {
+  display: none;
+}
+.admin-nested-compact > summary::before {
+  content: '▸';
+}
+.admin-nested-compact[open] > summary::before {
+  content: '▾';
+}
+.admin-array-item-title {
+  flex: 1;
+  min-width: 0;
+}
+.admin-array-item {
+  position: relative;
+}
+.admin-array-item > .admin-row-actions {
+  position: absolute;
+  top: 8px;
+  right: 0;
+  gap: 6px;
+  margin: 0;
+}
+.admin-nested-compact > .admin-object,
+.admin-nested-compact > .admin-field {
+  margin-top: 10px;
+}
+.admin-nested-compact .admin-fields {
+  gap: 10px;
+}
+.admin-array-album .admin-nested-compact > .admin-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 10px;
+}
+.admin-array-album .admin-field > label {
+  grid-column: 1 / -1;
+  margin-bottom: 0;
+}
+.admin-array-album .admin-asset {
+  margin-top: 0;
+  gap: 8px;
+}
+.admin-array-album .admin-asset output:empty {
+  display: none;
+}
+@media (max-width: 600px) {
+  .admin-array-album .admin-nested-compact > .admin-field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
 .admin-shell .admin-danger {
   color: #a03e31;
 }
