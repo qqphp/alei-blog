@@ -1,6 +1,6 @@
 # 开发阿雷 · 个人工作站
 
-中文个人博客，包含写作、项目、说说、AI 手记、投资研究、网站收藏与生活记录。前台保留现有视觉和交互，后台位于 `/admin`，通过表单管理内容。
+中文个人博客，包含写作、项目、说说、AI 手记、投资研究、网站收藏与生活记录。前台保留现有视觉和交互，后台通过服务器配置的随机路径访问。
 
 项目使用 Node.js 运行，支持 Windows 本地开发和 Linux VPS 自托管。数据库为 PostgreSQL，上传素材由应用直接读写持久化目录。Linux 从零部署、systemd、Nginx 和数据迁移见 [部署指南](docs/self-hosting.md)。
 
@@ -17,21 +17,21 @@ npm run admin:password
 npm run dev
 ```
 
-打开终端打印的本地地址，默认是 [http://localhost:3000](http://localhost:3000)。后台为 [http://localhost:3000/admin](http://localhost:3000/admin)。如开发服务器使用其他端口，后台也使用同一端口。
+打开终端打印的本地地址，默认是 [http://localhost:3000](http://localhost:3000)。运行 `npm run admin:password` 后，终端会显示后台随机地址；请将它保存为书签。如开发服务器使用其他端口，后台也使用同一端口。访问 `/admin` 会返回 404。
 
-管理员密码由 `npm run admin:password` 随机生成并显示，同时保存在根目录 `.env` 中。后台只需要密码，不需要用户名。
+管理员密码与随机入口由 `npm run admin:password` 首次生成并显示，同时保存在根目录 `.env` 中；重复运行会保留已有值。后台只需要密码，不需要用户名；修改 `.env` 后需重启服务。
 
 ### 数据库与密码配置
 
 `db:setup` 默认使用已安装的 PostgreSQL 18，在 `.local/postgres18/` 建立博客专用实例，仅监听 `127.0.0.1:55433`，创建 `alei_blog` 数据库和独立账号，并将随机密码连接串写入 `.env`。开发与本地生产启动会自动启动这个实例。程序不在默认目录时配置 `POSTGRES_BIN`。使用已有同机或外部服务时，直接填写已创建空库的 `DATABASE_URL`；`db:setup` 会验证连接，`db:init` 创建表并写入示例内容。也可临时配置 `PG_ADMIN_URL` 由脚本创建独立账号和数据库，成功后会从 `.env` 移除该项。进程环境变量优先于文件；修改后需重启服务。
 
-`npm run admin:password` 检测到已有密码时不会覆盖。忘记密码时执行：
+`npm run admin:password` 只会补齐缺少或格式无效的配置，不会覆盖已有有效密码和入口。忘记密码或需要轮换后台凭据时执行：
 
 ```powershell
 npm run admin:password -- --reset
 ```
 
-随后重启开发服务；旧登录会话会失效。请勿把 `.env` 发送给别人或提交到版本库。
+该命令会同时重新生成管理员密码和后台随机入口；重启服务后旧入口失效，旧登录会话也会失效。请勿把 `.env` 发送给别人或提交到版本库。
 
 ## 后台可以管理什么
 
@@ -105,7 +105,7 @@ npm run admin:password -- --reset
 | `npm run db:migrate`     | 在 PostgreSQL 中创建或更新博客表及索引                              |
 | `npm run db:seed-missing` | 补齐数据库中缺失的默认栏目和记录，重复执行不会覆盖已有内容        |
 | `npm run db:backup`      | 备份 PostgreSQL 数据和上传素材                                    |
-| `npm run admin:password` | 首次生成管理员密码                                                  |
+| `npm run admin:password` | 补齐缺失的管理员密码和后台入口                                      |
 | `npm run typecheck`      | TypeScript 类型检查                                                 |
 | `npm run test:cms`       | 在独立测试数据库运行逐条读写与冲突集成测试                           |
 | `npm run test:self-hosting` | 备份传输恢复、记录与文件核对、HTTPS 代理登录和重启持久化 |

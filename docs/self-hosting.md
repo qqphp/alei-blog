@@ -65,9 +65,9 @@ sudo install -o root -g alei-blog -m 0640 deploy/alei-blog.env.example /etc/alei
 sudoedit /etc/alei-blog/alei-blog.env
 ```
 
-替换 `DATABASE_URL` 与 `ADMIN_PASSWORD`。密码至少 12 位，应使用新的随机值（例如 `openssl rand -hex 24`）。生产环境不复制本地 `.env`；AI 密钥可在后台单独配置。素材目录必须是持久化绝对路径，不能放在会随升级替换的 `dist` 下。
+替换 `DATABASE_URL`、`ADMIN_PASSWORD` 与 `ADMIN_PATH`。密码至少 12 位，应使用新的随机值；`ADMIN_PATH` 使用 `openssl rand -hex 24` 生成的 48 位十六进制字符串，不加斜杠。后台地址是 `https://你的域名/<ADMIN_PATH>`；请妥善保存，不要放进前台导航。未配置有效路径时后台关闭，访问 `/admin` 返回 404。生产环境不复制本地 `.env`；AI 密钥可在后台单独配置。素材目录必须是持久化绝对路径，不能放在会随升级替换的 `dist` 下。
 
-配置格式使用 `KEY=value`，URL 中密码先编码；不要加 `export` 或 shell 命令。systemd 通过 EnvironmentFile 注入，Node/Vite 也支持根目录 `.env`；进程环境优先。配置中不要使用 `VITE_` 前缀存放密钥。`HTTP_PROXY` / `HTTPS_PROXY` 只影响 AI / 大模型出站请求；`NO_PROXY` 可排除地址。管理员密码和 API 密钥只由服务端模块读取。
+配置格式使用 `KEY=value`，URL 中密码先编码；不要加 `export` 或 shell 命令。systemd 通过 EnvironmentFile 注入，Node/Vite 也支持根目录 `.env`；进程环境优先。配置中不要使用 `VITE_` 前缀存放密钥。`HTTP_PROXY` / `HTTPS_PROXY` 只影响 AI / 大模型出站请求；`NO_PROXY` 可排除地址。管理员密码、后台入口路径和 API 密钥只由服务端模块读取。
 
 命令行初始化与迁移可直接使用 Node 的环境文件选项，不把密码放进 shell 历史或参数：
 
