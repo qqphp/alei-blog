@@ -138,6 +138,14 @@ try {
   books.lists=Array.from({length:13},(_,i)=>({...books.lists[0],id:`list-${i}`,title:`书单${i}`,entries:Array.from({length:13},(_,j)=>({title:`书单书目${i}-${j}`,author:`书单作者${i}`}))}));
   mount(Bookshelf,{books});
   assert.equal(document.querySelectorAll('.reading-book').length,12);
+  const firstBook = screen.getByRole('button',{name:'查看《书籍0》的阅读卡片'});
+  await user.click(firstBook);
+  const bookDialog = await screen.findByRole('dialog',{name:'书籍0'});
+  assert.ok(bookDialog.querySelector('.reading-cover-face'));
+  assert.equal(within(bookDialog).getByRole('heading',{name:'书籍0'}).textContent,'书籍0');
+  await user.tab(); assert.ok(bookDialog.contains(document.activeElement));
+  await user.keyboard('[Escape]');
+  await waitFor(()=>assert.equal(screen.queryByRole('dialog'),null));
   await next('书籍分页'); assert.equal(document.querySelectorAll('.reading-book').length,12);
   await next('书籍分页'); assert.equal(document.querySelectorAll('.reading-book').length,1);
   await user.click(screen.getByRole('button',{name:'甲类',exact:true}));

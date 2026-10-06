@@ -19,7 +19,9 @@ import { BooklistGallery } from './booklist-gallery';
 
 type Book = StoredBook & { category: string };
 function Cover({ book }: { book: Book }) {
-  return book.cover ? <div className="reading-cover reading-uploaded-cover"><Image src={book.cover} alt={`${book.title}封面`} width={160} height={240} /></div> : <div className="reading-cover"><span>{book.category}</span><strong>{book.title}</strong><small>{book.author}</small></div>;
+  return <div className={`reading-cover${book.cover ? ' reading-uploaded-cover' : ''}`}><div className="reading-cover-face">
+    {book.cover ? <Image src={book.cover} alt={`${book.title}封面`} width={160} height={240} /> : <><span>{book.category}</span><strong>{book.title}</strong><small>{book.author}</small></>}
+  </div></div>;
 }
 
 export function Bookshelf() {

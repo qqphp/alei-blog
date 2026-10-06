@@ -29,32 +29,32 @@ const headerNotes: Record<LifeHeaderKind, HeaderNote> = {
   music: {
     icon: Headphones,
     lines: ["让声音留在日常里，", "也留一点空白给自己。"],
-    meta: "原创合成 · 顺序循环",
+    meta: "喜欢的旋律，陪着日常。",
   },
   films: {
     icon: Film,
     lines: ["电影散场以后，", "故事仍在心里继续。"],
-    meta: "虚构短片 · 视觉练习",
+    meta: "灯光暗下，故事亮起。",
   },
   podcasts: {
     icon: Mic,
     lines: ["给问题多一点时间，", "给不同声音一个座位。"],
-    meta: "虚构对话 · 暂无音频",
+    meta: "听见别人，也听见自己。",
   },
   travel: {
     icon: Map,
     lines: ["走得慢一点，", "沿途才会真正出现。"],
-    meta: "想象路线 · 出发前请核实",
+    meta: "走走停停，看看世界。",
   },
   hobbies: {
     icon: Sparkles,
     lines: ["不为擅长，", "只是愿意再次开始。"],
-    meta: "轻量练习 · 随时开始",
+    meta: "心有所好，日有所乐。",
   },
   books: {
     icon: BookOpen,
     lines: ["一本一本地读，", "一点一点地积累。"],
-    meta: "书籍与书单 · 持续整理",
+    meta: "翻过一页，多见一点世界。",
   },
 };
 
