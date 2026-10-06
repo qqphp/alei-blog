@@ -472,6 +472,7 @@ export function Field({
     const album = path === 'travel.items.album' || path === 'hobbies.items.album';
     const compact = songs || album;
     const template = songs ? { title: '', artist: '' }
+      : path === 'books.lists.entries' ? { title: '', author: '' }
       : path === 'site.footer.footerLinks' ? footerLinkSample
       : path === 'site.footer.footerSocialLinks' ? footerSocialLinkSample
       : Array.isArray(sample) ? (sample[0] ?? '') : '';
