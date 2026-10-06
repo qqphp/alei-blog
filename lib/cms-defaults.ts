@@ -16,6 +16,7 @@ import { aiAgents, aiSkills, aiRelays, agentStatuses, type AiSkillCategory } fro
 import { researchContent } from './research-content';
 import articleSeed from './article-seed.json';
 import { categoryId, stripArticleExtras } from './article-categories';
+import { markdownAiDefaults } from './markdown-ai';
 
 const publish = <T extends object>(items: T[]) =>
   items.map((item) => ({ ...item, _published: true }));
@@ -33,6 +34,7 @@ export const footerIconOptions = [
 ];
 export const defaults = {
   aiSettings: {
+    ...markdownAiDefaults,
     booklistCoverSize: '1536x1024',
     booklistCoverStyle: '3:2 横版编辑插画，以阅读主题为视觉中心，细腻纸张质感、克制的色彩与留白。',
     booklistCoverPrompt: '为主题书单创作原创封面。图片描述：{{description}}。风格：{{style}}。用描述中的场景、物件和色彩表达主题，不添加文字、水印或虚构的官方标志。',

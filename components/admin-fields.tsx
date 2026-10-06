@@ -469,10 +469,11 @@ export function Field({
       onChange={onChange} onWorking={onWorking} />;
   if (Array.isArray(value)) {
     const songs = path === 'tracks.playlists.songs';
+    const bookEntries = path === 'books.lists.entries';
     const album = path === 'travel.items.album' || path === 'hobbies.items.album';
-    const compact = songs || album;
+    const compact = songs || bookEntries || album;
     const template = songs ? { title: '', artist: '' }
-      : path === 'books.lists.entries' ? { title: '', author: '' }
+      : bookEntries ? { title: '', author: '' }
       : path === 'site.footer.footerLinks' ? footerLinkSample
       : path === 'site.footer.footerSocialLinks' ? footerSocialLinkSample
       : Array.isArray(sample) ? (sample[0] ?? '') : '';
@@ -524,7 +525,7 @@ export function Field({
             {!compact && actions}
             <Field
               path={`${path}.${index}`}
-              label={songs ? '' : album ? '图片地址' : `第 ${index + 1} 项`}
+              label={songs || bookEntries ? '' : album ? '图片地址' : `第 ${index + 1} 项`}
               sample={template}
               value={item}
               onChange={(next) =>
@@ -543,7 +544,7 @@ export function Field({
         })}
         <button
           type="button"
-          onClick={() => onChange([...value, songs ? structuredClone(template) : fresh(template)])}
+          onClick={() => onChange([...value, songs || bookEntries ? structuredClone(template) : fresh(template)])}
         >
           ＋ 添加一项
         </button>

@@ -304,6 +304,12 @@ try {
     return h(AdminAiSettings, { value, onChange: set, dirty: false });
   }
   render(h(Settings));
+  await user.click(screen.getByRole('tab', { name: 'Markdown 内容' }));
+  assert.equal(screen.getByLabelText('诊断提示词').value, defaults.aiSettings.markdownDiagnosePrompt);
+  await user.type(screen.getByLabelText('文本润色提示词'), ' 保留个人语气。');
+  await user.click(screen.getByRole('tab', { name: '模型配置' }));
+  await user.click(screen.getByRole('tab', { name: 'Markdown 内容' }));
+  assert.ok(screen.getByLabelText('文本润色提示词').value.endsWith(' 保留个人语气。'));
   await user.click(screen.getByRole('tab', { name: '写作配置' }));
   assert.equal(screen.getByLabelText('文章封面尺寸').value, '1536x1024');
   await user.clear(screen.getByLabelText('文章封面尺寸'));

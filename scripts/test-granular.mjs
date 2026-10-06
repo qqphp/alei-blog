@@ -249,6 +249,30 @@ try {
       throw new Error(`测试请求失败：${method} ${path}`, { cause: error });
     }
   };
+  const markdownFields = ['markdownDiagnosePrompt', 'markdownRepairPrompt', 'markdownPolishPrompt'];
+  const aiConfig = await request('/api/admin/config/aiSettings/root');
+  assert.equal(aiConfig.status, 200);
+  for (const field of markdownFields) assert.equal(typeof aiConfig.data.value[field], 'string');
+  const customMarkdownPrompts = Object.fromEntries(markdownFields.map(field => [field, `自定义 ${field} 持久化测试`]));
+  const savedAiConfig = await request('/api/admin/config/aiSettings/root', 'PUT', {
+    value: { ...aiConfig.data.value, ...customMarkdownPrompts }, revision: aiConfig.data.revision,
+  });
+  assert.equal(savedAiConfig.status, 200, JSON.stringify(savedAiConfig.data));
+  const reloadedAiConfig = await request('/api/admin/config/aiSettings/root');
+  assert.deepEqual(reloadedAiConfig.data.value, savedAiConfig.data.value);
+  assert.equal(reloadedAiConfig.data.revision, savedAiConfig.data.revision);
+  for (const field of markdownFields) assert.equal(reloadedAiConfig.data.value[field], customMarkdownPrompts[field]);
+  assert.equal((await request('/api/admin/config/aiSettings/root', 'PUT', {
+    value: { ...savedAiConfig.data.value, markdownPolishPrompt: '' }, revision: savedAiConfig.data.revision,
+  })).status, 400);
+  for (const path of ['/missing/galaxy', '/writing/markdown-ai-missing-article', '/invalid-admin-path']) {
+    const response = await fetch(origin + path);
+    assert.equal(response.status, 404);
+    const html = await response.text();
+    assert.ok(html.includes('missing-page') && html.includes('返回博客首页'));
+    assert.equal(html.includes('missing-document'), path === '/missing/galaxy');
+  }
+  console.log('PASS Markdown prompt persistence/readback/validation and both themed 404 entries');
   const legacySiteDb = new pg.Client({ connectionString: testUrl.toString() });
   await legacySiteDb.connect();
   try {

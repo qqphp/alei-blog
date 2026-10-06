@@ -59,33 +59,62 @@ try {
     if (!existing) await user.type(document.getElementById('books.lists.title'), listTitle);
     const entries = screen.getByRole('group', { name: /^内容条目/ });
     const original = existing ? structuredClone(saved.entries) : [];
+    const rows = () => [...entries.querySelectorAll('details')];
+    const writesBeforeEditing = writes.length;
+    for (const row of rows()) assert.equal(row.open, true, '已有条目默认展开');
+    if (original.length) rows()[0].open = false;
     for (let index = 0; index < 2; index++) {
       await user.click(within(entries).getByRole('button', { name: '＋ 添加一项' }));
-      const row = entries.querySelectorAll('details')[original.length + index];
-      await user.click(row.querySelector('summary'));
+      const row = rows()[original.length + index];
+      assert.equal(row.open, true, '新增条目自动展开');
+      assert.ok(row.parentElement.classList.contains('admin-array-item'), '书单沿用歌单紧凑布局');
+      assert.equal(row.querySelector('summary').textContent, `条目 ${original.length + index + 1}`);
       const title = within(row).getByLabelText('标题');
       const author = within(row).getByLabelText('作者');
+      assert.equal(title.value, '', '新增标题为空，不填入未命名内容');
       assert.equal(author.value, '', '新增条目包含空作者字段');
-      await user.clear(title);
       await user.type(title, `新增书籍${index}`);
       await user.type(author, `新增作者${index}`);
+      assert.equal(row.querySelector('summary').textContent, `新增书籍${index}`);
+      if (original.length) assert.equal(rows()[0].open, false, '新增和输入保留已有折叠状态');
+      if (index > 0) assert.equal(rows()[original.length].open, false, '保留前一条新增项的折叠状态');
+      else row.open = false;
     }
     const expected = [...original, { title: '新增书籍0', author: '新增作者0' },
       { title: '新增书籍1', author: '新增作者1' }];
+    const lastTitle = within(rows().at(-1)).getByLabelText('标题');
+    await user.clear(lastTitle);
+    assert.equal(rows().at(-1).querySelector('summary').textContent, `条目 ${expected.length}`);
+    await user.type(lastTitle, '新增书籍1');
+    await user.click(within(entries).getByRole('button', { name: '＋ 添加一项' }));
+    assert.equal(rows().at(-1).querySelector('summary').textContent, `条目 ${expected.length + 1}`);
+    await user.click(within(rows().at(-1).parentElement).getByRole('button', { name: '上移' }));
+    assert.equal(rows()[expected.length - 1].querySelector('summary').textContent, `条目 ${expected.length}`);
+    assert.equal(rows()[expected.length - 1].open, true, '上移按钮不触发折叠');
+    await user.click(within(rows()[expected.length - 1].parentElement).getByRole('button', { name: '下移' }));
+    assert.equal(rows().at(-1).querySelector('summary').textContent, `条目 ${expected.length + 1}`);
+    await user.click(within(rows().at(-1).parentElement).getByRole('button', { name: '删除' }));
+    assert.equal(rows().length, expected.length);
+    assert.equal(rows().at(-1).open, true, '删除按钮不触发其他条目折叠');
+    await user.click(within(entries).getByRole('button', { name: '＋ 添加一项' }));
+    assert.equal(rows().at(-1).querySelector('summary').textContent, `条目 ${expected.length + 1}`, '删除后按当前位置重新编号');
+    await user.click(within(rows().at(-1).parentElement).getByRole('button', { name: '删除' }));
+    assert.equal(writes.length, writesBeforeEditing, '新增、编辑、排序、删除不自动提交');
     await user.click(screen.getByRole('button', { name: '确认提交' }));
     await user.click(await screen.findByRole('button', { name: listTitle, exact: true }));
     const reloaded = screen.getByRole('group', { name: /^内容条目/ });
-    const rows = reloaded.querySelectorAll('details');
+    const reloadedRows = reloaded.querySelectorAll('details');
     assert.deepEqual(saved.entries, expected, '提交结构保留每项标题和作者');
-    assert.equal(rows.length, expected.length);
+    assert.equal(reloadedRows.length, expected.length);
     expected.forEach((entry, index) => {
-      assert.equal(within(rows[index]).getByLabelText('标题').value, entry.title);
-      assert.equal(within(rows[index]).getByLabelText('作者').value, entry.author);
+      assert.equal(reloadedRows[index].open, true, '重新加载的条目默认展开');
+      assert.equal(within(reloadedRows[index]).getByLabelText('标题').value, entry.title);
+      assert.equal(within(reloadedRows[index]).getByLabelText('作者').value, entry.author);
     });
     await user.click(screen.getByRole('button', { name: '← 返回列表' }));
   }
   assert.deepEqual(writes, ['PUT', 'POST']);
-  console.log('PASS booklist create/edit entries retain independent title and author fields through save/reload');
+  console.log('PASS booklist empty templates, compact expansion, summaries/numbering, preserved collapse, move/delete and explicit save/reload');
 } finally {
   cleanup();
   await window.happyDOM.close();

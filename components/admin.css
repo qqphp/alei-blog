@@ -571,6 +571,31 @@
   margin: 0;
   font-size: 15px;
 }
+.admin-markdown-heading { flex-wrap: wrap; }
+.admin-markdown-actions, .admin-markdown-proposal-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.admin-shell .admin-markdown-actions button { padding: 7px 12px; font-size: 13px; }
+.admin-markdown-ai-help { margin: -4px 0 12px; color: var(--muted); font-size: 12px; line-height: 1.7; }
+.admin-markdown-ai-limit { padding: 10px 14px; border-left: 3px solid #b58032; color: #80591d; background: #fbf5e8; font-size: 13px; }
+.admin-markdown-ai-message { display: block; margin-top: 12px; font-size: 13px; color: var(--muted); }
+.admin-markdown-ai-message:empty { display: none; }
+.admin-markdown-report, .admin-markdown-proposal { margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; background: #f8faf7; overflow: hidden; }
+.admin-markdown-report summary { padding: 14px 16px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.admin-markdown-report > p { padding: 0 16px 12px; font-size: 13px; }
+.admin-markdown-report ol { list-style: decimal; margin: 0; padding: 0 20px 0 42px; max-height: 480px; overflow: auto; }
+.admin-markdown-report li { padding: 14px 0; border-top: 1px solid var(--line); font-size: 13px; line-height: 1.8; }
+.admin-markdown-report blockquote { margin: 10px 0; padding: 8px 12px; border-left: 2px solid #b5c9ba; background: #eef3ed; white-space: pre-wrap; overflow-wrap: anywhere; }
+.admin-markdown-report li p { margin: 6px 0; overflow-wrap: anywhere; }
+.admin-markdown-issue-heading { display: flex; flex-wrap: wrap; gap: 8px 14px; }
+.admin-markdown-issue-heading span, .admin-markdown-issue-reason { color: var(--muted); }
+.admin-markdown-proposal-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 14px 16px; }
+.admin-markdown-proposal-heading h4 { margin: 0; font-size: 14px; }
+.admin-markdown-proposal-heading span { font-size: 12px; color: var(--muted); }
+.admin-markdown-diff { margin: 0; max-height: 520px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font: 13px/1.8 ui-monospace, monospace; background: #fff; tab-size: 2; }
+.admin-markdown-diff > span { display: block; padding: 0 16px; min-height: 1.8em; }
+.admin-markdown-diff .diff-added { background: #e8f5eb; color: #245c36; }
+.admin-markdown-diff .diff-removed { background: #fbecec; color: #9a3b3b; }
+.admin-markdown-proposal-actions { padding: 14px 16px; border-top: 1px solid var(--line); }
+.admin-shell .admin-markdown-proposal-actions button:first-child { background: #315c47; border-color: #315c47; color: #fff; }
 .admin-shell .article-markdown .vditor-toolbar button {
   padding: 4px;
   border: 0;

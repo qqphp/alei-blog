@@ -7,7 +7,7 @@ import { convertGeneratedImage, saveLocalMedia } from './local-media';
 import type { Content } from './cms-defaults';
 
 
-export async function providerRequest(path: string, body?: unknown, settings?: Content['aiSettings']) {
+export async function providerRequest(path: string, body?: unknown, settings?: Content['aiSettings'], timeoutMs?: number) {
   settings ??= (await getDocuments(['aiSettings'])).content.aiSettings;
   const key = serverConfig().AI_PROVIDER_API_KEY?.trim();
   if (!key)
@@ -27,7 +27,7 @@ export async function providerRequest(path: string, body?: unknown, settings?: C
       },
       body: body ? JSON.stringify(body) : undefined,
       signal: AbortSignal.timeout(
-        path === 'images/generations' ? 300000 : 45000,
+        timeoutMs ?? (path === 'images/generations' ? 300000 : 45000),
       ),
     });
   } catch {
@@ -45,7 +45,7 @@ export async function providerRequest(path: string, body?: unknown, settings?: C
     new TextDecoder().decode(await readLimitedBody(response, 30 * 1024 * 1024)),
   ) as {
     data?: { id?: string; b64_json?: string; url?: string }[];
-    choices?: { message?: { content?: string } }[];
+    choices?: { message?: { content?: string }; finish_reason?: string }[];
   };
 }
 

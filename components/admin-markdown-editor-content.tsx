@@ -5,6 +5,7 @@ import Vditor from 'vditor';
 import { upload } from './admin-fields';
 import { MarkdownContent } from './markdown-content';
 import { loadVditorMath } from './vditor-math';
+import { AdminMarkdownAssistant } from './admin-markdown-assistant';
 import 'vditor/dist/index.css';
 
 export default function AdminMarkdownEditorContent({
@@ -24,6 +25,9 @@ export default function AdminMarkdownEditorContent({
   const currentValue = useRef(value);
   const generation = useRef(0);
   const [message, setMessage] = useState('');
+  const [readyLabel, setReadyLabel] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const aiWorking = useRef(false);
   useEffect(() => { callbacks.current = { onChange, onWorking }; }, [onChange, onWorking]);
 
   useEffect(() => {
@@ -111,6 +115,7 @@ export default function AdminMarkdownEditorContent({
         }
         ready = true;
         editor.current = instance;
+        setReadyLabel(label);
         instance.vditor.preview!.previewElement.classList.add('markdown-body');
         instance.setValue(currentValue.current, true);
         instance.enable();
@@ -125,8 +130,10 @@ export default function AdminMarkdownEditorContent({
       upload: {
         accept: '', multiple: true,
         handler: async (files) => {
+          if (aiWorking.current) { setMessage('请等待 AI 处理完成后再上传文件。'); return null; }
           const uploadGeneration = generation.current;
           uploads++;
+          setUploading(true);
           callbacks.current.onWorking?.(true);
           setMessage('正在上传正文图片或文件…');
           try {
@@ -144,6 +151,7 @@ export default function AdminMarkdownEditorContent({
             if (!disposed && uploadGeneration === generation.current) setMessage(error instanceof Error ? error.message : '文件上传失败，请重试');
           } finally {
             uploads--;
+            if (!disposed && uploads === 0) setUploading(false);
             if (!disposed && uploads === 0) callbacks.current.onWorking?.(false);
           }
           return null;
@@ -174,10 +182,16 @@ export default function AdminMarkdownEditorContent({
   }, [value]);
 
   return (
-    <div className="admin-wide article-markdown">
-      <div className="admin-markdown-heading"><h3>{label}</h3></div>
+    <AdminMarkdownAssistant label={label} value={value} disabled={readyLabel !== label || uploading}
+      readMarkdown={() => editor.current?.getValue() ?? currentValue.current}
+      onWorking={(working) => { aiWorking.current = working; callbacks.current.onWorking?.(working); }}
+      applyMarkdown={(markdown) => {
+        currentValue.current = markdown;
+        editor.current?.setValue(markdown);
+        callbacks.current.onChange(markdown);
+      }}>
       <div ref={container} />
       <output aria-live="polite">{message}</output>
-    </div>
+    </AdminMarkdownAssistant>
   );
 }

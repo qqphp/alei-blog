@@ -7,6 +7,8 @@ import {
 } from '@/lib/admin-auth';
 import { getDocuments } from '@/lib/cms-server';
 import { generateCover, imageActions, providerRequest, type ImageAction } from '@/lib/ai-provider';
+import { markdownAiActions, validateMarkdownInput, validateMarkdownIssues, type MarkdownAiAction } from '@/lib/markdown-ai';
+import { processMarkdown } from '@/lib/markdown-ai-provider';
 
 export async function GET(request: Request) {
   if (!(await authenticated(request))) return json({ error: '请先登录' }, 401);
@@ -18,24 +20,39 @@ export async function POST(request: Request) {
   let body: {
     action?: string;
     description?: string;
+    markdown?: string;
+    issues?: unknown;
   };
   try {
     body = JSON.parse(
-      new TextDecoder().decode(await readLimitedBody(request, 32000)),
+      new TextDecoder().decode(await readLimitedBody(request, 256 * 1024)),
     );
   } catch {
     return json({ error: '请求格式无效' }, 400);
   }
   if (
     !body ||
-    !['models', 'test', ...Object.keys(imageActions)].includes(body.action || '')
+    !['models', 'test', ...Object.keys(imageActions), ...markdownAiActions].includes(body.action || '')
   )
     return json({ error: '操作无效' }, 400);
   const isImage = Object.hasOwn(imageActions, body.action || '');
   if (isImage &&
     (typeof body.description !== 'string' || !body.description.trim() || body.description.length > 5000))
     return json({ error: '请填写图片描述（最多 5000 字）' }, 400);
+  const isMarkdown = markdownAiActions.some((action) => action === body.action);
+  if (isMarkdown) {
+    try {
+      validateMarkdownInput(body.markdown);
+      if (body.action === 'markdown-repair') {
+        validateMarkdownIssues(body.issues, body.markdown);
+        if (!body.issues.length) throw new Error('当前没有需要修复的诊断问题。');
+      }
+    } catch (error) {
+      return json({ error: error instanceof Error ? error.message : 'Markdown 请求无效' }, 400);
+    }
+  }
   try {
+    if (isMarkdown) return json(await processMarkdown({ action: body.action as MarkdownAiAction, markdown: body.markdown!, issues: body.issues }));
     if (body.action === 'models') {
       const result = await providerRequest('models');
       return json({

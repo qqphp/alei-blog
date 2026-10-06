@@ -300,6 +300,8 @@ export function validateContent(key: Section, value: unknown) {
     validateProviderUrl(settings.baseUrl);
     if (!settings.textModel.trim() || !settings.imageModel.trim())
       throw new Error('请填写模型名称');
+    for (const field of ['markdownDiagnosePrompt', 'markdownRepairPrompt', 'markdownPolishPrompt'] as const)
+      if (!settings[field].trim()) throw new Error('请填写 Markdown 诊断、修复和润色提示词');
   }
   if (key === 'aiSettings') {
     const settings = value as typeof defaults.aiSettings;

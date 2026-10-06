@@ -100,6 +100,7 @@ export function AdminAiSettings({
         <Tabs.Tab value="models">模型配置</Tabs.Tab>
         <Tabs.Tab value="api">API 接口设置</Tabs.Tab>
         <Tabs.Tab value="writing">写作配置</Tabs.Tab>
+        <Tabs.Tab value="markdown">Markdown 内容</Tabs.Tab>
         <Tabs.Tab value="projects">项目配置</Tabs.Tab>
         <Tabs.Tab value="stories">说说配置</Tabs.Tab>
         <Tabs.Tab value="music">歌单配置</Tabs.Tab>
@@ -181,6 +182,24 @@ export function AdminAiSettings({
       </Tabs.Panel>
       <Tabs.Panel value="api">
         <AdminApiSettings />
+      </Tabs.Panel>
+      <Tabs.Panel value="markdown">
+        <div className="admin-section-heading"><div>
+          <h2>Markdown 内容设置</h2>
+          <p className="admin-help">适用于所有 Markdown 编辑器，使用“模型配置”中已保存的文本模型。单次最多 12,000 个字符，全文发送到配置的 AI 服务。</p>
+        </div></div>
+        <div className="admin-fields">
+          {([
+            ['markdownDiagnosePrompt', '诊断提示词', '检查语法、标点、冗长句和通顺程度，诊断不会修改正文。'],
+            ['markdownRepairPrompt', '修复提示词', '依据诊断结果生成完整修订稿，查看差异后应用。'],
+            ['markdownPolishPrompt', '文本润色提示词', '参考 Humanizer-zh 的编辑原则，保留事实、作者声音和文体。'],
+          ] as const).map(([field, label, help]) => <div className="admin-field admin-wide" key={field}>
+            <label htmlFor={`ai-${field}`}>{label}</label>
+            <textarea id={`ai-${field}`} rows={8} value={value[field]}
+              onChange={(event) => onChange({ ...value, [field]: event.target.value })} />
+            <small>{help} 系统会补充输出格式和 Markdown 保护要求，无需填写内容占位符。</small>
+          </div>)}
+        </div>
       </Tabs.Panel>
       <Tabs.Panel value="writing">
         <div className="admin-section-heading">
