@@ -104,7 +104,8 @@ export function AdminApiSettings() {
             onChange={(event) => setApiKey(event.target.value)}
           />
           <small>
-            请求由服务端发送，密钥不会写入公开页面或状态读取响应；完整数据库备份包含密钥，请妥善保管。
+            密钥仅在服务端使用，保存后不回显。{' '}
+            <a href="https://artificialanalysis.ai" target="_blank" rel="noopener noreferrer">Artificial Analysis 官网 ↗</a>
           </small>
         </div>
         <div className="admin-ai-checks admin-wide">

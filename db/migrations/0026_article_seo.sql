@@ -1,0 +1,2 @@
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS seo_title text NOT NULL DEFAULT '';
+ALTER TABLE articles ADD COLUMN IF NOT EXISTS seo_description text NOT NULL DEFAULT '';

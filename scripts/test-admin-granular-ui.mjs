@@ -265,7 +265,8 @@ globalThis.fetch = async (input, init = {}) => {
       else { home = body.value; homeRevision++; }
     }
     return Response.json({ value: reorderConfigFields(isSite ? site : home, init.method === 'PUT'),
-      revision: isSite ? siteRevision : homeRevision });
+      revision: isSite ? siteRevision : homeRevision,
+      ...(isSite ? { seoEnvironment: { siteUrl: 'https://blog.example.test', indexable: false } } : {}) });
   }
   return Response.json({ items: [], total: 0, page: 1, size: 20 });
 };
@@ -308,6 +309,12 @@ try {
   assert.equal(screen.getAllByRole('checkbox').at(-1), screen.getByRole('checkbox', { name: /发布到前台/ }));
   assert.equal(screen.queryByRole('radio', { name: '草稿' }), null);
   const markdown = await screen.findByRole('textbox', { name: '文章正文 Markdown' });
+  await user.click(screen.getByText('搜索展示（可选）'));
+  assert.equal(screen.getByLabelText('SEO 标题').maxLength, 200);
+  assert.equal(screen.getByLabelText('SEO 描述').maxLength, 1000);
+  await user.type(screen.getByLabelText('SEO 标题'), '独立搜索标题');
+  await user.type(screen.getByLabelText('SEO 描述'), '独立搜索描述');
+  assert.match(screen.getByLabelText('搜索展示预览').textContent, /独立搜索标题.*自定义站点/);
   await user.type(markdown, '\n\n## 按需编辑测试');
   await user.click(screen.getByRole('button', { name: '预览', exact: true }));
   assert.ok(screen.getByRole('heading', { name: '按需编辑测试', exact: true }));
@@ -337,6 +344,8 @@ try {
   assert.equal(write.body.value.slug, 'ui-granular');
   assert.equal(write.body.value.cover, '/notes/paper-v2.png', '修改正文时保留原封面');
   assert.ok(write.body.value.body.includes('## 按需编辑测试'), '按需加载后的正文修改必须随表单保存');
+  assert.equal(write.body.value.seoTitle, '独立搜索标题');
+  assert.equal(write.body.value.seoDescription, '独立搜索描述');
   assert.equal(Object.hasOwn(write.body, 'key'), false);
   await screen.findByRole('button', { name: '原文章已修改' });
   await user.click(screen.getByRole('button', { name: '发布' }));
@@ -391,11 +400,11 @@ try {
   await user.click(within(nav).getByRole('button', { name: '网站设置' }));
   await screen.findByLabelText('站点标记');
   assert.ok(screen.getByRole('heading', { name: '网站设置' }));
-  assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['站点', '导航', '首页', '页脚', '邮箱设置']);
+  assert.deepEqual(screen.getAllByRole('tab').map((node) => node.textContent), ['站点', 'SEO', '导航', '首页', '页脚', '邮箱设置']);
   assert.equal(screen.getByRole('tab', { name: '站点' }).getAttribute('aria-selected'), 'true');
   assert.equal(screen.getByRole('link', { name: '查看前台 ↗' }).getAttribute('href'), '/');
   const settingsLabels = () => [...window.document.querySelectorAll('.admin-form label')].map((node) => node.textContent);
-  const siteLabels = ['名称', '站点标记', '标题', '说明'];
+  const siteLabels = ['名称', '站点标记'];
   const homeLabels = ['眉题', '标题', '说明', '正在开发', '正在写作', '正在探索', '主视觉右上英文', '主视觉右下英文', '说说区标题', '说说区说明', '说说装饰英文'];
   const assertNavigationOrder = () => {
     assert.deepEqual([...window.document.querySelectorAll('.admin-form .admin-array > legend')]
@@ -405,7 +414,7 @@ try {
   };
   assert.deepEqual(settingsLabels(), siteLabels);
   assert.equal(screen.getByLabelText('名称').value, ' 自定义站点 ');
-  assert.equal(screen.getByLabelText('说明').value, '自定义说明\n第二行');
+  assert.equal(screen.queryByLabelText('说明'), null);
   const originalSite = structuredClone(site);
   const writesBeforeSettings = calls.filter((call) => call.method === 'PUT').length;
   await user.type(screen.getByLabelText('名称'), '已修改');
@@ -469,8 +478,20 @@ try {
   await screen.findByLabelText('站点标记');
   assert.equal(screen.getByLabelText('名称').value, savedSite.name);
   assert.deepEqual(settingsLabels(), siteLabels);
-  const homeTab = screen.getByRole('tab', { name: '首页' });
-  homeTab.focus();
+  await user.click(screen.getByRole('tab', { name: 'SEO' }));
+  await screen.findByLabelText('首页 SEO 标题');
+  assert.equal(screen.getByLabelText('首页 SEO 描述').value, site.description);
+  assert.equal(screen.getByLabelText('默认分享图片').value, '');
+  assert.ok(screen.getByText('https://blog.example.test'));
+  assert.ok(screen.getByText('不允许收录'));
+  assert.equal(screen.queryByLabelText('站点标记'), null);
+  await user.type(screen.getByLabelText('分享图片说明'), '分享图说明');
+  await user.click(screen.getByRole('button', { name: '确认提交' }));
+  await waitFor(() => assert.equal(site.defaultShareImageAlt, '分享图说明'));
+  assert.equal(site.title, beforeConflict.title);
+  assert.equal(site.description, beforeConflict.description);
+  beforeConflict.defaultShareImageAlt = site.defaultShareImageAlt;
+  screen.getByRole('tab', { name: '首页' }).focus();
   await user.keyboard('[Enter]');
   await screen.findByLabelText('标题');
   assert.deepEqual(settingsLabels(), homeLabels);

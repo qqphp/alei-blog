@@ -21,6 +21,8 @@
     "admin:password": "node scripts/admin-password.mjs",
     "typecheck": "tsc --noEmit",
     "test:cms": "node --env-file-if-exists=.env --import tsx scripts/test-granular.mjs",
+    "test:seo": "node --env-file-if-exists=.env --import tsx scripts/test-seo.mjs",
+    "test:seo:browser": "node --env-file-if-exists=.env scripts/test-seo-browser.mjs",
     "test:self-hosting": "node --env-file-if-exists=.env scripts/test-self-hosting.mjs",
     "test:server-fetch": "node --import tsx scripts/test-server-fetch.mjs",
     "test:dependencies": "node scripts/test-dependency-security.mjs",

@@ -95,6 +95,10 @@ export function validateContent(key: Section, value: unknown) {
         fail('请上传音频或填写时长');
       if (typeof input !== typeof sample) fail(`需要 ${typeof sample}`);
       if (typeof input === 'string') {
+        if (key === 'writing' && field === 'seoTitle' && Array.from(input).length > 200)
+          fail('SEO 标题最多 200 字符');
+        if (key === 'writing' && field === 'seoDescription' && Array.from(input).length > 1000)
+          fail('SEO 描述最多 1000 字符');
         if (key === 'site' && field === 'icon' && !footerIconOptions.some((option) => option.id === input))
           fail('请选择有效的社交图标');
         if (key === 'site' && field === 'href' && path.includes('.footer') && !input.trim())
@@ -108,7 +112,7 @@ export function validateContent(key: Section, value: unknown) {
         if (['id', 'slug'].includes(field) && !/^[a-zA-Z0-9_-]+$/.test(input))
           fail('请使用英文、数字、短横线或下划线');
         if (
-          /^(url|href|src|audio|cover|image|publicAccountQr|communityQr|serviceUrl|footerUrl)$/i.test(
+          /^(url|href|src|audio|cover|image|defaultShareImage|publicAccountQr|communityQr|serviceUrl|footerUrl)$/i.test(
             field,
           ) &&
           input

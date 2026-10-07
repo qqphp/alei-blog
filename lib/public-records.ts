@@ -177,6 +177,7 @@ export async function getPublicPage(
 export async function getPublicSection(
   sections: (keyof PublicContent)[],
   projectId?: string,
+  projectInput: { page?: number; category?: string } = {},
 ) {
   const { content, revisions } = await getDocuments(sections as Section[], {
     publicOnly: true,
@@ -194,7 +195,7 @@ export async function getPublicSection(
       continue;
     const page = await getPublicPage(
       key,
-      key === 'projects.items' && projectId ? { id: projectId } : {},
+      key === 'projects.items' ? { ...projectInput, ...(projectId ? { id: projectId } : {}) } : {},
     );
     archives[key] = page;
     const doc = content[section] as unknown as Item;

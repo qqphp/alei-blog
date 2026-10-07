@@ -977,6 +977,15 @@
 .admin-fields > .admin-field.admin-track-src {
   grid-column: auto;
 }
+.admin-fields > .admin-field.admin-share-image {
+  grid-column: auto;
+}
+.admin-share-image-hint {
+  flex: 1 1 240px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #7c897c;
+}
 .admin-field > label {
   display: block;
   font-size: 12px;
@@ -1432,3 +1441,8 @@ body:has(.admin-login) .music-dock {
 .admin-contact-detail dd { margin: 0; }
 .admin-contact-content { white-space: pre-wrap; }
 @media (max-width: 700px) { .admin-mail-fields { grid-template-columns: 1fr; }.admin-contact-detail dl { grid-template-columns: 1fr; } }
+.admin-seo-editor summary { cursor:pointer; margin-bottom:16px; }
+.admin-seo-preview { margin-top:16px; padding:16px; border:1px solid var(--line); overflow-wrap:anywhere; }
+.admin-seo-preview strong { color:var(--lime); }
+.admin-seo-preview p { margin:8px 0; }
+.admin-seo-environment { padding:16px 0; }

@@ -3,12 +3,16 @@ import tailwindcss from '@tailwindcss/postcss';
 import vinext from 'vinext';
 import { defineConfig, loadEnv } from 'vite';
 import { ensureManagedPostgres } from './scripts/managed-postgres.mjs';
+import { seoEnvironment } from './lib/seo-environment.mjs';
 
 export default defineConfig(async ({ command, mode }) => {
   const localEnvironment = loadEnv(mode, process.cwd(), '');
   for (const [key, value] of Object.entries(localEnvironment))
     process.env[key] ??= value;
-  if (command === 'serve') await ensureManagedPostgres();
+  if (command === 'serve') {
+    seoEnvironment();
+    await ensureManagedPostgres();
+  }
   return {
     css: { postcss: { plugins: [tailwindcss()] } },
     ssr: { external: ['pg', 'sharp', 'undici', 'nodemailer', 'imapflow'] },

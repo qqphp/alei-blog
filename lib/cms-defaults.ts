@@ -88,6 +88,8 @@ export const defaults = {
     mark: 'A',
     title: '开发阿雷 · 个人工作站',
     description: '写作、项目与持续生长的工作档案。',
+    defaultShareImage: '',
+    defaultShareImageAlt: '',
     footer: '保持好奇，缓慢积累。',
     copyright: '© 2026 · 开发阿雷',
     footerLink: '保持联系 ↗',
@@ -135,6 +137,8 @@ export const defaults = {
     writing.map((item) => ({
       ...stripArticleExtras(item),
       body: articleSeed,
+      seoTitle: '',
+      seoDescription: '',
       categoryId: categoryId(item.category),
       coverMode: 'upload',
       coverDescription: '',

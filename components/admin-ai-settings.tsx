@@ -99,8 +99,8 @@ export function AdminAiSettings({
       <Tabs.List className="admin-settings-tabs" aria-label="AI 功能配置">
         <Tabs.Tab value="models">模型配置</Tabs.Tab>
         <Tabs.Tab value="api">API 接口设置</Tabs.Tab>
-        <Tabs.Tab value="writing">写作配置</Tabs.Tab>
         <Tabs.Tab value="markdown">Markdown 内容</Tabs.Tab>
+        <Tabs.Tab value="writing">写作配置</Tabs.Tab>
         <Tabs.Tab value="projects">项目配置</Tabs.Tab>
         <Tabs.Tab value="stories">说说配置</Tabs.Tab>
         <Tabs.Tab value="music">歌单配置</Tabs.Tab>

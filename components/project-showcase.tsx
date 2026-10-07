@@ -13,6 +13,10 @@ import { PublicListError } from './public-list-error';
 import { newestProjectsFirst } from '@/lib/content-order';
 
 import Image from 'next/image';
+import Link from 'next/link';
+import type { Project } from '@/lib/project-content';
+import { listUrl } from '@/lib/seo-text';
+import { Breadcrumbs } from './breadcrumbs';
 import { useState } from 'react';
 
 import { PageIntro, SiteFooter, SiteHeader } from '@/components/site-chrome';
@@ -20,7 +24,7 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import '@/components/project-showcase.css';
 
 
-export function ProjectShowcase({ initialId }: { initialId: string }) {
+export function ProjectShowcase({ initialId, route, selectedProject }: { initialId: string; route?: { category: string; page: number }; selectedProject?: Project }) {
   const { projects: projectDocument } = useContent();
   const projects = newestProjectsFirst(projectDocument.items);
   const initialArchive = usePublicArchives()['projects.items'];
@@ -29,7 +33,7 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
     ...(initialArchive ? projectDocument.categories.filter((item)=>(initialArchive.categoryCounts[item.id]??0)>0).map((item)=>item.name)
       : [...new Set(projects.map((project) => project.category))]),
   ];
-  const [category, setCategory] = useState('全部');
+  const [category, setCategory] = useState(projectDocument.categories.find((item) => item.id === route?.category)?.name ?? '全部');
   const [selected, setSelected] = useState(initialId);
   const [page, setPage] = useState(() => {
     if (initialArchive) return initialArchive.page;
@@ -43,9 +47,9 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
   const visible = projects.filter(
     (project) => category === '全部' || project.category === category,
   );
-  const paginated = usePublicCollection('projects.items',visible,page,{category:projectDocument.categories.find((item)=>item.name===category)?.id,onPageChange:setPage});
+  const paginated = usePublicCollection('projects.items',visible,page,{category:projectDocument.categories.find((item)=>item.name===category)?.id,onPageChange:setPage,enabled:!route});
   const active =
-    (paginated.remote ? paginated.items : visible).find((project) => project.id === selected) ?? paginated.items[0];
+    selectedProject ?? (paginated.remote ? paginated.items : visible).find((project) => project.id === selected) ?? paginated.items[0];
   if (!active) return (
     <main className="site-shell">
       <SiteHeader />
@@ -60,7 +64,7 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
           <h2 id="project-empty-title">暂无已发布项目</h2>
           <p>作品还在酝酿中，之后会在这里记录构思、实现与迭代。</p>
           {(paginated.remote ? paginated.allCount : projects.length) > 0 && (
-            <button type="button" onClick={() => setCategory('全部')}>查看全部项目</button>
+            route ? <Link href="/projects">查看全部项目</Link> : <button type="button" onClick={() => setCategory('全部')}>查看全部项目</button>
           )}
         </div>
       </section>
@@ -86,7 +90,10 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
         <span className="folio-eyebrow">{"PROJECT INDEX /"}{String(paginated.remote ? paginated.allCount : projects.length).padStart(2, '0')}
         </span>
         <div>
-          {categories.map((item) => (
+          {categories.map((item) => route ? <Link key={item} href={listUrl('/projects', { category: item === '全部' ? '' : projectDocument.categories.find((option) => option.name === item)?.id })}
+            aria-current={category === item ? 'page' : undefined}>
+            {item}<small>{item === '全部' ? paginated.allCount : paginated.categoryCounts[projectDocument.categories.find((option) => option.name === item)?.id ?? ''] ?? 0}</small>
+          </Link> : (
             <button
               type="button"
               key={item}
@@ -121,11 +128,13 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
           </div>
           <div className="folio-project-list">
             {paginated.items.map((project) => (
-              <button
-                type="button"
+              <Link
+                href={listUrl('/projects', { project: project.id, category: route?.category, page: route?.page })}
                 className="folio-project"
-                aria-pressed={active.id === project.id}
-                onClick={() => {
+                aria-current={active.id === project.id ? 'page' : undefined}
+                onClick={(event) => {
+                  if (route) return;
+                  event.preventDefault();
                   setSelected(project.id);
                   setImageIndex(0);
                 }}
@@ -136,6 +145,7 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
                     src={project.images[0].src}
                     width={420}
                     height={230}
+                    sizes="(max-width: 720px) 28vw, 280px"
                     alt=""
                   />
                   <span>
@@ -153,7 +163,7 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
                     {project.status}
                   </small>
                 </div>
-              </button>
+              </Link>
             ))}
           </div>
           <ContentPagination
@@ -162,6 +172,7 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
             itemLabel="个项目"
             page={paginated.currentPage}
             pageSize={contentPageSizes.projects}
+            pageHref={route ? (nextPage) => listUrl('/projects', { category: route.category, page: nextPage }) : undefined}
             onPageChange={(nextPage) => {
               if (paginated.remote) { setPage(nextPage); setSelected(''); setImageIndex(0); return; }
               const next = paginateItems(visible, nextPage, contentPageSizes.projects);
@@ -176,6 +187,7 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
           </div>
         </aside>
         <article className="folio-detail">
+          {selectedProject && <Breadcrumbs items={[{ name: '首页', path: '/' }, { name: '项目', path: '/projects' }, { name: active.title, path: listUrl('/projects', { project: active.id }) }]} />}
           <header className="folio-detail-header">
             <div className="folio-section-label">
               <span>项目档案</span>
@@ -202,6 +214,7 @@ export function ProjectShowcase({ initialId }: { initialId: string }) {
                 src={currentImage.src}
                 width={1100}
                 height={660}
+                sizes="(max-width: 720px) calc(100vw - 50px), (max-width: 1100px) 60vw, 800px"
                 alt={currentImage.alt}
                 priority
               />

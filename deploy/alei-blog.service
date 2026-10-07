@@ -13,7 +13,7 @@ Environment=NODE_ENV=production
 Environment=HOST=127.0.0.1
 Environment=PORT=3000
 Environment=VINEXT_TRUST_PROXY=1
-ExecStart=/usr/bin/node /opt/alei-blog/dist/standalone/server.js
+ExecStart=/usr/bin/node /opt/alei-blog/scripts/start-production.mjs
 Restart=on-failure
 RestartSec=5
 UMask=0077

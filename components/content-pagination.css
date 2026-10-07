@@ -16,7 +16,7 @@
   gap: 8px;
 }
 
-.content-pagination button {
+.content-pagination button, .content-pagination a, .content-pagination > div > span {
   min-width: 76px;
   padding: 9px 12px;
   border: 1px solid var(--line);
@@ -24,17 +24,17 @@
   cursor: pointer;
 }
 
-.content-pagination button:hover:not(:disabled) {
+.content-pagination button:hover:not(:disabled), .content-pagination a:hover {
   border-color: var(--lime);
   color: var(--lime);
 }
 
-.content-pagination button:disabled {
+.content-pagination button:disabled, .content-pagination [aria-disabled=true] {
   cursor: not-allowed;
   opacity: 0.38;
 }
 
-.content-pagination button:focus-visible {
+.content-pagination button:focus-visible, .content-pagination a:focus-visible {
   outline: 2px solid var(--lime);
   outline-offset: 3px;
 }
@@ -46,7 +46,7 @@
   }
 
   .content-pagination > div,
-  .content-pagination button {
+  .content-pagination button, .content-pagination a, .content-pagination > div > span {
     flex: 1;
   }
 }

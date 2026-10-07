@@ -5,10 +5,14 @@ import { HeroGarden } from '@/components/hero-garden';
 import { getPublicContent, getRecentArticles, getRecentProjects } from '@/lib/cms-server';
 import { SiteFooter, SiteHeader } from '@/components/site-chrome';
 import './home.css';
+import { columnMetadata, absoluteUrl } from '@/lib/seo';
+import { JsonLd } from '@/components/json-ld';
+
+export function generateMetadata() { return columnMetadata('/'); }
 
 export default async function Home() {
-  const [{ home }, latestWriting, latestProjects] = await Promise.all([
-    getPublicContent(['home']), getRecentArticles(3), getRecentProjects(3),
+  const [{ home, site }, latestWriting, latestProjects] = await Promise.all([
+    getPublicContent(['home', 'site']), getRecentArticles(3), getRecentProjects(3),
   ]);
   const now = [
     { label: '正在开发', text: home.nowBuilding, Icon: Box },
@@ -19,6 +23,7 @@ export default async function Home() {
   return (
     <main className="site-shell home-page">
       <SiteHeader />
+      <JsonLd value={{ '@context': 'https://schema.org', '@type': 'WebSite', name: site.name, url: absoluteUrl('/') }} />
       <div className="home-hero-surface">
         <div className="home-hero-guide" aria-hidden="true"><i /><span /></div>
         <section className="hero hero-live home-hero" id="top" aria-labelledby="home-title">
@@ -57,7 +62,7 @@ export default async function Home() {
           {latestWriting.map((entry, index) => (
             <Link className={`home-article${index === 0 ? ' home-article-featured' : ''}`} href={`/writing/${entry.slug}`} key={entry.slug}>
               <div className="home-article-cover">
-                {entry.cover ? <Image src={entry.cover} width={900} height={600}
+                {entry.cover ? <Image src={entry.cover} width={900} height={600} priority={index === 0}
                   sizes={index === 0 ? '(max-width: 599px) calc(100vw - 40px), (max-width: 899px) calc(100vw - 64px), (max-width: 1264px) 52vw, 640px' : '(max-width: 599px) calc(100vw - 40px), (max-width: 899px) 45vw, 180px'} alt="" />
                   : <span className="home-cover-placeholder">{entry.category}</span>}
                 <span className="home-category">{entry.category}</span>

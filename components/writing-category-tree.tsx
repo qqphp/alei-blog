@@ -1,4 +1,5 @@
 import { categoryBranch, type CategoryNode } from '@/lib/article-categories';
+import Link from 'next/link';
 
 export function WritingCategoryTree({
   categories,
@@ -6,12 +7,14 @@ export function WritingCategoryTree({
   counts,
   selected,
   onSelect,
+  categoryHref,
 }: {
   categories: CategoryNode[];
   articles?: { categoryId: string }[];
   counts?: Record<string, number>;
   selected: string;
   onSelect: (id: string) => void;
+  categoryHref?: (id: string) => string;
 }) {
   function branch(parentId: string) {
     return (
@@ -25,7 +28,11 @@ export function WritingCategoryTree({
               : (articles ?? []).filter((article) => ids.has(article.categoryId)).length;
             return (
               <li key={category.id}>
-                <button
+                {categoryHref ? <Link href={categoryHref(category.id)}
+                  className={selected === category.id ? 'active' : ''}
+                  aria-current={selected === category.id ? 'true' : undefined}>
+                  <span>{category.name}</span><b>{count}</b>
+                </Link> : <button
                   type="button"
                   className={selected === category.id ? 'active' : ''}
                   aria-current={selected === category.id ? 'true' : undefined}
@@ -33,7 +40,7 @@ export function WritingCategoryTree({
                 >
                   <span>{category.name}</span>
                   <b>{count}</b>
-                </button>
+                </button>}
                 {categories.some((item) => item.parentId === category.id) &&
                   branch(category.id)}
               </li>

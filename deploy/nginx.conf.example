@@ -1,4 +1,11 @@
 # Put upstream in the http context. Add location to your existing HTTPS server.
+# Replace blog.example.com with the preferred domain matching SITE_URL.
+# server {
+#     listen 80;
+#     server_name blog.example.com www.blog.example.com;
+#     return 301 https://blog.example.com$request_uri;
+# }
+# Add the same redirect to the HTTPS alias-domain server with its valid certificate.
 upstream alei_blog {
     server 127.0.0.1:3000;
     keepalive 16;

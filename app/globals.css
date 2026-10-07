@@ -1192,7 +1192,7 @@ nav a:hover {
   color: var(--navy);
   font-size: 0.85rem;
 }
-.archive-side button {
+.archive-side button, .writing-archive .archive-side a {
   width: 100%;
   display: flex;
   justify-content: space-between;
@@ -1207,10 +1207,10 @@ nav a:hover {
   text-align: left;
   cursor: pointer;
 }
-.archive-side button.active {
+.archive-side button.active, .writing-archive .archive-side a.active {
   color: var(--lime);
 }
-.archive-side button b {
+.archive-side button b, .writing-archive .archive-side a b {
   font:
     0.7rem ui-monospace,
     monospace;
@@ -2938,10 +2938,13 @@ nav a:hover {
 }
 .writing-category-tree { list-style: none; margin: 0; padding: 0; }
 .writing-category-tree .writing-category-tree { padding-left: 14px; margin-left: 3px; border-left: 1px solid var(--line); }
-.writing-category-tree button { align-items: center; gap: 10px; text-align: left; }
-.writing-category-tree button span { overflow-wrap: anywhere; }
-.writing-category-tree button b { flex-shrink: 0; }
+.writing-category-tree button, .writing-category-tree a { align-items: center; gap: 10px; text-align: left; }
+.writing-category-tree button span, .writing-category-tree a span { overflow-wrap: anywhere; }
+.writing-category-tree button b, .writing-category-tree a b { flex-shrink: 0; }
 @media (max-width: 900px) {
   .writing-archive .archive-side { display: block; padding: 20px 0; border-bottom: 1px solid var(--line); }
   .writing-archive { grid-template-columns: 1fr; }
 }
+.seo-breadcrumbs { display:block; margin-bottom:20px; color:var(--muted); font-size:0.78rem; line-height:1.7; overflow-wrap:anywhere; }
+.seo-breadcrumbs a:hover { color:var(--lime); }
+.writing-archive .archive-side a:focus-visible { outline:2px solid var(--lime); outline-offset:3px; }

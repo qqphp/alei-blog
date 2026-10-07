@@ -29,7 +29,7 @@ function recordInput(section: Section, collection: string, value: Item, createdA
     return playlist;
   }
   if (section === 'writing' && collection === 'articles')
-    return { ...fields, date: articleCreationDate(createdAt ?? '2026-01-01T08:00:00+08:00') };
+    return { seoTitle: '', seoDescription: '', ...fields, date: articleCreationDate(createdAt ?? '2026-01-01T08:00:00+08:00') };
   return section === 'projects' && collection === 'items' ? { ...fields, createdAt: createdAt ?? '' } : fields;
 }
 
@@ -128,6 +128,7 @@ async function readRecord(db: Client, key: RecordKey) {
       to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, a.published AS "_published",
       a.cover_url AS cover, a.cover_mode AS "coverMode", a.cover_description AS "coverDescription",
       a.cover_generated_for AS "coverGeneratedFor", a.revision,
+      a.seo_title AS "seoTitle", a.seo_description AS "seoDescription",
       a.created_at AS "createdAt", a.updated_at AS "updatedAt"
       FROM articles a JOIN article_categories c ON c.id = a.category_id WHERE a.slug = $1`, [id]);
     if (!row.rowCount) return null;
@@ -378,7 +379,8 @@ async function cleanupUnreferencedMedia(before: unknown, after: unknown) {
 
 function articleParams(value: Item) {
   return [value.slug, value.title, value.excerpt, value.body, value.categoryId,
-    value._published, value.cover, value.coverMode, value.coverGeneratedFor, value.coverDescription];
+    value._published, value.cover, value.coverMode, value.coverGeneratedFor, value.coverDescription,
+    value.seoTitle, value.seoDescription];
 }
 
 export async function createAdminRecord(section: Section, collection: string, value: Item) {
@@ -394,8 +396,8 @@ export async function createAdminRecord(section: Section, collection: string, va
       await validateMediaReferences(value);
       if (section === 'writing' && collection === 'articles') {
         await db.query(`INSERT INTO articles (slug, title, excerpt, body, category_id,
-          published, cover_url, cover_mode, cover_generated_for, cover_description, position)
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,
+          published, cover_url, cover_mode, cover_generated_for, cover_description, seo_title, seo_description, position)
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,
             (SELECT coalesce(max(position) + 1, 0) FROM articles))`, articleParams(value));
       } else if (section === 'writing' && collection === 'categories') {
         await db.query('UPDATE article_categories SET position = position + 1');
@@ -444,6 +446,8 @@ export async function updateAdminRecord(key: RecordKey, value: Item, revision: n
       const previous = await readRecord(db, key);
       if (!previous) throw new AdminNotFound('记录不存在');
       if (previous.revision !== revision) throw new AdminConflict('此记录已在另一窗口修改');
+      if (key.section === 'writing' && key.collection === 'articles')
+        value = { seoTitle: previous.value.seoTitle, seoDescription: previous.value.seoDescription, ...value };
       value = recordInput(key.section, key.collection, value, previous.value.createdAt as string | null);
       await validateRecord(db, key, value, key.id);
       await validateMediaReferences(value, previous.value);
@@ -451,8 +455,8 @@ export async function updateAdminRecord(key: RecordKey, value: Item, revision: n
       if (key.section === 'writing' && key.collection === 'articles') {
         updated = await db.query(`UPDATE articles SET slug=$1,title=$2,excerpt=$3,body=$4,
           category_id=$5,published=$6,cover_url=$7,
-          cover_mode=$8,cover_generated_for=$9,cover_description=$10,revision=revision+1,updated_at=now()
-          WHERE slug=$11 AND revision=$12`, [...articleParams(value), key.id, revision]);
+          cover_mode=$8,cover_generated_for=$9,cover_description=$10,seo_title=$11,seo_description=$12,revision=revision+1,updated_at=now()
+          WHERE slug=$13 AND revision=$14`, [...articleParams(value), key.id, revision]);
       } else if (key.section === 'writing' && key.collection === 'categories') {
         updated = await db.query(`UPDATE article_categories SET name=$1,description=$2,
           parent_id=nullif($3,''),revision=revision+1 WHERE id=$4 AND revision=$5`,

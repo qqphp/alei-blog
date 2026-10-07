@@ -8,6 +8,19 @@ import { visit } from 'unist-util-visit';
 import { unified } from 'unified';
 import { getPublicArticle, getPublicContent } from '@/lib/cms-server';
 import { SiteFooter, SiteHeader } from '@/components/site-chrome';
+import { pageMetadata, absoluteUrl, breadcrumbData } from '@/lib/seo';
+import { articleDescription } from '@/lib/seo-text';
+import { JsonLd } from './json-ld';
+import { Breadcrumbs } from './breadcrumbs';
+
+export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params;
+  const [{ site }, article] = await Promise.all([getPublicContent(['site']), getPublicArticle(slug)]);
+  if (!article) notFound();
+  return pageMetadata(site, { title: article.seoTitle.trim() ? article.seoTitle : article.title,
+    description: articleDescription(article), path: `/writing/${article.slug}`, article: true,
+    image: article.cover, imageAlt: article.coverDescription });
+}
 
 export function articleHeadings(body: string) {
   const headings: { id: string; text: string }[] = [];
@@ -25,16 +38,27 @@ export default async function ArticlePage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [{ site }, article] = await Promise.all([
-    getPublicContent(['site']), getPublicArticle(slug),
+  const [{ profile }, article] = await Promise.all([
+    getPublicContent(['profile']), getPublicArticle(slug),
   ]);
   if (!article) notFound();
   const headings = articleHeadings(article.body);
+  const path = `/writing/${article.slug}`;
+  const crumbs = [{ name: '首页', path: '/' }, { name: '写作', path: '/writing' }, { name: article.title, path }];
   return (
     <main className="site-shell">
       <SiteHeader />
+      <JsonLd value={breadcrumbData(crumbs)} />
+      <JsonLd value={{ '@context': 'https://schema.org', '@type': 'BlogPosting', headline: article.title,
+        description: articleDescription(article), url: absoluteUrl(path), mainEntityOfPage: absoluteUrl(path),
+        author: { '@type': 'Person', name: profile.name, url: absoluteUrl('/about') },
+        ...(article.createdAt ? { dateCreated: article.createdAt } : {}),
+        ...(article.updatedAt ? { dateModified: article.updatedAt } : {}),
+        ...(absoluteUrl(article.cover) ? { image: absoluteUrl(article.cover) } : {}),
+      }} />
       <article className="article-layout">
         <section>
+          <Breadcrumbs items={crumbs} />
           <Link className="article-category" href="/writing">
             <span>← 返回写作</span>
             <b>{article.category}</b>
@@ -42,7 +66,7 @@ export default async function ArticlePage({
           <h1>{article.title}</h1>
           <p className="article-lead">{article.excerpt}</p>
           <div className="article-meta">
-            {site.name} · {article.date}
+            <Link href="/about">{profile.name}</Link> · {article.date}
           </div>
           <MarkdownContent source={article.body} />
         </section>

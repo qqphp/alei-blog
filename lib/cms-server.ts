@@ -60,7 +60,7 @@ export async function getDocuments(sections?: Section[], options: { publicOnly?:
       const [sectionResult, categories, articles, entries] = [
         await db.query<{ section: Section; value: unknown; revision: number }>('SELECT section, value, revision FROM cms_sections WHERE $1::text[] IS NULL OR section = ANY($1::text[])', [selected]),
         await db.query<{ id: string; name: string; description: string; parent_id: string | null }>('SELECT id, name, description, parent_id FROM article_categories WHERE $1::boolean ORDER BY position', [has('categories') || has('writing')]),
-        await db.query<{ slug: string; title: string; excerpt: string; body: string; category_id: string; date: string; published: boolean; cover_url: string; cover_mode: string; cover_generated_for: string; cover_description: string }>(`SELECT slug, title, excerpt, body, category_id, to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, published, cover_url, cover_mode, cover_generated_for, cover_description FROM articles WHERE $1::boolean AND (NOT $2::boolean OR published) ORDER BY created_at DESC, slug`, [has('writing') && !options.metadataOnly, options.publicOnly ?? false]),
+        await db.query<{ slug: string; title: string; excerpt: string; body: string; category_id: string; date: string; published: boolean; cover_url: string; cover_mode: string; cover_generated_for: string; cover_description: string; seo_title: string; seo_description: string }>(`SELECT slug, title, excerpt, body, category_id, to_char(created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date, published, cover_url, cover_mode, cover_generated_for, cover_description, seo_title, seo_description FROM articles WHERE $1::boolean AND (NOT $2::boolean OR published) ORDER BY created_at DESC, slug`, [has('writing') && !options.metadataOnly, options.publicOnly ?? false]),
         await db.query<{ section: Section; collection: string; category_id: string | null; payload: unknown; createdAt: Date | null; updatedAt: Date }>(`SELECT section, collection, category_id, payload, created_at AS "createdAt", updated_at AS "updatedAt" FROM cms_entries
           WHERE ($1::text[] IS NULL OR section = ANY($1::text[]))
           AND (NOT $2::boolean OR published OR collection IN ('categories','statuses','scenes','agentStatuses','skillCategories','sections'))
@@ -96,6 +96,7 @@ export async function getDocuments(sections?: Section[], options: { publicOnly?:
   if (has('writing') && revisions.writing !== undefined)
     content.writing = articles.map((row) => ({
       slug: row.slug, title: row.title, excerpt: row.excerpt, body: row.body,
+      seoTitle: row.seo_title, seoDescription: row.seo_description,
       categoryId: row.category_id, category: '', date: row.date, _published: row.published,
       coverDescription: row.cover_description, cover: row.cover_url, coverMode: row.cover_mode as 'upload' | 'ai', coverGeneratedFor: row.cover_generated_for,
     }));
@@ -220,24 +221,32 @@ export async function getPublicPlaybackContent(): Promise<PublicContent['tracks'
   return publishedOnly(migrateMusic(content.tracks)) as PublicContent['tracks'];
 }
 
-export async function getPublicArticle(slug: string) {
+const articlesForRequest = cacheForRequest(() => new Map<string, ReturnType<typeof loadPublicArticle>>());
+export function getPublicArticle(slug: string) {
+  const articles = articlesForRequest();
+  if (!articles.has(slug)) articles.set(slug, loadPublicArticle(slug));
+  return articles.get(slug)!;
+}
+async function loadPublicArticle(slug: string) {
   const row = await withDatabase(async (db) => {
-    const result = await db.query<{ slug: string; title: string; excerpt: string; body: string; categoryId: string; category: string; date: string; cover: string; coverMode: 'upload' | 'ai'; coverGeneratedFor: string; coverDescription: string }>(
+    const result = await db.query<{ slug: string; title: string; excerpt: string; body: string; categoryId: string; category: string; date: string; cover: string; coverMode: 'upload' | 'ai'; coverGeneratedFor: string; coverDescription: string; seoTitle: string; seoDescription: string; createdAt: Date; updatedAt: Date }>(
       `SELECT a.slug, a.title, a.excerpt, a.body, a.category_id AS "categoryId",
         c.name AS category, to_char(a.created_at AT TIME ZONE 'Asia/Shanghai', 'YYYY.MM.DD') AS date,
         a.cover_url AS cover, a.cover_mode AS "coverMode",
-        a.cover_generated_for AS "coverGeneratedFor", a.cover_description AS "coverDescription"
+        a.cover_generated_for AS "coverGeneratedFor", a.cover_description AS "coverDescription", a.seo_title AS "seoTitle", a.seo_description AS "seoDescription",
+        a.created_at AS "createdAt", a.updated_at AS "updatedAt"
        FROM articles a JOIN article_categories c ON c.id = a.category_id
        WHERE a.slug = $1 AND a.published`,
       [slug],
     );
     return result.rows[0] ?? null;
   });
-  if (row) return { ...row, _published: true };
+  if (row) return { ...row, ...recordTimes(row), _published: true };
   const saved = await withDatabase(async (db) =>
     ((await db.query('SELECT 1 FROM cms_sections WHERE section = $1', ['writing'])).rowCount ?? 0) > 0,
   );
-  return saved ? undefined : defaults.writing.find((item) => item.slug === slug && item._published);
+  const fallback = defaults.writing.find((item) => item.slug === slug && item._published);
+  return saved || !fallback ? undefined : { ...fallback, createdAt: null, updatedAt: null };
 }
 
 export async function getRecentArticles(limit: number) {

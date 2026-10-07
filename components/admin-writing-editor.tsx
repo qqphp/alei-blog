@@ -4,6 +4,7 @@ import { AdminMarkdownEditor } from './admin-markdown-editor';
 import type { Content } from '@/lib/cms-defaults';
 import { categoryRows } from '@/lib/article-categories';
 import { api, upload } from './admin-fields';
+import { articleDescription, brandedTitle } from '@/lib/seo-text';
 
 export type Article = Content['writing'][number];
 
@@ -13,12 +14,16 @@ export function AdminWritingEditor({
   onChange,
   onWorking,
   disabled = false,
+  siteName = '',
+  siteUrl = '',
 }: {
   article: Article;
   categories: Content['categories'];
   onChange: (article: Article) => void;
   onWorking: (working: boolean) => void;
   disabled?: boolean;
+  siteName?: string;
+  siteUrl?: string;
 }) {
   const [message, setMessage] = useState('');
   const [working, setWorking] = useState(false);
@@ -125,6 +130,26 @@ export function AdminWritingEditor({
         </fieldset>
         <AdminMarkdownEditor label="文章正文" value={article.body}
           onWorking={onWorking} onChange={(body) => set('body', body)} />
+        <details className="admin-wide admin-seo-editor">
+          <summary>搜索展示（可选）</summary>
+          <div className="admin-field">
+            <label htmlFor="article-seo-title">SEO 标题</label>
+            <input id="article-seo-title" value={article.seoTitle ?? ''} maxLength={200}
+              placeholder="留空使用文章标题" onChange={(event) => set('seoTitle', event.target.value)} />
+          </div>
+          <div className="admin-field">
+            <label htmlFor="article-seo-description">SEO 描述</label>
+            <textarea id="article-seo-description" rows={3} value={article.seoDescription ?? ''} maxLength={1000}
+              placeholder="留空使用摘要或正文简介" onChange={(event) => set('seoDescription', event.target.value)} />
+          </div>
+          <small>输入上限用于保护数据，不代表搜索引擎展示长度或排名。</small>
+          <div className="admin-seo-preview" aria-label="搜索展示预览">
+            <strong>{siteName ? brandedTitle(article.seoTitle?.trim() ? article.seoTitle : article.title, siteName) : article.seoTitle || article.title}</strong>
+            <p>{siteUrl || '正式域名尚未配置'}/writing/{article.slug}</p>
+            <p>{articleDescription(article)}</p>
+            <small>预览仅供参考，搜索引擎可能采用不同的标题和摘要。</small>
+          </div>
+        </details>
         <label className="admin-check">
           <input type="checkbox" checked={article._published} disabled={disabled}
             onChange={(event) => set('_published', event.target.checked)} />

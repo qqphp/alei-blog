@@ -12,21 +12,28 @@ import { categoryRows } from '@/lib/article-categories';
 import type { WritingArchive } from '@/lib/cms-server';
 import type { Content } from '@/lib/cms-defaults';
 import { useEffect, useRef, useState } from 'react';
+import { listUrl } from '@/lib/seo-text';
 
 import { PageIntro, SiteFooter, SiteHeader } from '@/components/site-chrome';
 import { Input } from '@/components/ui/input';
 import '@/components/writing-archive.css';
 
-export default function WritingPage({ initial }: { initial: WritingArchive & { categories: Content['categories'] } }) {
+export default function WritingPage({ initial, route, onSearch }: { initial: WritingArchive & { categories: Content['categories'] }; route?: { group: string; q: string; page: number }; onSearch?: (q: string) => void }) {
   const { categories } = initial;
   const rows = categoryRows(categories);
-  const [group, setGroup] = useState('');
-  const [query, setQuery] = useState('');
-  const [page, setPage] = useState(1);
+  const [group, setGroup] = useState(route?.group ?? '');
+  const [query, setQuery] = useState(route?.q ?? '');
+  const [page, setPage] = useState(route?.page ?? initial.page ?? 1);
   const [archive, setArchive] = useState<WritingArchive>(initial);
   const [error, setError] = useState('');
   const first = useRef(true);
   useEffect(() => {
+    if (!route || query === route.q || !onSearch) return;
+    const timer = window.setTimeout(() => onSearch(query), 250);
+    return () => window.clearTimeout(timer);
+  }, [route, query, onSearch]);
+  useEffect(() => {
+    if (route) return;
     if (first.current) { first.current = false; return; }
     const controller = new AbortController();
     const timer = window.setTimeout(async () => {
@@ -44,7 +51,7 @@ export default function WritingPage({ initial }: { initial: WritingArchive & { c
       }
     }, query ? 250 : 0);
     return () => { controller.abort(); window.clearTimeout(timer); };
-  }, [query, group, page]);
+  }, [query, group, page, route]);
   return (
     <main className="site-shell">
       <SiteHeader />
@@ -74,7 +81,9 @@ export default function WritingPage({ initial }: { initial: WritingArchive & { c
           <p>
             {"文章分类"}
           </p>
-          <button
+          {route ? <Link href={listUrl('/writing', { q: query })} className={group === '' ? 'active' : ''}>
+            全部文章<b>{archive.allCount}</b>
+          </Link> : <button
             className={group === '' ? 'active' : ''}
             type="button"
             onClick={() => {
@@ -84,11 +93,12 @@ export default function WritingPage({ initial }: { initial: WritingArchive & { c
           >
             {"全部文章"}
             <b>{archive.allCount}</b>
-          </button>
+          </button>}
           <WritingCategoryTree
             categories={categories}
             counts={archive.categoryCounts}
             selected={group}
+            categoryHref={route ? (id) => listUrl('/writing', { q: query, group: id }) : undefined}
             onSelect={(categoryId) => {
               setGroup(categoryId);
               setPage(1);
@@ -149,6 +159,7 @@ export default function WritingPage({ initial }: { initial: WritingArchive & { c
             page={page}
             pageSize={contentPageSizes.writing}
             onPageChange={setPage}
+            pageHref={route ? (nextPage) => listUrl('/writing', { q: query, group, page: nextPage }) : undefined}
           />
         </div>
       </section>

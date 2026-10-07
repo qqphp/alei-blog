@@ -35,7 +35,8 @@ const sidebarSections: { label?: string; sections: Section[] }[] = [
   { label: '设置', sections: ['aiSettings', 'site'] },
 ];
 const websiteTabs = [
-  { id: 'site', label: '站点', keys: ['name', 'mark', 'title', 'description'] },
+  { id: 'site', label: '站点', keys: ['name', 'mark'] },
+  { id: 'seo', label: 'SEO', keys: ['title', 'description', 'defaultShareImage', 'defaultShareImageAlt'] },
   { id: 'navigation', label: '导航', keys: ['links', 'sites', 'life'] },
   { id: 'home', label: '首页', keys: ['eyebrow', 'title', 'description', 'nowBuilding', 'nowWriting', 'nowExploring', 'heroArtTopText', 'heroArtBottomText', 'noteTitle', 'noteText', 'noteArtText'] },
   { id: 'footer', label: '页脚', keys: ['footer', 'copyright', 'footerLink', 'footerUrl', 'footerLinks', 'footerSocialLinks', 'footerMotto'] },
@@ -78,7 +79,7 @@ function sampleRecord(section: Section, collection: string, options: Record<stri
       slug: `article-${crypto.randomUUID().slice(0, 8)}`, title: '', excerpt: '', body: '',
       categoryId: options.categories?.[0]?.id ?? '', category: options.categories?.[0]?.name ?? '',
       date: format(new Date(), 'yyyy.MM.dd'), cover: '', coverMode: 'upload',
-      coverDescription: '', coverGeneratedFor: '', _published: false,
+      coverDescription: '', coverGeneratedFor: '', seoTitle: '', seoDescription: '', _published: false,
     };
   if (section === 'writing' && collection === 'categories')
     return { id: `category-${crypto.randomUUID()}`, name: '', description: '', parentId: '' };
@@ -147,6 +148,7 @@ export function AdminGranularPanel() {
   const [options, setOptions] = useState<Record<string, Option[]>>({});
   const [edit, setEdit] = useState<Edit | null>(null);
   const [config, setConfig] = useState<Edit | null>(null);
+  const [seoSettings, setSeoSettings] = useState({ siteUrl: '', indexable: false, name: '' });
   const [busy, setBusy] = useState(false);
   const [working, setWorking] = useState(false);
   const [mailDirty, setMailDirty] = useState(false);
@@ -203,6 +205,15 @@ export function AdminGranularPanel() {
       .catch((error) => { if (current) setMessage(String(error)); });
     return () => { current = false; };
   }, [loggedIn, recordSection, collections]);
+
+  useEffect(() => {
+    if (!loggedIn || !['site', 'writing'].includes(section)) return;
+    let current = true;
+    void api<{ value: Content['site']; seoEnvironment?: { siteUrl: string; indexable: boolean } }>(configUrl('site', 'root'))
+      .then((result) => { if (current) setSeoSettings({ name: result.value.name, siteUrl: result.seoEnvironment?.siteUrl ?? '', indexable: result.seoEnvironment?.indexable ?? false }); })
+      .catch((error) => { if (current) setMessage(String(error)); });
+    return () => { current = false; };
+  }, [loggedIn, section, tab]);
 
   const refreshOptions = useCallback(async () => {
     if (collections.length)
@@ -417,6 +428,7 @@ export function AdminGranularPanel() {
           <fieldset disabled={busy || working}>
             {section === 'writing' && activeCollection === 'articles' ?
               <AdminWritingEditor article={edit.value as unknown as Article}
+                siteName={seoSettings.name} siteUrl={seoSettings.siteUrl}
                 categories={(options.categories ?? []) as Content['categories']}
                 onWorking={setWorking} disabled={busy || working}
                 onChange={(value) => setEdit({ ...edit, value: asJson(value) })} /> :
@@ -500,6 +512,11 @@ export function AdminGranularPanel() {
           </nav>
         </section>)}
         {activeScope && config && <section className="admin-form" aria-label="设置表单">
+          {section === 'site' && tab === 'seo' && <div className="admin-seo-environment">
+            <p>正式网站地址：<output>{seoSettings.siteUrl || '尚未配置 SITE_URL'}</output></p>
+            <p>有效收录状态：<output>{seoSettings.indexable ? '允许收录' : '不允许收录'}</output></p>
+            <small>由部署环境的 SITE_URL 与 SEO_INDEXABLE 提供。首页 SEO 描述与首页首屏文案分别保存。</small>
+          </div>}
           {section === 'aiSettings' ?
             <AdminAiSettings value={config.value as unknown as typeof defaults.aiSettings}
               dirty={dirty} onChange={(value) => setConfig({ ...config, value: asJson(value) })} /> :

@@ -20,6 +20,8 @@ const names: Record<string, string> = {
   title: '标题',
   name: '名称',
   description: '说明',
+  defaultShareImage: '默认分享图片',
+  defaultShareImageAlt: '分享图片说明',
   excerpt: '摘要',
   body: '正文（Markdown）',
   date: '日期',
@@ -578,7 +580,7 @@ export function Field({
             <Field
               key={key}
               path={`${path}.${key}`}
-              label={names[key] || key}
+              label={path === 'site.seo' && key === 'title' ? '首页 SEO 标题' : path === 'site.seo' && key === 'description' ? '首页 SEO 描述' : names[key] || key}
               sample={template[key] ?? item}
               value={item}
               onChange={(next) => onChange({ ...value, [key]: next })}
@@ -623,14 +625,14 @@ export function Field({
         onChange={onChange}
       />
     );
-  const asset = /^(src|cover|image|audio|publicAccountQr|communityQr|logo)$/.test(field) || /\.album\.\d+$/.test(path);
+  const asset = /^(src|cover|image|defaultShareImage|audio|publicAccountQr|communityQr|logo)$/.test(field) || /\.album\.\d+$/.test(path);
   const long =
     typeof value === 'string' &&
     ((typeof sample === 'string' &&
       (sample.length > 90 || sample.includes('\n'))) ||
       /body|description|excerpt|text|note|summary|paragraph/.test(field));
   return (
-    <div className={`admin-field${path === 'ai.agents.logo' || path === 'ai.relays.logo' ? ' admin-resource-logo' : ''}${path === 'tracks.items.src' ? ' admin-track-src' : ''}`}>
+    <div className={`admin-field${path === 'ai.agents.logo' || path === 'ai.relays.logo' ? ' admin-resource-logo' : ''}${path === 'tracks.items.src' ? ' admin-track-src' : ''}${path === 'site.seo.defaultShareImage' ? ' admin-share-image' : ''}`}>
       <label htmlFor={path}>{label}</label>
       {options[field] ? (
         <select id={path} value={String(value ?? '')} onChange={(e) => onChange(e.target.value)}>
@@ -672,7 +674,7 @@ export function Field({
             上传替换
             <input
               type="file"
-              accept="image/png,image/jpeg,image/webp,image/gif,audio/mpeg,audio/wav"
+              accept={field === 'defaultShareImage' ? "image/png,image/jpeg,image/webp,image/gif" : "image/png,image/jpeg,image/webp,image/gif,audio/mpeg,audio/wav"}
               onChange={async (e) => {
                 const file = e.target.files?.[0];
                 if (!file) return;
@@ -694,6 +696,9 @@ export function Field({
               }}
             />
           </label>
+          {path === 'site.seo.defaultShareImage' && <small className="admin-share-image-hint">
+            用于首页和栏目分享预览；文章或项目无图片时作为默认图，图片说明填写图片内容。
+          </small>}
           {typeof value === 'string' && /^(\/|https?:)/.test(value) && (
             <a href={value} target="_blank" rel="noreferrer">
               查看素材 ↗

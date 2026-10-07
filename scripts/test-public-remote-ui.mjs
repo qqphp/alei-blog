@@ -84,7 +84,7 @@ const cases = [
     'projects.items',
     ProjectShowcase,
     null,
-    '.folio-project-list button',
+    '.folio-project-list a',
     '项目分页',
   ],
   ['books.items', Bookshelf, null, '.reading-book', '书籍分页'],
