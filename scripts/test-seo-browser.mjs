@@ -12,10 +12,13 @@ const output = resolve('outputs/seo-browser');
 await mkdir(output, { recursive: true });
 const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await db.connect();
-let article, project;
+let article, project, publishedCounts;
 try {
   article = (await db.query('SELECT slug,title FROM articles WHERE published ORDER BY slug LIMIT 1')).rows[0];
   project = (await db.query("SELECT id,title FROM cms_entries WHERE section='projects' AND collection='items' AND published ORDER BY id LIMIT 1")).rows[0];
+  publishedCounts = (await db.query(`SELECT (SELECT count(*)::int FROM articles WHERE published) AS articles,
+    (SELECT count(*)::int FROM cms_entries WHERE section='projects' AND collection='items' AND published) AS projects,
+    (SELECT count(*)::int FROM cms_entries WHERE section='stories' AND collection='root' AND published) AS stories`)).rows[0];
 } finally { await db.end(); }
 assert.ok(article && project, '浏览器抽查需要至少一篇已发布文章与项目');
 const server = spawn(process.execPath, ['scripts/start-production.mjs'], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe'],
@@ -65,6 +68,15 @@ try {
       page.on('response', (response) => { if (response.request().resourceType() === 'image' && response.status() >= 400) imageFailures.push({ url: response.url(), status: response.status() }); });
       const response = await page.goto(base + path, { waitUntil: 'load' });
       assert.equal(response.status(), 200);
+      if (name === 'home') {
+        const statistics = page.getByRole('region', { name: '已发布内容统计' });
+        assert.equal(await statistics.locator('.home-now-label').textContent(), '积累');
+        assert.deepEqual(await statistics.locator('.home-now-item > div > span').allTextContents(), ['笔墨成篇', '匠心成作', '随心札记']);
+        assert.deepEqual(await statistics.locator('.home-now-item p').allTextContents(), [`${publishedCounts.articles} 篇文章`, `${publishedCounts.projects} 个项目`, `${publishedCounts.stories} 则说说`]);
+        const positions = await statistics.locator('.home-now-item').evaluateAll((items) => items.map((item) => item.getBoundingClientRect().top));
+        if (device === 'desktop') assert.ok(positions.every((top) => Math.abs(top - positions[0]) < 1));
+        else assert.ok(positions[0] < positions[1] && positions[1] < positions[2]);
+      }
       if (name !== 'home') {
         await page.getByRole('navigation', { name: '面包屑' }).waitFor({ state: 'visible' });
         assert.ok((await page.getByRole('navigation', { name: '面包屑' }).textContent()).includes(name === 'article' ? article.title : project.title));
@@ -94,6 +106,15 @@ try {
       }
       assert.deepEqual(imageFailures, [], `${device}/${name} image responses`);
       const renderedImages = await page.evaluate(() => [...document.images].map((image) => ({ src: image.currentSrc, width: image.clientWidth, height: image.clientHeight, naturalWidth: image.naturalWidth, naturalHeight: image.naturalHeight })));
+      if (name === 'home') {
+        const texts = await page.locator('.home-now-item p').allTextContents();
+        // Exercise long counts in the browser DOM only; never write source data.
+        await page.locator('.home-now-item p').evaluateAll((items) => items.forEach((item) => { item.textContent = item.textContent.replace(/^\d+/, '2147483647'); }));
+        const fits = await page.locator('.home-now').evaluate((region) => document.documentElement.scrollWidth <= innerWidth + 1 &&
+          [...region.querySelectorAll('.home-now-item p')].every((item) => item.scrollWidth <= item.clientWidth + 1));
+        assert.ok(fits, `${device} long statistics overflow`);
+        await page.locator('.home-now-item p').evaluateAll((items, original) => items.forEach((item, index) => { item.textContent = original[index]; }), texts);
+      }
       await page.screenshot({ path: resolve(output, `${device}-${name}.png`), fullPage: true });
       results.push({ device, page: name, path, ...metrics, renderedImages });
       console.log(`${device}/${name}: LCP ${metrics.lcpMs}ms, CLS ${metrics.cls}`);

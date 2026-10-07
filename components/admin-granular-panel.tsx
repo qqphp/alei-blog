@@ -38,7 +38,7 @@ const websiteTabs = [
   { id: 'site', label: '站点', keys: ['name', 'mark'] },
   { id: 'seo', label: 'SEO', keys: ['title', 'description', 'defaultShareImage', 'defaultShareImageAlt'] },
   { id: 'navigation', label: '导航', keys: ['links', 'sites', 'life'] },
-  { id: 'home', label: '首页', keys: ['eyebrow', 'title', 'description', 'nowBuilding', 'nowWriting', 'nowExploring', 'heroArtTopText', 'heroArtBottomText', 'noteTitle', 'noteText', 'noteArtText'] },
+  { id: 'home', label: '首页', keys: ['eyebrow', 'title', 'description', 'heroArtTopText', 'heroArtBottomText', 'noteTitle', 'noteText', 'noteArtText'] },
   { id: 'footer', label: '页脚', keys: ['footer', 'copyright', 'footerLink', 'footerUrl', 'footerLinks', 'footerSocialLinks', 'footerMotto'] },
   { id: 'email', label: '邮箱设置', keys: [] },
 ];

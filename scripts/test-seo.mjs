@@ -77,6 +77,16 @@ const html = async (path, agent = 'Mozilla/5.0') => {
 const meta = (document, name) => document.head.querySelector(`meta[name="${name}"],meta[property="${name}"]`)?.getAttribute('content');
 const canonical = (document) => document.head.querySelector('link[rel="canonical"]')?.getAttribute('href');
 const structured = (document) => [...document.querySelectorAll('script[type="application/ld+json"]')].map((node) => JSON.parse(node.textContent));
+const homeCounts = async (articles, projects, stories) => {
+  const { response, document } = await html('/');
+  assert.equal(response.status, 200);
+  const region = document.querySelector('[aria-label="已发布内容统计"]');
+  assert.ok(region);
+  assert.equal(region.querySelector('.home-now-label').textContent, '积累');
+  assert.deepEqual([...region.querySelectorAll('.home-now-item > div > span')].map((node) => node.textContent), ['笔墨成篇', '匠心成作', '随心札记']);
+  assert.deepEqual([...region.querySelectorAll('.home-now-item p')].map((node) => node.textContent), [`${articles} 篇文章`, `${projects} 个项目`, `${stories} 则说说`]);
+  assert.equal(region.querySelector('a'), null);
+};
 const sitemap = async () => {
   const { response, text, document } = await html('/sitemap.xml');
   assert.equal(response.status, 200); assert.match(response.headers.get('content-type'), /xml/);
@@ -103,6 +113,15 @@ try {
       VALUES('projects','items',$1,$2,$3,$4,$5,$6,$7::jsonb,'2026-01-02T03:04:05Z','2026-02-03T04:05:06Z')`,
     [payload.id, i, payload.title, payload.categoryId, payload.statusId, payload._published, JSON.stringify(payload)]);
   }
+  await db.query("DELETE FROM cms_entries WHERE section='stories' AND collection='root'");
+  for (let i = 0; i < 10; i++) {
+    const payload = { ...defaults.stories[0], id: `seo-story-${i}`, text: `统计说说 ${i}`, images: [], topics: [],
+      date: i % 2 ? '2024-01-02T03:04:05+08:00' : '2026-09-01T03:04:05+08:00', _published: i !== 9 };
+    await db.query(`INSERT INTO cms_entries(section,collection,id,position,published,payload,occurred_at)
+      VALUES('stories','root',$1,$2,$3,$4::jsonb,$5)`, [payload.id, i, payload._published, JSON.stringify(payload), payload.date]);
+  }
+  await db.query(`INSERT INTO cms_entries(section,collection,id,position,published,payload)
+    VALUES('stories','covers','seo-story-cover',0,true,'{}')`);
   // Simulate the old schema in the isolated database, and prove migration/replay preserve every old column.
   await db.query('ALTER TABLE articles DROP COLUMN seo_title, DROP COLUMN seo_description');
   await db.query("DELETE FROM schema_migrations WHERE version='0026_article_seo.sql'");
@@ -140,6 +159,7 @@ try {
   let robots = await (await fetch(base + '/robots.txt')).text();
   assert.match(robots, /Allow: \/api\/media\//); assert.doesNotMatch(robots, /Sitemap:|Disallow: \/\s/); assert.ok(!robots.includes(adminPath));
   console.log('PASS all public columns, homepage settings, default sharing, noindex environment and crawlable media rules');
+  await homeCounts(17, 7, 9);
 
   const recordPath = '/api/admin/records/writing/articles/seo-article-0';
   let record = await api(recordPath);
@@ -230,18 +250,49 @@ try {
   const draftPath = '/api/admin/records/writing/articles/seo-article-17';
   let draft = await api(draftPath); draft = await put(draftPath, { ...draft.value, cover: '/notes/paper-v2.png', _published: true }, draft.revision);
   assert.ok((await sitemap()).urls.includes(formal + '/writing/seo-article-17'));
+  await homeCounts(18, 7, 9);
   draft = await put(draftPath, { ...draft.value, _published: false }, draft.revision); assert.ok(!(await sitemap()).urls.includes(formal + '/writing/seo-article-17'));
+  await homeCounts(17, 7, 9);
+  draft = await put(draftPath, { ...draft.value, _published: true }, draft.revision);
+  await homeCounts(18, 7, 9);
   await api(draftPath, { method: 'DELETE', body: JSON.stringify({ revision: draft.revision }) });
+  await homeCounts(17, 7, 9);
   const projectPath = '/api/admin/records/projects/items/seo-project-7';
   let project = await api(projectPath); project = await put(projectPath, { ...project.value, _published: true }, project.revision);
   assert.ok((await sitemap()).urls.includes(formal + '/projects?project=seo-project-7'));
+  await homeCounts(17, 8, 9);
+  project = await put(projectPath, { ...project.value, _published: false }, project.revision);
+  await homeCounts(17, 7, 9);
+  project = await put(projectPath, { ...project.value, _published: true }, project.revision);
+  await homeCounts(17, 8, 9);
   await api(projectPath, { method: 'DELETE', body: JSON.stringify({ revision: project.revision }) });
   assert.ok(!(await sitemap()).urls.includes(formal + '/projects?project=seo-project-7'));
+  await homeCounts(17, 7, 9);
+  const storyPath = '/api/admin/records/stories/root/seo-story-9';
+  let story = await api(storyPath); story = await put(storyPath, { ...story.value, _published: true }, story.revision);
+  await homeCounts(17, 7, 10);
+  story = await put(storyPath, { ...story.value, _published: false }, story.revision);
+  await homeCounts(17, 7, 9);
+  story = await put(storyPath, { ...story.value, _published: true }, story.revision);
+  await api(storyPath, { method: 'DELETE', body: JSON.stringify({ revision: story.revision }) });
+  await homeCounts(17, 7, 9);
   console.log('PASS crawler HTML, canonical Host isolation, safe JSON-LD, real dates, full dynamic sitemap and publication/removal changes');
   await stop(); await start('0', '');
   for (const path of ['/', '/writing/seo-article-0', '/projects?project=seo-project-6']) {
     page = await html(path); assert.equal(page.response.status, 200); assert.match(meta(page.document, 'robots'), /noindex/); assert.equal(canonical(page.document), undefined);
   }
+  await db.query('UPDATE articles SET published=false');
+  await homeCounts(0, 7, 9);
+  await db.query("UPDATE cms_entries SET published=false WHERE section='projects' AND collection='items'");
+  await homeCounts(0, 0, 9);
+  await db.query("UPDATE cms_entries SET published=false WHERE section='stories' AND collection='root'");
+  await homeCounts(0, 0, 0);
+  await db.query("DELETE FROM cms_sections WHERE section='writing'");
+  const defaultArticles = defaults.writing.filter((item) => item._published).length;
+  await homeCounts(defaultArticles, 0, 0);
+  await db.query("DELETE FROM cms_sections WHERE section IN ('projects','stories')");
+  await homeCounts(defaultArticles, defaults.projects.items.filter((item) => item._published).length, defaults.stories.filter((item) => item._published).length);
+  console.log('PASS published homepage counts, all-page/year totals, publication/withdrawal/deletion, zero states and per-section defaults');
   await stop();
   const invalid = spawnSync(process.execPath, ['scripts/start-production.mjs'], { env: { ...env, SEO_INDEXABLE: '1', SITE_URL: 'http://localhost' }, encoding: 'utf8', windowsHide: true });
   assert.notEqual(invalid.status, 0); assert.match(invalid.stderr, /SITE_URL/);

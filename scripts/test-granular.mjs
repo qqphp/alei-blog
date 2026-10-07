@@ -711,6 +711,7 @@ try {
   for (const field of ['heroArtTopText', 'heroArtBottomText', 'noteArtText'])
     assert.equal(page.data.value[field], defaults.home[field]);
   assert.ok(!(await (await fetch(origin + '/')).text()).includes('aria-label="当前近况"'));
+  assert.ok((await (await fetch(origin + '/')).text()).includes('aria-label="已发布内容统计"'));
   const pageSaved = await request('/api/admin/config/home/root', 'PUT',
     { value: { ...page.data.value, title: '网站设置首页持久化测试', nowBuilding: '开发近况持久化测试',
       nowWriting: '写作近况持久化测试', nowExploring: '探索近况持久化测试',
@@ -725,15 +726,16 @@ try {
   assert.deepEqual((await request('/api/admin/config/site/root')).data, reloadedSite.data,
     '首页保存不能改变站点和导航');
   const homeHtml = await (await fetch(origin + '/')).text();
-  for (const text of ['网站设置持久化测试', '网站设置页脚测试', '导航持久化测试', '网站设置首页持久化测试',
-    '开发近况持久化测试', '写作近况持久化测试', '探索近况持久化测试'])
+  for (const text of ['网站设置持久化测试', '网站设置页脚测试', '导航持久化测试', '网站设置首页持久化测试'])
     assert.ok(homeHtml.includes(text), `前台应读取实际保存的${text}`);
+  for (const text of ['开发近况持久化测试', '写作近况持久化测试', '探索近况持久化测试'])
+    assert.ok(!homeHtml.includes(text), '旧近况配置仍可保存，但不在首页展示');
   const partialNow = await request('/api/admin/config/home/root', 'PUT', {
     value: { ...reloadedHome.data.value, nowWriting: '', nowExploring: '   ' }, revision: reloadedHome.data.revision,
   });
   assert.equal(partialNow.status, 200);
   const partialHtml = await (await fetch(origin + '/')).text();
-  assert.ok(partialHtml.includes('开发近况持久化测试'));
+  assert.ok(!partialHtml.includes('开发近况持久化测试'));
   assert.ok(!partialHtml.includes('写作近况持久化测试'));
   const clearedNow = await request('/api/admin/config/home/root', 'PUT', {
     value: { ...partialNow.data.value, nowBuilding: '', nowWriting: '', nowExploring: '',
@@ -780,7 +782,7 @@ try {
     assert.ok(singleHtml.includes(`/writing/${article.slug}`));
     assert.ok(singleHtml.includes(`/projects?project=${project.id}`));
   } finally { await emptyHomeDb.end(); }
-  console.log('PASS homepage legacy config, Now persistence/clearing, empty collections and missing covers');
+  console.log('PASS homepage legacy config and Now compatibility, published statistics, empty collections and missing covers');
   console.log('PASS isolated PostgreSQL record lists, detail, single-record writes, conflicts, publication, move, delete, category references, config scopes and 1000-row pagination');
 } finally {
   if (server && server.exitCode === null) {

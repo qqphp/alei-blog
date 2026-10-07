@@ -36,7 +36,8 @@ let article = { ...defaults.writing[0], slug: 'ui-granular', title: '原文章',
   cover: '/notes/paper-v2.png', coverMode: 'upload', coverGeneratedFor: '',
   _published: false };
 let articleRevision = 1;
-let home = { ...defaults.home };
+const legacyNow = { nowBuilding: '历史开发近况', nowWriting: '历史写作近况', nowExploring: '历史探索近况' };
+let home = { ...defaults.home, ...legacyNow };
 let homeRevision = 1;
 function reorderConfigFields(value, saved) {
   if (Array.isArray(value)) return value.map((item) => reorderConfigFields(item, saved));
@@ -405,7 +406,7 @@ try {
   assert.equal(screen.getByRole('link', { name: '查看前台 ↗' }).getAttribute('href'), '/');
   const settingsLabels = () => [...window.document.querySelectorAll('.admin-form label')].map((node) => node.textContent);
   const siteLabels = ['名称', '站点标记'];
-  const homeLabels = ['眉题', '标题', '说明', '正在开发', '正在写作', '正在探索', '主视觉右上英文', '主视觉右下英文', '说说区标题', '说说区说明', '说说装饰英文'];
+  const homeLabels = ['眉题', '标题', '说明', '主视觉右上英文', '主视觉右下英文', '说说区标题', '说说区说明', '说说装饰英文'];
   const assertNavigationOrder = () => {
     assert.deepEqual([...window.document.querySelectorAll('.admin-form .admin-array > legend')]
       .map((node) => node.childNodes[0].textContent.trim()), ['主导航', '网站导航', '生活导航']);
@@ -496,9 +497,7 @@ try {
   await screen.findByLabelText('标题');
   assert.deepEqual(settingsLabels(), homeLabels);
   await user.type(screen.getByLabelText('标题'), ' 测试');
-  await user.type(screen.getByLabelText('正在开发'), '开发近况测试');
-  await user.type(screen.getByLabelText('正在写作'), '写作近况测试');
-  await user.type(screen.getByLabelText('正在探索'), '探索近况测试');
+  for (const label of ['正在开发', '正在写作', '正在探索']) assert.equal(screen.queryByLabelText(label), null);
   await user.clear(screen.getByLabelText('主视觉右上英文'));
   await user.type(screen.getByLabelText('主视觉右上英文'), 'Build\nTogether');
   assert.equal(home.title, defaults.home.title);
@@ -507,9 +506,7 @@ try {
   await waitFor(() => assert.equal(screen.getByRole('button', { name: '确认提交' }).disabled, true));
   assert.deepEqual(settingsLabels(), homeLabels);
   assert.equal(screen.getByLabelText('标题').value, home.title);
-  assert.equal(home.nowBuilding, '开发近况测试');
-  assert.equal(home.nowWriting, '写作近况测试');
-  assert.equal(home.nowExploring, '探索近况测试');
+  for (const [field, value] of Object.entries(legacyNow)) assert.equal(home[field], value, '保存首页设置保留历史近况');
   assert.equal(home.heroArtTopText, 'Build\nTogether');
   assert.deepEqual(site, beforeConflict, '首页保存不能改变站点或导航');
   await user.click(screen.getByRole('tab', { name: '导航' }));
@@ -520,14 +517,11 @@ try {
   await screen.findByLabelText('标题');
   assert.equal(screen.getByLabelText('标题').value, home.title);
   assert.deepEqual(settingsLabels(), homeLabels);
-  assert.equal(screen.getByLabelText('正在开发').value, home.nowBuilding);
-  await user.clear(screen.getByLabelText('正在开发'));
-  await user.clear(screen.getByLabelText('正在写作'));
-  await user.clear(screen.getByLabelText('正在探索'));
+  for (const label of ['正在开发', '正在写作', '正在探索']) assert.equal(screen.queryByLabelText(label), null);
+  await user.clear(screen.getByLabelText('主视觉右上英文'));
   await user.click(screen.getByRole('button', { name: '确认提交' }));
-  await waitFor(() => assert.equal(home.nowBuilding, ''));
-  assert.equal(home.nowWriting, '');
-  assert.equal(home.nowExploring, '');
+  await waitFor(() => assert.equal(home.heroArtTopText, ''));
+  for (const [field, value] of Object.entries(legacyNow)) assert.equal(home[field], value);
   await user.click(screen.getByRole('tab', { name: '页脚' }));
   await screen.findByLabelText('页脚文字');
   const siteBeforeFooter = structuredClone(site);

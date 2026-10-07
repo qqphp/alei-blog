@@ -1,8 +1,8 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { Box, FileText, Compass, ArrowUpRight, ArrowRight } from 'lucide-react';
+import { Box, FileText, MessageSquare, ArrowUpRight, ArrowRight } from 'lucide-react';
 import { HeroGarden } from '@/components/hero-garden';
-import { getPublicContent, getRecentArticles, getRecentProjects } from '@/lib/cms-server';
+import { getPublicContent, getRecentArticles, getRecentProjects, getPublishedContentCounts } from '@/lib/cms-server';
 import { SiteFooter, SiteHeader } from '@/components/site-chrome';
 import './home.css';
 import { columnMetadata, absoluteUrl } from '@/lib/seo';
@@ -11,14 +11,14 @@ import { JsonLd } from '@/components/json-ld';
 export function generateMetadata() { return columnMetadata('/'); }
 
 export default async function Home() {
-  const [{ home, site }, latestWriting, latestProjects] = await Promise.all([
-    getPublicContent(['home', 'site']), getRecentArticles(3), getRecentProjects(3),
+  const [{ home, site }, latestWriting, latestProjects, counts] = await Promise.all([
+    getPublicContent(['home', 'site']), getRecentArticles(3), getRecentProjects(3), getPublishedContentCounts(),
   ]);
-  const now = [
-    { label: '正在开发', text: home.nowBuilding, Icon: Box },
-    { label: '正在写作', text: home.nowWriting, Icon: FileText },
-    { label: '正在探索', text: home.nowExploring, Icon: Compass },
-  ].filter((item) => item.text.trim());
+  const statistics = [
+    { label: '笔墨成篇', text: `${counts.articles} 篇文章`, Icon: FileText },
+    { label: '匠心成作', text: `${counts.projects} 个项目`, Icon: Box },
+    { label: '随心札记', text: `${counts.stories} 则说说`, Icon: MessageSquare },
+  ];
 
   return (
     <main className="site-shell home-page">
@@ -42,15 +42,15 @@ export default async function Home() {
             {home.heroArtBottomText.trim() && <p className="home-art-bottom" aria-hidden="true">{home.heroArtBottomText}</p>}
           </div>
         </section>
-        {now.length > 0 && <section className="home-now home-container" aria-label="当前近况">
-          <p className="home-now-label">NOW</p>
-          <div className="home-now-items">{now.map(({ label, text, Icon }) => (
+        <section className="home-now home-container" aria-label="已发布内容统计">
+          <p className="home-now-label">积累</p>
+          <div className="home-now-items">{statistics.map(({ label, text, Icon }) => (
             <div className="home-now-item" key={label}>
               <span className="home-now-icon"><Icon size={21} aria-hidden="true" /></span>
               <div><span>{label}</span><p>{text}</p></div>
             </div>
           ))}</div>
-        </section>}
+        </section>
       </div>
 
       <section className="home-latest home-container" aria-labelledby="latest-title">

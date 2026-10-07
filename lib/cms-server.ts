@@ -249,6 +249,21 @@ async function loadPublicArticle(slug: string) {
   return saved || !fallback ? undefined : { ...fallback, createdAt: null, updatedAt: null };
 }
 
+export async function getPublishedContentCounts() {
+  return withReadDatabase(async (db) => (await db.query<{ articles: number; projects: number; stories: number }>(
+    `SELECT
+      CASE WHEN EXISTS (SELECT 1 FROM cms_sections WHERE section='writing')
+        THEN (SELECT count(*)::int FROM articles WHERE published) ELSE $1::int END AS articles,
+      CASE WHEN EXISTS (SELECT 1 FROM cms_sections WHERE section='projects')
+        THEN (SELECT count(*)::int FROM cms_entries WHERE section='projects' AND collection='items' AND published) ELSE $2::int END AS projects,
+      CASE WHEN EXISTS (SELECT 1 FROM cms_sections WHERE section='stories')
+        THEN (SELECT count(*)::int FROM cms_entries WHERE section='stories' AND collection='root' AND published) ELSE $3::int END AS stories`,
+    [defaults.writing.filter((item) => item._published).length,
+      defaults.projects.items.filter((item) => item._published).length,
+      defaults.stories.filter((item) => item._published).length],
+  )).rows[0]);
+}
+
 export async function getRecentArticles(limit: number) {
   const saved = await withDatabase(async (db) => {
     const section = await db.query('SELECT 1 FROM cms_sections WHERE section = $1', ['writing']);
