@@ -7,12 +7,15 @@ import { SiteFooter, SiteHeader } from '@/components/site-chrome';
 import './home.css';
 import { columnMetadata, absoluteUrl } from '@/lib/seo';
 import { JsonLd } from '@/components/json-ld';
+import { getActiveAnnouncements } from '@/lib/announcements-server';
+import { AnnouncementPopup } from '@/components/announcement-popup';
 
 export function generateMetadata() { return columnMetadata('/'); }
 
 export default async function Home() {
-  const [{ home, site }, latestWriting, latestProjects, counts] = await Promise.all([
+  const [{ home, site }, latestWriting, latestProjects, counts, announcements] = await Promise.all([
     getPublicContent(['home', 'site']), getRecentArticles(3), getRecentProjects(3), getPublishedContentCounts(),
+    getActiveAnnouncements(),
   ]);
   const statistics = [
     { label: '笔墨成篇', text: `${counts.articles} 篇文章`, Icon: FileText },
@@ -23,6 +26,7 @@ export default async function Home() {
   return (
     <main className="site-shell home-page">
       <SiteHeader />
+      <AnnouncementPopup announcements={announcements} />
       <JsonLd value={{ '@context': 'https://schema.org', '@type': 'WebSite', name: site.name, url: absoluteUrl('/') }} />
       <div className="home-hero-surface">
         <div className="home-hero-guide" aria-hidden="true"><i /><span /></div>

@@ -6,6 +6,7 @@ import { musicSample, type MusicDocument } from './music-content';
 import { defaults, footerLinkSample, footerSocialLinkSample, footerIconOptions, type Section } from './cms-defaults';
 import { skillCategorySample } from './ai-resources';
 import { storyDate } from './story-content';
+import { announcementSample, announcementCategorySample, validAnnouncementTime } from './announcements';
 
 export type Json =
   | string
@@ -69,6 +70,8 @@ export function validateContent(key: Section, value: unknown) {
       if (list.length > (growingCollection ? 10000 : 500))
         fail(growingCollection ? '最多 10000 项' : '最多 500 项');
       const itemSample = path === 'site.footerLinks' ? footerLinkSample
+        : path === 'announcements.items' ? announcementSample
+        : path === 'announcements.categories' ? announcementCategorySample
         : path === 'site.footerSocialLinks' ? footerSocialLinkSample
         : path === 'ai.skillCategories' ? skillCategorySample : sample[0] ?? '';
       list.forEach((item, i) => walk(item, itemSample, `${path}[${i + 1}]`));
@@ -170,6 +173,17 @@ export function validateContent(key: Section, value: unknown) {
           : key === 'travel' || key === 'hobbies' ? activitySample : key === 'books' ? bookSample : defaults[key],
     key,
   );
+  if (key === 'announcements') {
+    const document = value as typeof defaults.announcements;
+    const categories = new Set(document.categories.map((item) => item.id));
+    for (const item of document.items) {
+      if (!categories.has(item.categoryId)) throw new Error('请选择有效的公告类型');
+      if (!item.body.trim()) throw new Error('请填写公告内容');
+      if (!validAnnouncementTime(item.startAt)) throw new Error('请填写有效的开始时间（精确到秒）');
+      if (item.endAt && (!validAnnouncementTime(item.endAt) || Date.parse(item.endAt) <= Date.parse(item.startAt)))
+        throw new Error('结束时间必须晚于开始时间');
+    }
+  }
   if (key === 'ai') {
     const document = value as typeof defaults.ai;
     const statusIds = new Set(document.agentStatuses.map((item) => item.id));

@@ -277,12 +277,14 @@ try {
   await screen.findByRole('button', { name: '原文章' });
   assert.equal(calls.some((call) => call.path === '/api/admin/content'), false);
   const nav = screen.getByRole('navigation', { name: '后台栏目' });
-  assert.deepEqual(within(nav).getAllByRole('button').slice(0, 6).map((node) => node.textContent), ['写作', '项目', '说说', 'AI', '投资', '关于']);
+  assert.deepEqual(within(nav).getAllByRole('button').filter((node) => !node.hasAttribute('aria-expanded')).slice(0, 6)
+    .map((node) => node.textContent), ['写作', '项目', '说说', 'AI', '投资', '关于']);
   assert.equal(within(nav).queryByRole('button', { name: '提示词便签' }), null);
   assert.equal(within(nav).queryByRole('button', { name: '说说封面' }), null);
   assert.equal(within(nav).queryByRole('button', { name: '站点与导航' }), null);
   assert.equal(within(nav).queryByRole('button', { name: '首页', exact: true }), null);
-  assert.equal(within(nav).getByRole('button', { name: '网站设置' }).parentElement.textContent, '设置AI 大模型设置网站设置');
+  assert.deepEqual(Array.from(within(nav).getByRole('button', { name: '网站设置' }).parentElement.querySelectorAll('button'))
+    .map((node) => node.textContent), ['网站设置', '模型设置', '公告设置']);
   for (const label of ['导出内容备份', '导入此栏目', '重新载入', '保存栏目'])
     assert.equal(screen.queryByText(label), null, label);
   assert.equal(window.document.querySelector('.admin-toolbar'), null);
@@ -323,6 +325,14 @@ try {
   assert.ok(screen.getByRole('textbox', { name: '文章正文 Markdown' }).value.includes('按需编辑测试'));
   await user.click(screen.getByRole('button', { name: '编辑 & 预览', exact: true }));
   await user.type(screen.getByLabelText('文章标题'), '已修改');
+  const editedTitle = screen.getByLabelText('文章标题').value;
+  const originalConfirm = window.confirm;
+  window.confirm = () => { throw new Error('菜单分组折叠不应触发丢弃修改确认'); };
+  await user.click(within(nav).getByRole('button', { name: '内容', exact: true }));
+  assert.equal(within(nav).queryByRole('button', { name: '写作' }), null);
+  assert.equal(screen.getByLabelText('文章标题').value, editedTitle);
+  await user.click(within(nav).getByRole('button', { name: '内容', exact: true }));
+  window.confirm = originalConfirm;
   assert.equal(calls.filter((call) => call.method === 'PUT').length, 0,
     '输入字段时不能自动保存');
   assert.ok(screen.getByRole('button', { name: '确认提交' }).closest('.admin-form-actions'));

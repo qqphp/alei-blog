@@ -20,6 +20,41 @@ export async function checkContentManagement({ request, origin, testUrl, default
     assert.equal(run.status, 0, run.stderr);
   };
   try {
+    const announcementCategory = { id: 'announcement-type-test', name: '验收通知' };
+    const announcementBase = '/api/admin/records/announcements/items';
+    const categoryBase = '/api/admin/records/announcements/categories';
+    const categoryCreated = await request(categoryBase, 'POST', { value: announcementCategory });
+    assert.equal(categoryCreated.status, 200, JSON.stringify(categoryCreated.data));
+    const notice = { id: 'announcement-test', title: '公告持久化验收标题', categoryId: announcementCategory.id,
+      body: '**公告持久化正文**', startAt: '2020-01-01T00:00:00.000Z', endAt: '', _published: false };
+    const noticeCreated = await request(announcementBase, 'POST', { value: notice });
+    assert.equal(noticeCreated.status, 200, JSON.stringify(noticeCreated.data));
+    assert.ok(noticeCreated.data.value.createdAt && noticeCreated.data.value.updatedAt);
+    assert.equal((await getHtml('/')).includes(notice.title), false);
+    for (const change of [{ categoryId: 'missing' }, { body: '' }, { startAt: '' }, { endAt: notice.startAt }])
+      assert.equal((await request(`${announcementBase}/${notice.id}`, 'PUT',
+        { value: { ...notice, ...change }, revision: 1 })).status, 400);
+    assert.equal((await request(`${categoryBase}/${announcementCategory.id}`, 'DELETE', { revision: 1 })).status, 400);
+    const noticePublished = await request(`${announcementBase}/${notice.id}`, 'PATCH', { published: true, revision: 1 });
+    assert.equal(noticePublished.status, 200, JSON.stringify(noticePublished.data));
+    assertTime(noticeCreated.data.value, noticePublished.data.value);
+    assert.ok((await getHtml('/')).includes(notice.title));
+    const noticeEdited = await request(`${announcementBase}/${notice.id}`, 'PUT', { revision: noticePublished.data.revision,
+      value: { ...noticePublished.data.value, body: '更新后的公告内容', createdAt: '2000-01-01T00:00:00Z', updatedAt: '2099-01-01T00:00:00Z' } });
+    assert.equal(noticeEdited.status, 200, JSON.stringify(noticeEdited.data));
+    assertTime(noticePublished.data.value, noticeEdited.data.value);
+    assert.equal((await request(`${announcementBase}/${notice.id}`, 'PUT', { value: notice, revision: 1 })).status, 409);
+    for (const { id, times } of [{ id: 'future', times: { startAt: '2099-01-01T00:00:00.000Z' } },
+      { id: 'expired', times: { endAt: '2021-01-01T00:00:00.000Z' } }]) {
+      const value = { ...notice, ...times, id: `notice-${id}`, title: `公告${id}不可见验收`, _published: true };
+      const result = await request(announcementBase, 'POST', { value });
+      assert.equal(result.status, 200, JSON.stringify(result.data));
+      assert.equal((await getHtml('/')).includes(value.title), false);
+      assert.equal((await request(`${announcementBase}/${value.id}`, 'DELETE', { revision: result.data.revision })).status, 200);
+    }
+    assert.equal((await request(`${announcementBase}/${notice.id}`, 'DELETE', { revision: noticeEdited.data.revision })).status, 200);
+    assert.equal((await request(`${categoryBase}/${announcementCategory.id}`, 'DELETE', { revision: 1 })).status, 200);
+    console.log('PASS announcement API persistence, publication/validity, timestamps, category references and edit conflicts');
     for (const old of ['aiNotes', 'prompt']) {
       assert.equal((await request(`/api/admin/records/${old}/root`)).status, 400);
       assert.equal((await request(`/api/admin/config/${old}/root`)).status, 400);

@@ -13,6 +13,9 @@ import { AdminStoryEditor } from './admin-story-editor';
 import { AdminAiSettings } from './admin-ai-settings';
 import { AdminAiResources } from './admin-ai-resources';
 import { AdminInvestmentEditor } from './admin-investment-editor';
+import { AdminAnnouncementEditor } from './admin-announcement-editor';
+import { AdminSidebar } from './admin-sidebar';
+import { announcementSample, announcementCategorySample, type Announcement } from '@/lib/announcements';
 import { AdminMailSettings, AdminContactRecords } from './admin-contact';
 import { formatRecordTime } from '@/lib/content-times';
 import { api, asJson, Field, fresh } from './admin-fields';
@@ -28,12 +31,6 @@ type Page = { items: Summary[]; total: number; page: number; size: number };
 type Edit = { id: string | null; value: Json; revision: number; original: string };
 type Option = { id: string; name: string; parentId?: string; title?: string };
 
-const sidebarSections: { label?: string; sections: Section[] }[] = [
-  { sections: ['writing', 'projects', 'stories', 'ai', 'investing', 'profile'] },
-  { label: '网站', sections: ['bookmarks', 'friends'] },
-  { label: '生活', sections: ['tracks', 'films', 'podcasts', 'travel', 'hobbies', 'books'] },
-  { label: '设置', sections: ['aiSettings', 'site'] },
-];
 const websiteTabs = [
   { id: 'site', label: '站点', keys: ['name', 'mark'] },
   { id: 'seo', label: 'SEO', keys: ['title', 'description', 'defaultShareImage', 'defaultShareImageAlt'] },
@@ -62,6 +59,7 @@ const destinations: Partial<Record<Section, string>> = {
   travel: '/travel', hobbies: '/hobbies',
 };
 const collectionName = (section: Section, collection: string) => {
+  if (section === 'announcements') return collection === 'categories' ? '分类' : '内容';
   if (section === 'writing' && collection === 'articles') return '文章管理';
   if (section === 'writing' && collection === 'categories') return '文章分类';
   if (section === 'stories') return collection === 'covers' ? '说说封面' : '说说';
@@ -74,6 +72,9 @@ const configUrl = (section: Section, scope: string) =>
   `/api/admin/config/${section}/${encodeURIComponent(scope)}`;
 
 function sampleRecord(section: Section, collection: string, options: Record<string, Option[]>): Json {
+  if (section === 'announcements') return asJson(collection === 'categories'
+    ? { ...announcementCategorySample, id: crypto.randomUUID() }
+    : { ...announcementSample, id: crypto.randomUUID(), categoryId: options.categories?.[0]?.id ?? '' });
   if (section === 'writing' && collection === 'articles')
     return {
       slug: `article-${crypto.randomUUID().slice(0, 8)}`, title: '', excerpt: '', body: '',
@@ -248,7 +249,9 @@ export function AdminGranularPanel() {
   }, [loggedIn, configSection, configScope, activeScope]);
 
   function changeSection(next: Section) {
-    if (busy || working || next === section || !confirmDiscard()) return;
+    if (busy || working) return false;
+    if (next === section) return true;
+    if (!confirmDiscard()) return false;
     listRequest.current++;
     editRequest.current++;
     setSection(next);
@@ -256,6 +259,7 @@ export function AdminGranularPanel() {
     setTab(next === 'site' ? websiteTabs[0].id : adminCollections[next]?.[0] ?? configScopes(next)[0]?.id ?? 'root');
     setEdit(null); setConfig(null); setList(null); setOptions({}); setPage(1); setQuery('');
     setStatus('all'); setCategoryId(''); setStatusId(''); setPendingTag(''); setMessage('');
+    return true;
   }
   function changeTab(next: string) {
     if (busy || working || next === tab || !confirmDiscard()) return;
@@ -383,30 +387,16 @@ export function AdminGranularPanel() {
   const canPublish = activeCollection && !['categories', 'statuses', 'scenes', 'sections', 'agentStatuses', 'skillCategories'].includes(activeCollection)
     && !(section === 'writing' && activeCollection === 'categories');
   const showTimes = (section === 'writing' && activeCollection === 'articles') ||
+    (section === 'announcements' && activeCollection === 'items') ||
     (section === 'projects' && activeCollection === 'items') || (section === 'investing' && activeCollection === 'entries');
-  const canMove = !['writing', 'stories'].includes(recordSection) && !(section === 'investing' && activeCollection === 'entries');
+  const canMove = !['writing', 'stories', 'announcements'].includes(recordSection) && !(section === 'investing' && activeCollection === 'entries');
   const moveFiltered = Boolean(query || status !== 'all' || categoryId || statusId);
   return <main className="admin-shell">
-    <aside className="admin-sidebar">
-      <div className="admin-brand"><span>ALEI ADMIN</span><strong>后台管理系统</strong></div>
-      <p>内容与页面</p>
-      <nav aria-label="后台栏目">
-        {sidebarSections.map((group, index) => <div key={group.label ?? index}
-          className={group.label ? 'admin-nav-group' : 'admin-nav-primary'}>
-          {group.label && <span className="admin-nav-group-label">{group.label}</span>}
-          {group.sections.map((key) => <button key={key} type="button" disabled={busy || working}
-            className={group.label ? 'admin-nav-child' : undefined}
-            aria-current={section === key ? 'page' : undefined} onClick={() => changeSection(key)}>
-            {sectionLabels[key]}
-          </button>)}
-        </div>)}
-      </nav>
-      <button type="button" disabled={busy || working} onClick={async () => {
+    <AdminSidebar section={section} disabled={busy || working} onSelect={changeSection} onLogout={async () => {
         if (!confirmDiscard()) return;
         try { await api('/api/admin/session', { method: 'DELETE' }); setLoggedIn(false); }
         catch (error) { setMessage(String(error)); }
-      }}>退出登录</button>
-    </aside>
+      }} />
     <div className="admin-workspace">
       <header className="admin-topbar"><div>
         <p className="admin-eyebrow">LOCAL BLOG / EDITOR</p><h1>{sectionLabels[section]}</h1>
@@ -436,6 +426,9 @@ export function AdminGranularPanel() {
                 pendingTopic={pendingStoryTopic} onPendingTopicChange={setPendingStoryTopic}
                 onWorking={setWorking} disabled={busy || working}
                 onChange={(value) => setEdit({ ...edit, value: asJson(value) })} /> :
+              section === 'announcements' && activeCollection === 'items' ? <AdminAnnouncementEditor
+                value={edit.value as unknown as Announcement} categories={options.categories ?? []}
+                onWorking={setWorking} onChange={(value) => setEdit({ ...edit, value: asJson(value) })} /> :
               section === 'ai' ? <AdminAiResources collection={activeCollection} value={edit.value} sample={recordSample!}
                 agentStatuses={options.agentStatuses ?? []}
                 skillCategories={options.skillCategories ?? []}
@@ -481,7 +474,7 @@ export function AdminGranularPanel() {
           {canMove && moveFiltered && <p className="admin-sort-hint">清除筛选后可调整排序。</p>}
           <div className="admin-table-scroll"><table className="admin-data-table">
             <caption>共 {list?.total ?? 0} 条；每页最多 20 条</caption>
-            <thead><tr><th scope="col">内容</th>{showTimes && <><th scope="col">{section === 'investing' ? '添加时间' : '创建时间'}</th><th scope="col">最后更新时间</th></>}<th scope="col">状态</th><th scope="col">操作</th></tr></thead>
+            <thead><tr><th scope="col">内容</th>{showTimes && <><th scope="col">{section === 'investing' ? '添加时间' : '创建时间'}</th><th scope="col">{section === 'announcements' ? '编辑时间' : '最后更新时间'}</th></>}<th scope="col">状态</th><th scope="col">操作</th></tr></thead>
             <tbody>{list?.items.map((item, index) => <tr key={item.id}>
               <td><button type="button" className="admin-table-title" disabled={busy || working} onClick={() => void openRecord(item.id)}>
                 {section === 'stories' && tab !== 'covers' ? item.date ? formatRecordTime(item.date).replaceAll('/', '-') : '—'

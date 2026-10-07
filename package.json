@@ -34,6 +34,7 @@
     "test:public-pagination": "node --import tsx scripts/test-public-pagination.mjs",
     "test:content-order": "node --import tsx scripts/test-content-order.mjs",
     "test:admin-granular-ui": "node --import tsx scripts/test-admin-granular-ui.mjs",
+    "test:announcements-ui": "node --import tsx scripts/test-announcements-ui.mjs",
     "test:booklist-entries-ui": "node --import tsx scripts/test-booklist-entries-ui.mjs",
     "test:contact": "node --env-file-if-exists=.env --import tsx scripts/test-contact.mjs",
     "test:contact-ui": "node --import tsx scripts/test-contact-ui.mjs",

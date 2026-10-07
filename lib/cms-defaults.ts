@@ -17,6 +17,7 @@ import { researchContent } from './research-content';
 import articleSeed from './article-seed.json';
 import { categoryId, stripArticleExtras } from './article-categories';
 import { markdownAiDefaults } from './markdown-ai';
+import type { Announcement, AnnouncementCategory } from './announcements';
 
 const publish = <T extends object>(items: T[]) =>
   items.map((item) => ({ ...item, _published: true }));
@@ -33,6 +34,7 @@ export const footerIconOptions = [
   { id: 'linkedin', name: 'LinkedIn' }, { id: 'facebook', name: 'Facebook' },
 ];
 export const defaults = {
+  announcements: { items: [] as Announcement[], categories: [] as AnnouncementCategory[] },
   aiSettings: {
     ...markdownAiDefaults,
     booklistCoverSize: '1536x1024',
@@ -237,7 +239,8 @@ export function siteWithFooter(value: Partial<typeof defaults.site>) {
 
 export type Section = keyof Content;
 export const sectionLabels: Record<Section, string> = {
-  aiSettings: 'AI 大模型设置',
+  announcements: '公告设置',
+  aiSettings: '模型设置',
   site: '网站设置',
   home: '首页',
   writing: '写作',

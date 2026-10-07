@@ -1,6 +1,7 @@
 import { defaults, type Section } from './cms-defaults';
 
 export const adminCollections: Partial<Record<Section, readonly string[]>> = {
+  announcements: ['items', 'categories'],
   writing: ['articles', 'categories'],
   projects: ['items', 'statuses', 'categories'],
   stories: ['root'],
