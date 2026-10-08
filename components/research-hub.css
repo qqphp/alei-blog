@@ -49,16 +49,15 @@
 
 /* Investing page */
 .research-investing { max-width: 1240px; padding-bottom: 56px; }
-.research-investing .investment-topic-grid { gap: 0; margin: 26px 0 48px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.research-investing .investment-topic { min-height: 90px; display: flex; align-items: center; gap: 14px; padding: 17px 20px; text-align: left; color: var(--ink); border: 0; border-right: 1px solid var(--line); background: transparent; cursor: pointer; transition: background-color .18s ease; }
+.research-investing .investment-topic-grid { gap: 0; margin: 20px 0 28px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.research-investing .investment-topic { min-height: 56px; display: flex; align-items: center; gap: 10px; padding: 10px 18px; text-align: left; color: var(--ink); border: 0; border-right: 1px solid var(--line); background: transparent; cursor: pointer; transition: background-color .18s ease; }
 .research-investing .investment-topic:first-child { border-left: 1px solid var(--line); }
 .research-investing .investment-topic:hover, .research-investing .investment-topic[aria-pressed='true'] { background: color-mix(in srgb, var(--lime) 5%, transparent); }
 .research-investing .investment-topic[aria-pressed='true'] { box-shadow: inset 0 -2px 0 var(--lime); }
-.investment-topic-index { align-self: flex-start; color: var(--muted); font: .62rem ui-monospace, monospace; }
 .investment-topic-icon { flex: 0 0 auto; color: var(--lime); }
-.investment-topic-copy { display: grid; gap: 6px; color: var(--ink); font-family: Arial, 'Microsoft YaHei', sans-serif; }
+.investment-topic-copy { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; min-width: 0; color: var(--ink); font-family: Arial, 'Microsoft YaHei', sans-serif; }
 .investment-topic-copy strong { font-size: .85rem; font-weight: 500; }
-.investment-topic-copy small { color: var(--muted); font-size: .66rem; }
+.investment-topic-copy small { color: var(--muted); font-size: .66rem; white-space: nowrap; }
 .investment-library { margin-top: 0; }
 .investment-section-code { display: block; margin-bottom: 8px; color: var(--lime); font: .6rem ui-monospace, monospace; }
 .investment-entry-overline { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font: .58rem ui-monospace, monospace; }
@@ -86,8 +85,8 @@
 }
 @media (max-width: 700px) {
   .research-investing { padding: 0 22px 42px; }
-  .research-investing .investment-topic-grid { margin: 19px 0 36px; }
-  .research-investing .investment-topic { min-height: 76px; gap: 10px; padding: 12px; }
+  .research-investing .investment-topic-grid { margin: 16px 0 24px; }
+  .research-investing .investment-topic { min-height: 52px; gap: 8px; padding: 10px; }
   .investment-topic-copy strong { font-size: .78rem; }
   .investment-topic-copy small { font-size: .61rem; }
   .investment-reader { grid-template-columns: minmax(0, 1fr); }

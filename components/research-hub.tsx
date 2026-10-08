@@ -43,14 +43,13 @@ export function ResearchHub() {
             <InvestmentPond />
           </header>
           <nav className="research-topic-grid investment-topic-grid" aria-label="投资研究栏目">
-            {sectionsForDisplay.map((item, index) => {
+            {sectionsForDisplay.map((item) => {
               const Icon = investmentIcons[item.id] ?? BookOpen;
               const entryCount = archive.remote ? archive.categoryCounts[item.id] ?? 0 : item.entries.length;
               return (
                 <button className={`investment-topic investment-topic-${item.id}`} type="button" key={item.id} aria-pressed={category === item.id} onClick={() => { setCategory(category === item.id ? 'all' : item.id); setSelectedId(null); setPage(1); }}>
-                  <span className="investment-topic-index">{String(index + 1).padStart(2, '0')}</span>
                   <Icon className="investment-topic-icon" size={19} strokeWidth={1.6} aria-hidden="true" />
-                  <span className="investment-topic-copy"><strong>{item.title}</strong><small>{entryCount ? `${entryCount} 篇笔记` : '持续整理中'}</small></span>
+                  <span className="investment-topic-copy"><strong>{item.title}</strong><small>{entryCount} 篇笔记</small></span>
                 </button>
               );
             })}
