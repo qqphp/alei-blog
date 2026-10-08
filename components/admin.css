@@ -1274,8 +1274,8 @@ html.fresh-theme body:has(.admin-login) {
   background: #f5f4ee;
   background-image: none;
 }
-body:has(.admin-shell) .music-dock,
-body:has(.admin-login) .music-dock {
+body:has(.admin-shell) .site-floating-tools,
+body:has(.admin-login) .site-floating-tools {
   display: none;
 }
 @media (max-width: 1100px) {

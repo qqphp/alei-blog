@@ -1,12 +1,12 @@
 'use client';
 
 import { useContent } from '@/components/content-provider';
+import { SiteFloatingTools } from './site-floating-tools';
 
 import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -24,7 +24,6 @@ import {
   X,
 } from 'lucide-react';
 import { formatTime } from '@/lib/music';
-import { usePathname } from 'next/navigation';
 import type { PublicContent } from '@/lib/cms-defaults';
 
 const MusicContext = createContext<{
@@ -51,8 +50,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const tracks = music.items;
   const audio = useRef<HTMLAudioElement>(null);
   const request = useRef(0);
-  const dock = useRef<HTMLElement>(null);
-  const path = usePathname();
   const [trackId, setTrackId] = useState(tracks[0]?.id ?? '');
   const index = Math.max(
     0,
@@ -75,32 +72,6 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(false);
   const [playlist, setPlaylist] = useState(false);
   const [collapsed, setCollapsed] = useState(true);
-
-  useEffect(() => {
-    const element = dock.current;
-    if (!element) return;
-    let frame = 0;
-    const update = () => {
-      frame = 0;
-      const footer = document.querySelector('.site-footer');
-      const lift = footer ? Math.max(0, window.innerHeight - footer.getBoundingClientRect().top + 16) : 0;
-      element.style.setProperty('--music-footer-bottom', `${Math.min(lift, Math.max(0, window.innerHeight - 80))}px`);
-    };
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(update);
-    };
-    const observer = new ResizeObserver(schedule);
-    observer.observe(document.body);
-    window.addEventListener('scroll', schedule, { passive: true });
-    window.addEventListener('resize', schedule);
-    update();
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-      window.removeEventListener('scroll', schedule);
-      window.removeEventListener('resize', schedule);
-    };
-  }, [path, tracks.length]);
 
   const start = useCallback(async () => {
     const element = audio.current;
@@ -220,7 +191,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
 
   if (!tracks.length)
     return (
-      <MusicContext.Provider value={controls}>{children}</MusicContext.Provider>
+      <MusicContext.Provider value={controls}>{children}<SiteFloatingTools /></MusicContext.Provider>
     );
   return (
     <MusicContext.Provider value={controls}>
@@ -253,8 +224,8 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           default
         />
       </audio>
+      <SiteFloatingTools>
       <aside
-        ref={dock}
         className={`music-dock${collapsed ? ' is-collapsed' : ''}${playing ? ' is-playing' : ''}`}
         aria-label="全局音乐播放器"
       >
@@ -424,6 +395,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           </p>
         )}
       </aside>
+      </SiteFloatingTools>
     </MusicContext.Provider>
   );
 }
