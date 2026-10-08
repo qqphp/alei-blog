@@ -17,8 +17,8 @@ if (!mediaToBase || (!mediaToBase.startsWith('..') && !isAbsolute(mediaToBase)))
 try {
   if (!(await stat(media)).isDirectory()) throw new Error('素材路径不是目录');
 } catch (error) {
-  if (error?.code === 'ENOENT') throw new Error(`素材目录不存在：${media}`);
-  throw error;
+  if (error?.code === 'ENOENT') await mkdir(media, { recursive: true });
+  else throw error;
 }
 const db = new pg.Client({ connectionString: process.env.DATABASE_URL });
 await db.connect();

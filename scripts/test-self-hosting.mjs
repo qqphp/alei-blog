@@ -169,6 +169,26 @@ try {
   }
   const owner = decodeURIComponent(source.username).replaceAll('"', '""');
   await admin.query(`CREATE DATABASE ${databaseName} OWNER "${owner}"`);
+  const emptyMedia = join(directory, 'new-install', 'media');
+  const emptyBackupBase = join(directory, 'empty-backups');
+  run('backup-postgres.mjs', { CMS_MEDIA_DIRECTORY: emptyMedia }, [
+    emptyBackupBase,
+  ]);
+  assert.ok(
+    (await stat(emptyMedia)).isDirectory(),
+    'missing media directory is created',
+  );
+  const emptyBackup = join(emptyBackupBase, (await readdir(emptyBackupBase))[0]);
+  assert.deepEqual(
+    await readdir(join(emptyBackup, 'media')),
+    [],
+    'empty media is backed up',
+  );
+  assert.ok((await stat(join(emptyBackup, 'database.dump'))).size > 0);
+  assert.ok((await stat(join(emptyBackup, 'complete.json'))).isFile());
+  console.log(
+    'PASS backup creates missing media directory and completes an empty-media backup',
+  );
   const backupBase = join(directory, 'backups');
   const expired = join(backupBase, 'alei-2000-01-01T00-00-00');
   const incomplete = join(backupBase, 'alei-2001-01-01T00-00-00');
