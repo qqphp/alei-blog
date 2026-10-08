@@ -19,13 +19,13 @@ npm run dev
 
 打开终端打印的本地地址，默认是 [http://localhost:3000](http://localhost:3000)。运行 `npm run admin:password` 后，终端会显示后台随机地址；请将它保存为书签。如开发服务器使用其他端口，后台也使用同一端口。访问 `/admin` 会返回 404。
 
-管理员密码与随机入口由 `npm run admin:password` 首次生成并显示，同时保存在根目录 `.env` 中；重复运行会保留已有值。后台只需要密码，不需要用户名；修改 `.env` 后需重启服务。
+管理员密码与随机入口由 `npm run admin:password` 生成并显示，同时保存在根目录 `.env` 中；每次运行都会重置密码，已有有效入口保持不变。后台只需要密码，不需要用户名；修改 `.env` 后需重启服务。
 
 ### 数据库与密码配置
 
 `db:setup` 默认使用已安装的 PostgreSQL 18，在 `.local/postgres18/` 建立博客专用实例，仅监听 `127.0.0.1:55433`，创建 `alei_blog` 数据库和独立账号，并将随机密码连接串写入 `.env`。开发与本地生产启动会自动启动这个实例。程序不在默认目录时配置 `POSTGRES_BIN`。使用已有同机或外部服务时，直接填写已创建空库的 `DATABASE_URL`；`db:setup` 会验证连接，`db:init` 创建表并写入示例内容。也可临时配置 `PG_ADMIN_URL` 由脚本创建独立账号和数据库，成功后会从 `.env` 移除该项。进程环境变量优先于文件；修改后需重启服务。
 
-`npm run admin:password` 只会补齐缺少或格式无效的配置，不会覆盖已有有效密码和入口。忘记密码或需要轮换后台凭据时执行：
+忘记密码时执行 `npm run admin:password` 即可生成新密码并覆盖 `.env` 中的已有密码；入口缺失或格式无效时会自动生成。如果还需要同时轮换后台入口，执行：
 
 ```powershell
 npm run admin:password -- --reset
@@ -109,7 +109,7 @@ npm run admin:password -- --reset
 | `npm run db:migrate`     | 在 PostgreSQL 中创建或更新博客表及索引                              |
 | `npm run db:seed-missing` | 补齐数据库中缺失的默认栏目和记录，重复执行不会覆盖已有内容        |
 | `npm run db:backup`      | 备份 PostgreSQL 数据和上传素材                                    |
-| `npm run admin:password` | 补齐缺失的管理员密码和后台入口                                      |
+| `npm run admin:password` | 重置管理员密码，并补齐缺失或无效的后台入口                            |
 | `npm run typecheck`      | TypeScript 类型检查                                                 |
 | `npm run test:cms`       | 在独立测试数据库运行逐条读写与冲突集成测试                           |
 | `npm run test:self-hosting` | 备份传输恢复、记录与文件核对、HTTPS 代理登录和重启持久化 |
@@ -159,6 +159,6 @@ vite.config.ts         Vinext Node 开发与构建配置
 - **更新代码后旧开发进程报错**：更换运行环境后需要重新安装依赖，需要完整重启一次，单纯刷新浏览器不能代替重启。
 - **保存后看不到内容**：确认已提交当前记录、条目已发布、前台筛选条件没有隐藏它，并刷新前台。
 - **书单里的书名没有跟着书籍记录变化**：书单单独保存书名和作者。需要在书单里改对应一行。
-- **忘记密码**：运行 `npm run admin:password -- --reset` 后重启。
+- **忘记密码**：运行 `npm run admin:password` 后重启。
 - **本地请求受代理影响**：检查代理的 localhost 排除设置；命令行可使用 `curl.exe --noproxy "*" http://localhost:3000/`。
 - **准备部署到服务器**：按 [Linux 自托管指南](docs/self-hosting.md) 配置持久化目录、独立生产密码、systemd 和 Nginx。
