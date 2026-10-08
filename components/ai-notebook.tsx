@@ -180,10 +180,10 @@ function PianoBoard() {
     <section id="ai-piano" className="ai-piano" aria-label="钢琴键盘">
       <div className="ai-piano-bar">
       <Image
-        src="/ai/piano-banner.jpg"
-        alt="音乐与智能体远山横幅"
-        width={1376}
-        height={768}
+        src="/ai/piano-concert-banner.webp"
+        alt="宏大音乐厅侧视图：左侧满座观众，右侧舞台上的钢琴家正在演奏"
+        width={3072}
+        height={320}
       />
       </div>
       <div className="ai-piano-status">

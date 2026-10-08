@@ -90,7 +90,7 @@
   width: 100%;
   height: 115px;
   object-fit: cover;
-  object-position: center center;
+  object-position: right center;
 }
 .ai-piano-status {
   display: flex;
