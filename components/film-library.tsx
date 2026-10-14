@@ -82,7 +82,7 @@ export function FilmLibrary() {
       </div>
       <ol className="cinema-program-list" aria-label="电影节目单">
         {archive.items
-          .map((film, index) => (
+          .map((film) => (
             <li key={film.id}>
               <div className="cinema-program-image">
                 {film.cover ? (
@@ -98,23 +98,21 @@ export function FilmLibrary() {
               </div>
               <div className="cinema-card-info">
                 <div className="cinema-card-top">
+                  {film.genre.trim() && (
+                    <span className="cinema-program-genre" title={film.genre}>
+                      {film.genre}
+                    </span>
+                  )}
                   <span className="cinema-program-category">
                     {films.categories.find(
                       (item) => item.id === film.categoryId,
                     )?.name || '未分类'}
-                  </span>
-                  <span className="cinema-program-number">
-                    {String((currentPage - 1) * 20 + index + 1).padStart(
-                      2,
-                      '0',
-                    )}
                   </span>
                 </div>
                 <h3>{film.title}</h3>
                 <dl className="cinema-card-facts">
                   {[
                     ['导演', film.director],
-                    ['类型', film.genre],
                     ['国家', film.country],
                     ['语言', film.language],
                   ]

@@ -112,7 +112,7 @@
 .cinema-program-list > li {
   min-width: 0;
   position: relative;
-  padding-top: 27px;
+  padding-top: 34px;
   background: var(--navy);
   border-bottom: 2px solid var(--line);
 }
@@ -144,31 +144,41 @@
 .cinema-card-top {
   position: absolute;
   inset: 0 0 auto;
-  height: 27px;
+  height: 34px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  flex-direction: row-reverse;
   gap: 8px;
   padding: 0 8px;
   border-top: 1px solid var(--line);
 }
-.cinema-program-category {
+.cinema-program-genre {
+  flex: 1;
+  min-width: 0;
   color: var(--muted);
   font-size: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cinema-program-number {
-  color: var(--lime);
-  font:
-    11px ui-monospace,
-    monospace;
+.cinema-program-category {
+  --cinema-tag-ink: #65c2ad;
+  flex-shrink: 0;
+  max-width: 60%;
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid color-mix(in srgb, var(--cinema-tag-ink) 35%, transparent);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--cinema-tag-ink) 10%, transparent);
+  color: var(--cinema-tag-ink);
+  font-size: 10px;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.cinema-program-number::before {
-  content: 'NO. ';
-  font-size: 9px;
+.fresh-theme .cinema-program-category {
+  --cinema-tag-ink: #168b7c;
 }
 .cinema-card-info h3 {
   font-size: 17px;

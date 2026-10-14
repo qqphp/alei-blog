@@ -54,8 +54,9 @@
 .life-page-heading-aside p { margin: 0; font: 1.18rem/1.65 Georgia, 'Songti SC', SimSun, serif; }
 .life-page-heading-aside span { margin-top: 7px; color: var(--muted); font-size: .72rem; line-height: 1.6; }
 .life-page-nav { display: flex; flex-wrap: wrap; gap: 12px 26px; padding: 0 0 16px; border-bottom: 1px solid var(--line); }
-.life-page-nav a { white-space: nowrap; display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--muted); font-size: .8rem; }
+.life-page-nav a { position: relative; white-space: nowrap; display: flex; align-items: center; gap: 8px; min-height: 32px; color: var(--muted); font-size: .8rem; }
 .life-page-nav a[aria-current='page'], .life-page-nav a:hover { color: var(--lime); }
+.life-page-nav a[aria-current='page']::after { content: ''; position: absolute; bottom: -5px; left: 0; width: 24px; height: 2px; background: var(--lime); }
 .listening-room { display: grid; grid-template-columns: 1fr 1fr; align-items: center; gap: 45px; padding: 45px 40px; background: color-mix(in srgb, var(--lime) 5%, var(--navy)); margin-top: 25px; border: 1px solid var(--line); }
 .listening-record { display: grid; place-items: center; width: min(100%, 290px); aspect-ratio: 1; justify-self: center; border-radius: 50%; background: repeating-radial-gradient(circle, #182a30 0 2px, #293d42 3px, #182a30 4px 6px); box-shadow: 15px 18px 0 color-mix(in srgb, var(--lime) 8%, transparent); border: 1px solid var(--line); }
 .listening-record > div { display: flex; align-items: center; flex-direction: column; justify-content: center; width: 45%; height: 45%; border-radius: 50%; background: var(--lime); color: var(--navy); }
