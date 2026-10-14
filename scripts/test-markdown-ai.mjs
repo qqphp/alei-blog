@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
-register('./film-ai-test-loader.mjs', import.meta.url);
+import { registerHooks } from 'node:module';
+registerHooks(await import('./film-ai-test-loader.mjs'));
 const previousEnvironment = { ...process.env };
 const originalFetch = globalThis.fetch;
 process.env.AI_PROVIDER_API_KEY = 'test-only-key';

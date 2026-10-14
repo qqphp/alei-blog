@@ -1,10 +1,10 @@
 # Node.js 自托管部署
 
-目标：Ubuntu / Debian、systemd、Node.js >=22.13.0、PostgreSQL 18；已有 Nginx 和 HTTPS。应用只监听 `127.0.0.1:3000`，数据库可同机或外部。新克隆保留仓库示例内容和“开发阿雷”品牌，首次登录后自行替换。
+目标：Ubuntu / Debian、systemd、Node.js 24.21.0 LTS、PostgreSQL 18；已有 Nginx 和 HTTPS。Node 支持范围为 `>=24.21.0 <25`，允许后续 Node 24 更新，默认版本记录在 `.nvmrc`。应用只监听 `127.0.0.1:3000`，数据库可同机或外部。新克隆保留仓库示例内容和“开发阿雷”品牌，首次登录后自行替换。
 
 ## 1. 准备程序和目录
 
-安装适合服务器发行版的 Node.js 与 PostgreSQL 18 客户端；同机数据库还需 PostgreSQL 18 服务端。使用 [Node.js 官方下载](https://nodejs.org/en/download) 和 [PostgreSQL 官方 apt 仓库说明](https://www.postgresql.org/download/linux/ubuntu/)。不要直接使用发行版默认的旧 Node.js。确认以下程序可用：
+安装适合服务器发行版的 [Node.js 24.21.0 官方发行包](https://nodejs.org/en/download/archive/v24.21.0) 与 PostgreSQL 18 客户端；同机数据库还需 PostgreSQL 18 服务端，参见 [PostgreSQL 官方 apt 仓库说明](https://www.postgresql.org/download/linux/ubuntu/)。不要直接使用发行版默认的旧 Node.js。确认以下程序可用；默认 Node 应输出 `v24.21.0`，本机已验证 npm 11.19.0：
 
 ```sh
 node --version
@@ -14,6 +14,8 @@ pg_restore --version
 ```
 
 下面用 `/usr/bin/node`；若安装到其他目录，修改两个 service 的 ExecStart，避免 systemd 依赖交互 shell 的 nvm 配置。`pg_dump` 应为 18，且不能低于源服务器主版本。
+
+升级已有部署时，先停止应用服务和备份 timer，确认应用与备份 service 的 Node 绝对路径均指向新版程序，并用该绝对路径执行 `--version` 核对。随后在项目目录重新执行 `npm ci` 和 `npm run build`，再按下文启动服务与 timer；原生依赖必须在目标 Linux 服务器重新安装。项目的 `engine-strict` 会拒绝不符合版本要求的安装。本次 Node 24 已在 Windows 验证，Linux 的 Node 24 安装与运行仍需在目标环境验收。
 
 ```sh
 sudo useradd --system --user-group --home-dir /var/lib/alei-blog --shell /usr/sbin/nologin alei-blog

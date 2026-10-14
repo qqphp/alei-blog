@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { readFile, rm } from 'node:fs/promises';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import pg from 'pg';
 
-register('./ui-test-loader.mjs', import.meta.url);
+registerHooks(await import('./ui-test-loader.mjs'));
 const sourceUrl = new URL(process.env.DATABASE_URL);
 const dbName = `alei_audit_test_${Date.now()}`;
 const testUrl = new URL(sourceUrl);

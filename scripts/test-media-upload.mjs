@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
-register('./ui-test-loader.mjs', import.meta.url);
+registerHooks(await import('./ui-test-loader.mjs'));
 const directory = await mkdtemp(join(tmpdir(), 'alei-media-upload-'));
 const originalEnvironment = { ...process.env };
 try {

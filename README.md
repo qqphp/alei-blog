@@ -6,7 +6,7 @@
 
 ## 快速开始
 
-需要 PostgreSQL 18、Node.js **22.13 或以上**和 npm。在项目根目录执行：
+需要 PostgreSQL 18、Node.js **24.21.0 LTS** 和 npm。项目支持 `>=24.21.0 <25`，允许后续 Node 24 更新；默认版本记录在 `.nvmrc`，已验证的 npm 版本为 **11.19.0**。在项目根目录执行：
 
 ```powershell
 npm ci
@@ -18,6 +18,8 @@ npm run dev
 ```
 
 打开终端打印的本地地址，默认是 [http://localhost:3000](http://localhost:3000)。运行 `npm run admin:password` 后，终端会显示后台随机地址；请将它保存为书签。如开发服务器使用其他端口，后台也使用同一端口。访问 `/admin` 会返回 404。
+
+升级已有项目时，先停止本项目的开发或生产进程，安装或切换到 Node.js 24.21.0，执行 `node --version` 确认版本，再重新运行 `npm ci`，使原生依赖和安装补丁与当前运行环境一致。使用 nvm 时，Windows 执行 `nvm use 24.21.0`，Linux/macOS 可在项目根目录执行 `nvm install && nvm use`。项目启用了 `engine-strict`，不符合版本约束时安装会失败。Node 升级不需要迁移现有数据库或素材。
 
 管理员密码与随机入口由 `npm run admin:password` 生成并显示，同时保存在根目录 `.env` 中；每次运行都会重置密码，已有有效入口保持不变。后台只需要密码，不需要用户名；修改 `.env` 后需重启服务。
 

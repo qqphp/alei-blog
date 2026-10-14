@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 import pg from 'pg';
 
-register('./ui-test-loader.mjs', import.meta.url);
+registerHooks(await import('./ui-test-loader.mjs'));
 process.env.DATABASE_URL = 'postgresql://cache-test-placeholder';
 process.env.AA_API_KEY = 'cache-test-placeholder';
 let snapshot = null;

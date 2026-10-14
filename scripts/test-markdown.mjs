@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 import { Window } from 'happy-dom';
-register('./ui-test-loader.mjs', import.meta.url);
+registerHooks(await import('./ui-test-loader.mjs'));
 const window = new Window({ url: 'http://localhost:3000' });
 for (const name of ['window', 'document', 'navigator', 'HTMLElement', 'HTMLScriptElement', 'Element', 'Node', 'Event', 'MutationObserver'])
   Object.defineProperty(globalThis, name, { value: name === 'window' ? window : window[name], configurable: true });
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const { createElement: h, act, useState } = await import('react');
+const { renderToStaticMarkup } = await import('react-dom/server');
 const { render, screen, cleanup, fireEvent } = await import('@testing-library/react');
 const { MarkdownContent } = await import('../components/markdown-content.tsx');
 const { default: Editor } = await import('../components/admin-markdown-editor-content.tsx');
@@ -162,6 +163,24 @@ try {
   assert.ok(dollarEditor.container.querySelector('.katex-display'));
   assert.equal(dollarInstance.getValue(), dollarText);
   dollarEditor.unmount();
+  const currencyWarnings = [];
+  const previousWarn = console.warn;
+  let currencyHtml;
+  console.warn = (...values) => currencyWarnings.push(values.map(String).join(' '));
+  try {
+    currencyHtml = renderToStaticMarkup(h(MarkdownContent, {
+      source: '价格是 $5 到 $10，不应被当成公式。\n\n公式 $1+x$。',
+    }));
+  } finally {
+    console.warn = previousWarn;
+  }
+  assert.equal(currencyWarnings.some(value => value.includes('unicodeTextInMathMode')), false,
+    'dollar currency ranges must not produce Unicode math warnings during SSR');
+  const currencyMarkup = document.createElement('div');
+  currencyMarkup.innerHTML = currencyHtml;
+  assert.ok(currencyMarkup.textContent.includes('价格是 $5 到 $10'));
+  assert.equal(currencyMarkup.querySelectorAll('.katex').length, 1,
+    'currency stays literal while the adjacent inline formula still renders');
   const mathSource = '## 公式 $x^2$\n\n价格 \\$42 和 \\$50，数字 $1+2$，分数 $\\frac{a}{b}$。\n\n$$\n\\sum_{i=1}^{n} i + \\begin{pmatrix}1&2\\\\3&4\\end{pmatrix}\n$$\n\n`$code$`\n\n```js\nconst price = "$42";\n```\n\n错误 $\\badcommand{<img src=x onerror=alert(1)>}$\n\n$\\href{javascript:alert(1)}{危险}$';
   const mathView = render(h(MarkdownContent, { source: mathSource }));
   assert.equal(mathView.container.querySelector('h2').id, 'heading-1');

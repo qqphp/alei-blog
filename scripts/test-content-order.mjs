@@ -1,9 +1,9 @@
 import { Window } from 'happy-dom';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-register('./ui-test-loader.mjs', import.meta.url);
+registerHooks(await import('./ui-test-loader.mjs'));
 const window = new Window({ url: 'http://localhost:3000' });
 const style = window.document.createElement('style');
 style.textContent = readFileSync(

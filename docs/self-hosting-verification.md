@@ -42,3 +42,29 @@
 验证日志保存在本机被忽略的 `outputs/self-hosting/`。Linux 临时数据已清理；自动审批拒绝递归删除本机 `.local/linux-check`（返回 `blocked by policy`，没有更具体原因），因此该临时工具目录被保留，仍受 Git 忽略规则保护。
 
 旧本地数据和密钥文件未删除；旧环境文件和状态目录仅加入当前 checkout 的本地 Git 排除规则。运行配置已读取 `.env`，不依赖这些旧文件。
+
+## 2026-10-14：Node.js 24 升级验证
+
+本次在 Windows 本机使用 Node.js **24.21.0 LTS**、npm **11.19.0** 完成。前面的 Node 22 验证记录保留为历史结果；以下为本次升级后的结果。
+
+- 运行范围统一为 `>=24.21.0 <25`，`.nvmrc` 默认固定 `24.21.0`，`.npmrc` 启用 `engine-strict=true`。
+- Node 类型声明升级为 `@types/node@24.19.2`，必要的 `undici-types` 升级为 `7.24.6`；锁文件中其他依赖版本均未改变。
+- Node 24 类型声明将测试加载器原有 `module.register()` 标记为弃用；测试改用 [Node 官方的 `registerHooks()` 同步加载钩子](https://nodejs.org/docs/latest-v24.x/api/module.html#moduleregisterhooksoptions)，保留 CSS、Vinext shim、编辑器和数据库替身的原有解析行为。
+- 自托管测试原有“重复生成密码应保留旧值”的断言与现有脚本和 README 的每次重置行为不符，已对齐为检查密码轮换；应用密码逻辑未改动。
+
+| 项目 | 结果 |
+| --- | --- |
+| 干净 `npm ci`、安装钩子和 Vinext 补丁 | 通过；已确认 `engine-strict` 生效 |
+| npm 自带引擎检查器的版本边界检查 | 拒绝 22.23.1、24.20.0、25.0.0，接受 24.21.0、24.22.0；这是约束检查，不代表在其他 Node 版本做了运行回归 |
+| `typecheck`、`lint`、正式独立构建 | 通过；构建保留 Vinext/Rolldown 的迁移、动态导入和耗时提示 |
+| `test:dependencies`、`test:server-fetch`、`test:media-upload`、`test:film-ai`、`test:markdown` | 全部通过；覆盖补丁、代理、上传、Sharp PNG/JPEG/WebP 转换、Markdown 和模块加载 |
+| 迁移加载钩子后补测的 UI、Markdown AI、模型缓存、分页与生命周期回归 | 全部通过，包括 `test:admin-ui`；与其他回归合计 20 个现有测试命令通过 |
+| `test:cms`、`test:contact`、`test:audit-regressions` | 全部通过；独立测试库验证读写、版本冲突、密钥持久化、邮件模拟和数据库约束 |
+| `test:self-hosting` | 通过；备份恢复、文章与素材一致、生产入口、HTTPS 转发登录、Secure Cookie、同源检查、Range/ETag 与重启持久化 |
+| 开发服务首页 SSR | 通过；隔离端口 8897 返回 HTTP 200，HTML 包含首屏标题和站点名称 |
+| 原始数据核对 | 测试前后 13 张原库表的记录数与内容 SHA-256、174 个素材文件的 SHA-256 完全一致；已完成本地备份 |
+| Linux Node 24、VPS/systemd/Nginx | 本次未实测；Linux 部署说明已更新版本范围及两个 service 的 Node 绝对路径核对步骤 |
+
+开发验证进程为避免现有项目开发锁冲突，临时设置 `VINEXT_NO_DEV_LOCK=1`，并关闭邮件 worker；这些设置未写入项目运行配置，验证进程已停止。日志与摘要保存在 Git 忽略的 `outputs/node24/`。
+
+安装及 `npm audit` 仍报告现有依赖的 6 项漏洞：开发工具 `oxfmt`/`tinypool` 的 2 项 critical，以及 KaTeX/数学渲染依赖的 4 项 low。本次仅升级 Node 类型依赖，相关依赖版本未变；漏洞修复需单独升级并回归。

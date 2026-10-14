@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 import { mkdtemp, readFile, readdir, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
-register('./film-ai-test-loader.mjs', import.meta.url);
+registerHooks(await import('./film-ai-test-loader.mjs'));
 const { defaults } = await import('../lib/cms-defaults.ts');
 const settings = {
   ...defaults.aiSettings,

@@ -162,9 +162,10 @@ try {
     assert.ok(configured.length >= 12);
     if (i === 0) await writeFile(join(directory, 'password-check'), configured);
     else
-      assert.equal(
+      assert.notEqual(
         configured,
         await readFile(join(directory, 'password-check'), 'utf8'),
+        'password initialization must rotate the password on each run',
       );
   }
   const owner = decodeURIComponent(source.username).replaceAll('"', '""');

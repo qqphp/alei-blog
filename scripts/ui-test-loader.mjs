@@ -1,7 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import { resolve as resolvePath } from 'node:path';
 
-export async function resolve(specifier, context, next) {
+export function resolve(specifier, context, next) {
   if (specifier === 'vditor')
     return { url: new URL('./vditor-test-double.mjs', import.meta.url).href, shortCircuit: true };
   if (specifier === 'next/image' || specifier === 'next/link' || specifier === 'next/navigation')
@@ -15,7 +15,7 @@ export async function resolve(specifier, context, next) {
     };
   return next(specifier, context);
 }
-export async function load(url, context, next) {
+export function load(url, context, next) {
   if (url.endsWith('.css'))
     return { format: 'module', source: '', shortCircuit: true };
   return next(url, context);

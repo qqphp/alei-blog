@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
-import { register } from 'node:module';
+import { registerHooks } from 'node:module';
 import { Window } from 'happy-dom';
 
-register('./ui-test-loader.mjs', import.meta.url);
+registerHooks(await import('./ui-test-loader.mjs'));
 const window = new Window({ url: 'http://localhost:3000' });
 for (const name of ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'Event']) {
   Object.defineProperty(globalThis, name, { value: name === 'window' ? window : window[name], configurable: true });
