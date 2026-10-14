@@ -18,6 +18,7 @@ import { AdminSidebar } from './admin-sidebar';
 import { announcementSample, announcementCategorySample, type Announcement } from '@/lib/announcements';
 import { AdminMailSettings, AdminContactRecords } from './admin-contact';
 import { formatRecordTime } from '@/lib/content-times';
+import { clientId } from '@/lib/client-id';
 import { api, asJson, Field, fresh } from './admin-fields';
 import './admin.css';
 
@@ -73,24 +74,24 @@ const configUrl = (section: Section, scope: string) =>
 
 function sampleRecord(section: Section, collection: string, options: Record<string, Option[]>): Json {
   if (section === 'announcements') return asJson(collection === 'categories'
-    ? { ...announcementCategorySample, id: crypto.randomUUID() }
-    : { ...announcementSample, id: crypto.randomUUID(), categoryId: options.categories?.[0]?.id ?? '' });
+    ? { ...announcementCategorySample, id: clientId() }
+    : { ...announcementSample, id: clientId(), categoryId: options.categories?.[0]?.id ?? '' });
   if (section === 'writing' && collection === 'articles')
     return {
-      slug: `article-${crypto.randomUUID().slice(0, 8)}`, title: '', excerpt: '', body: '',
+      slug: `article-${clientId().slice(0, 8)}`, title: '', excerpt: '', body: '',
       categoryId: options.categories?.[0]?.id ?? '', category: options.categories?.[0]?.name ?? '',
       date: format(new Date(), 'yyyy.MM.dd'), cover: '', coverMode: 'upload',
       coverDescription: '', coverGeneratedFor: '', seoTitle: '', seoDescription: '', _published: false,
     };
   if (section === 'writing' && collection === 'categories')
-    return { id: `category-${crypto.randomUUID()}`, name: '', description: '', parentId: '' };
+    return { id: `category-${clientId()}`, name: '', description: '', parentId: '' };
   if (section === 'ai' && collection === 'skillCategories')
-    return { id: crypto.randomUUID(), name: '', parentId: '' };
+    return { id: clientId(), name: '', parentId: '' };
   if (section === 'ai' && collection === 'agentStatuses')
-    return { id: crypto.randomUUID(), name: '' };
+    return { id: clientId(), name: '' };
   if (section === 'investing' && collection === 'entries') {
     const sample = defaults.investing.sections[0].entries[0];
-    return { ...fresh(asJson(sample)) as Item, title: '', id: crypto.randomUUID(),
+    return { ...fresh(asJson(sample)) as Item, title: '', id: clientId(),
       sectionId: options.sections?.[0]?.id ?? '' } as Json;
   }
   const source = defaults[section] as unknown;
@@ -101,7 +102,7 @@ function sampleRecord(section: Section, collection: string, options: Record<stri
     : section === 'tracks' && collection === 'playlists' ? musicSample.playlists[0] : undefined;
   if (!sample) throw new Error('此列表没有可用的表单模板');
   const value = fresh(asJson(sample)) as Item;
-  value.id = crypto.randomUUID();
+  value.id = clientId();
   if (section === 'slides') {
     value.src = '';
     value.title = '';
@@ -383,7 +384,7 @@ export function AdminGranularPanel() {
     ? asJson(Object.fromEntries(websiteTab.keys.filter((key) => Object.hasOwn(config.value as Item, key))
       .map((key) => [key, (config.value as Item)[key]])))
     : config?.value;
-  const recordSample = activeCollection ? sampleRecord(recordSection, activeCollection, options) : null;
+  const recordSample = activeCollection && edit ? sampleRecord(recordSection, activeCollection, options) : null;
   const canPublish = activeCollection && !['categories', 'statuses', 'scenes', 'sections', 'agentStatuses', 'skillCategories'].includes(activeCollection)
     && !(section === 'writing' && activeCollection === 'categories');
   const showTimes = (section === 'writing' && activeCollection === 'articles') ||

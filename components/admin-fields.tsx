@@ -4,6 +4,7 @@ import type { Json } from '@/lib/cms-validation';
 import { footerLinkSample, footerSocialLinkSample, type Content, type Section } from '@/lib/cms-defaults';
 import type { ProjectImage } from '@/lib/project-content';
 import { AdminMarkdownEditor } from './admin-markdown-editor';
+import { clientId } from '@/lib/client-id';
 
 type ApiData = {
   error?: string;
@@ -154,7 +155,7 @@ export function fresh(sample: Json): Json {
           : key === 'coverMode' || key === 'mode'
             ? 'upload'
           : key === 'id' || key === 'slug'
-            ? `new-${crypto.randomUUID().slice(0, 8)}`
+            ? `new-${clientId().slice(0, 8)}`
             : key === 'title' || key === 'name'
               ? '未命名内容'
               : Array.isArray(value)
