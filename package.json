@@ -32,6 +32,7 @@
     "test:markdown-ai": "node --import tsx scripts/test-markdown-ai.mjs",
     "test:media-upload": "node --import tsx scripts/test-media-upload.mjs",
     "test:public-pagination": "node --import tsx scripts/test-public-pagination.mjs",
+    "test:project-category": "node --import tsx scripts/test-project-category.mjs",
     "test:content-order": "node --import tsx scripts/test-content-order.mjs",
     "test:admin-granular-ui": "node --import tsx scripts/test-admin-granular-ui.mjs",
     "test:announcements-ui": "node --import tsx scripts/test-announcements-ui.mjs",

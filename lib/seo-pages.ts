@@ -4,7 +4,7 @@ import { getPublicSection } from './public-records';
 import { defaults } from './cms-defaults';
 import { withReadDatabase } from './postgres';
 import { recordTimes } from './content-times';
-import type { Project } from './project-content';
+import { resolveProjects, type Project } from './project-content';
 import { contentPageSizes } from './content-page-sizes';
 
 const writingRequests = cacheForRequest(() => new Map<string, ReturnType<typeof getWritingArchive>>());
@@ -42,7 +42,9 @@ async function loadProjectsPage(project: string, category: string, page: number,
     data.archives['projects.items'] = { items: data.content.projects!.items, page: currentPage, total: items.length,
       allCount: all.length, searchTotal: all.length, categoryCounts: Object.fromEntries(data.content.projects!.categories.map((option) => [option.id, all.filter((item) => item.categoryId === option.id).length])) };
   }
-  return { ...data, selectedProject };
+  return { ...data, selectedProject: selectedProject
+    ? resolveProjects({ ...data.content.projects!, items: [selectedProject] }).items[0]
+    : undefined };
 }
 const projectRequests = cacheForRequest(() => new Map<string, ReturnType<typeof loadProjectsPage>>());
 export function projectsPageData(project: string, category: string, page: number, hasPage: boolean) {
